@@ -1,0 +1,5 @@
+(executable
+ (name calyxium)
+ (public_name calyxium)
+ (modules calyxium)
+ (libraries calyxiumlib))

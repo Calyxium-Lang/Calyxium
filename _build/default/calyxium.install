@@ -1,0 +1,12 @@
+lib: [
+  "_build/install/default/lib/calyxium/META"
+  "_build/install/default/lib/calyxium/dune-package"
+  "_build/install/default/lib/calyxium/opam"
+]
+bin: [
+  "_build/install/default/bin/calyxium"
+]
+doc: [
+  "_build/install/default/doc/calyxium/LICENSE"
+  "_build/install/default/doc/calyxium/README.md"
+]

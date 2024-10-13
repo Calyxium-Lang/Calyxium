@@ -1,0 +1,90 @@
+type token =
+    Var
+  | True
+  | Switch
+  | StringType
+  | String of string
+  | StarAssign
+  | Star
+  | SlashAssign
+  | Slash
+  | Semi
+  | Return
+  | RParen
+  | RBracket
+  | RBrace
+  | Pow
+  | PlusAssign
+  | Plus
+  | Null
+  | Not
+  | New
+  | Neq
+  | Mod
+  | MinusAssign
+  | Minus
+  | LogicalOr
+  | LogicalAnd
+  | Less
+  | Leq
+  | LParen
+  | LBracket
+  | LBrace
+  | IntType
+  | Int of int64
+  | Inc
+  | Import
+  | If
+  | Ident of string
+  | Greater
+  | Geq
+  | Function
+  | For
+  | FloatType
+  | Float of float
+  | False
+  | Export
+  | Eq
+  | Else
+  | EOF
+  | Dot
+  | Default
+  | Dec
+  | Const
+  | Comma
+  | Colon
+  | Class
+  | Case
+  | Carot
+  | ByteType
+  | Byte of char
+  | BoolType
+  | Bool of bool
+  | Assign
+val menhir_begin_marker : int
+val xv_type_expr : Ast.Type.t
+val xv_stmt_opt : Ast.Stmt.t option
+val xv_stmt_list : Ast.Stmt.t list
+val xv_stmt : Ast.Stmt.t
+val xv_program : Ast.Stmt.t
+val xv_parameter_list : Ast.Stmt.parameter list
+val xv_parameter : Ast.Stmt.parameter
+val xv_expr_opt : Ast.Expr.t option
+val xv_expr_list : Ast.Expr.t list
+val xv_expr : Ast.Expr.t
+val xv_default_opt : Ast.Stmt.t list option
+val xv_class_member : Ast.Stmt.parameter list * Ast.Stmt.t list
+val xv_class_body : Ast.Stmt.parameter list * Ast.Stmt.t list
+val xv_case_list : (Ast.Expr.t * Ast.Stmt.t list) list
+val xv_argument_list : Ast.Expr.t list
+val xv_VarDeclStmt : Ast.Stmt.t
+val xv_SwitchStmt : Ast.Stmt.t
+val xv_ReturnStmt : Ast.Stmt.t
+val xv_NewVarDeclStmt : Ast.Stmt.t
+val xv_ImportStmt : Ast.Stmt.t
+val xv_IfStmt : Ast.Stmt.t
+val xv_FunctionDeclStmt : Ast.Stmt.t
+val xv_ForStmt : Ast.Stmt.t
+val xv_ExportStmt : Ast.Stmt.t
+val xv_ClassDeclStmt : Ast.Stmt.t
+val menhir_end_marker : int

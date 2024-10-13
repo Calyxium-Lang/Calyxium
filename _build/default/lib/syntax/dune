@@ -1,0 +1,13 @@
+(library
+ (name syntax)
+ (modules ast lexer parser)
+ (libraries ppx_deriving.show)
+ (preprocess
+  (pps ppx_deriving.show))
+ (flags :standard)
+ (modes native))
+
+(ocamllex lexer)
+
+(menhir
+ (modules parser))

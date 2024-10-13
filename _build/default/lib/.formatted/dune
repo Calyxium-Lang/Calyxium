@@ -1,0 +1,17 @@
+(library
+ (name calyxiumlib)
+ (libraries syntax bytecode semantics repl vm modules)
+ (preprocess
+  (pps ppx_deriving.show))
+ (flags :standard)
+ (modes native))
+
+(documentation)
+
+(env
+ (dev
+  (flags
+   (:standard -w +a-4)))
+ (release
+  (flags
+   (:standard -w -03))))

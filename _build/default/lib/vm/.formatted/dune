@@ -1,0 +1,8 @@
+(library
+ (name vm)
+ (modules vm)
+ (libraries ppx_deriving.show syntax bytecode zarith modules)
+ (preprocess
+  (pps ppx_deriving.show))
+ (flags :standard)
+ (modes native))

@@ -1,0 +1,18 @@
+(lang dune 3.14)
+(using menhir 3.0)
+(name calyxium)
+(version 0.0.1)
+(generate_opam_files true)
+(license BSD 3-Clause)
+(authors "Calyxium Foundation")
+(maintainers "Codezz-ops TheDevConnor Zombii Iris")
+(source (uri https://github.com/Calyxium/Calyxium))
+(bug_reports "https://github.com/Calyxium/Calyxium/issues")
+(homepage "https://calyxium.cc")
+(documentation "https://calyxium.cc/docs")
+
+(package
+ (name calyxium)
+ (synopsis "A Programming Language")
+ (description "A Programming Language")
+ (depends ocaml dune menhir llvm  ppx_deriving odoc))

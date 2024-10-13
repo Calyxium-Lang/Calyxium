@@ -1,0 +1,87 @@
+<program> ::= <statement_list> EOF
+
+<statement_list> ::= <statement> | <statement_list> <statement>
+
+<statement> ::=
+    | <declaration>
+    | <function_definition>
+    | <if_statement>
+    | <switch_statement>
+    | <for_statement>
+    | <expression_statement>
+
+<declaration> ::=
+    | <var_declaration>
+    | <const_declaration>
+
+<var_declaration> ::= var <identifier> <type_annotation>? (= <expression>)?
+<const_declaration> ::= const <identifier> <type_annotation> = <expression>
+
+<function_definition> ::= 
+    function <identifier> (<parameter_list>) <type_annotation>? { <statement_list> }
+
+<parameter_list> ::= 
+    <parameter> | <parameter_list>, <parameter>
+
+<parameter> ::= <identifier> <type_annotation>
+
+<type_annotation> ::= : <type>
+
+<if_statement> ::= if (<expression>) <statement> else <statement>?
+
+<switch_statement> ::= 
+    switch (<expression>) { <case_statements_list> }
+
+<case_statements_list> ::= 
+    <case_statement> | <case_statements_list> <case_statement>
+
+<case_statement> ::=
+    case <expression> : <statement_list>
+    | default : <expression>
+
+<for_statement> ::=
+    for { <statement_list> }
+    for (<expression>) { <statement_list> }
+
+<expression_statement> ::= <expression> ;
+
+<expression> ::=
+    | <identifier>
+    | <literal>
+    | <function_call>
+    | <member_access>
+    | <binary_expression>
+    | <unary_expression>
+    | <array_access>
+
+<identifier> ::= [a-zA-Z][a-zA-Z0-9]*
+
+<literal> ::=
+    <null_literal> | <integer_literal> | <float_literal> | <string_literal> | <boolean_literal>
+
+<null_literal> ::= null
+<integer_literal> ::= [0-9]+
+<float_literal> ::= [0-9]+\.[0-9]+
+<string_literal> ::= "[^"]*"
+<boolean_literal> ::= true | false
+
+<function_call> ::= <identifier> (<argument_list>)
+
+<argument_list> ::=
+    <expression> | <argument_list> , <expression>
+
+<member_access> ::= <expression> . <identifier>
+
+<binary_expression> ::=
+    <expression> <operator> <expression>
+
+<unary_expression> ::= <operator> <expression>
+
+<parenthesized_expression> ::= ( <expression> )
+
+<array_access> ::= <expression> [ <expression> ]
+
+<type> ::= int | float | string | byte | bool
+
+<operator> ::=
+    + | - | * | / | % | == | != | <= | >= | < | > | ! | += | -= | *= | /=
