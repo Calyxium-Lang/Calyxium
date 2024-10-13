@@ -1,8 +1,0 @@
-(lang dune 3.16)
-(name calyxium)
-(version 0.0.1)
-(sections (lib .) (bin ../../bin) (doc ../../doc/calyxium))
-(files
- (lib (META dune-package opam))
- (bin (calyxium))
- (doc (LICENSE README.md)))
