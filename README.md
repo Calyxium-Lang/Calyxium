@@ -14,12 +14,12 @@ To install Calyxium, follow these steps:
 1. Ensure you have OCaml installed on your system. You can download it from [Linux](https://ocaml.org/install#linux_mac_bsd), [Windows](https://ocaml.org/install#windows)
 
 2. Clone the Calyxium repository:
-`git clone git@github.com:Calyxium/Calyxium.git`
+`git clone https://github.com/Calyxium-Lang/Calyxium.git`
 
 3. Navigate to the cloned directory:
 `cd Calyxium`
 
-4. Run the build powershell script on linux `pwsh ./build/build-install.ps1 linux dev or release`, on windows `.\build\build-install.ps1 windows dev or release`
+4. Run the build script `dune build`
 
 ## Getting Started
 To start using Calyxium, you need to create a script file with the `.cx` extension. Here's a simple example to get you started:
@@ -65,8 +65,8 @@ Here are some examples to help you get started with Calyxium:
 
 ## Contributing
 
-Contributions to Calyxium are welcome! If you find a bug or have a feature request, please open an issue on our [GitHub repository](https://github.com/Calyxium/Calyxium/issues). If you'd like to contribute code, please fork the repository and submit a pull request.
+Contributions to Calyxium are welcome! If you find a bug or have a feature request, please open an issue on our [GitHub repository](https://github.com/Calyxium-Lang/Calyxium/issues). If you'd like to contribute code, please fork the repository and submit a pull request.
 
 ## License
 
-Calyxium is licensed under the BSD 3-Clause License. See the [LICENSE](LICENSE) file for more details.
+Calyxium is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.

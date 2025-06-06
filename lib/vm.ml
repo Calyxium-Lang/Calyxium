@@ -21,15 +21,6 @@ let safe_pow base exponent =
 let inf_check value =
   if value > Int64.to_float Int64.max_int then Float.infinity else value
 
-let log_memory_usage label =
-  let stats = Gc.stat () in
-  Printf.printf
-    "[%s] Memory usage: minor_words = %.2f, major_words = %.2f, heap_size = %d \
-     KB, GCs = %d minor, %d major\n"
-    label stats.Gc.minor_words stats.Gc.major_words
-    (stats.Gc.heap_words * 8 / 1024)
-    stats.Gc.minor_collections stats.Gc.major_collections
-
 let add_string str =
   let id = Hashtbl.hash str in
   Hashtbl.add string_table id str;
@@ -76,7 +67,6 @@ let rec execute_bytecode instructions env pc =
   else
     let instruction_count = pc + 1 in
     trigger_gc instruction_count;
-    if instruction_count mod 256 = 0 then log_memory_usage "Instruction Count";
     match instructions.(pc) with
     | Bytecode.LOAD_INT value ->
         Stack.push (inf_check (Int64.to_float value)) stack;

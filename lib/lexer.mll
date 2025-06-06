@@ -88,7 +88,6 @@ rule token = parse
     | "new"                 { ignore (update_column_with_lexeme lexbuf); New }
     | "true"                { ignore (update_column_with_lexeme lexbuf); True }
     | "false"               { ignore (update_column_with_lexeme lexbuf); False }
-    | "nil"                 { ignore (update_column_with_lexeme lexbuf); Null }
 
     | "int"                 { ignore (update_column_with_lexeme lexbuf); IntType }
     | "float"               { ignore (update_column_with_lexeme lexbuf); FloatType }

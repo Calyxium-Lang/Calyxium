@@ -1,86 +1,86 @@
-let x: int = 10 + 5;
-let a: int = 10;
-let b: float = 5.5;
-let c: float = ToFloat(a) + b;
-let age: int = 18;
-let str: string = "Hellooo";
-let r: []int = {1, 2, 3};
-let op: byte = '+';
+let x: int = 10 + 5
+let a: int = 10
+let b: float = 5.5
+let c: float = ToFloat(a) + b
+let age: int = 18
+let str: string = "Hellooo"
+let r: []int = {1, 2, 3}
+let op: byte = '+'
 
-println("result of x: " ^ ToString(x));
-print("Random Print with newline escape char\n");
+println("result of x: " ^ ToString(x))
+print("Random Print with newline escape char\n")
 
-println("Floating point answer of c: " ^ ToString(c));
+println("Floating point answer of c: " ^ ToString(c))
 
 if (age >= 18) {
-    println("You are an adult.");
+    println("You are an adult.")
 } else {
-    println("You are not an adult.");
-};
+    println("You are not an adult.")
+}
 
 switch str {
     case "Hello":
-        println("String is: " ^ str);
+        println("String is: " ^ str)
     case "Helloo":
-        println("String is: " ^ str);
+        println("String is: " ^ str)
     default:
-        println("Neither condition was met string was: " ^ str);
-};
+        println("Neither condition was met string was: " ^ str)
+}
 
 # if (str == "Hello") {
-#     println("String is: " ^ str);
+#     println("String is: " ^ str)
 # } else {
 #     if (str == "Helloo") {
-#         println("String is: " ^ str);
+#         println("String is: " ^ str)
 #     } else {
-#         println("Neither condition was met string was: " ^ str);
-#     };
-# };
+#         println("Neither condition was met string was: " ^ str)
+#     }
+# }
 
-println("Second element of array r: " ^ ToString(r[2]));
+println("Second element of array r: " ^ ToString(r[2]))
 
 switch op {
     case '+':
-        println("plus");
+        println("plus")
     case '-':
-        println("minus");
+        println("minus")
     default:
-        println("Default");
+        println("Default")
 };
 
-println(r);
+println(r)
 
-# let i: int = 1;
+# let i: int = 1
 # for (i; i <= 10; i++) {
-#     print("Hello");
-# };
+#     print("Hello")
+# }
 
 # fun add(x: int, y: int): int {
-#     return x + y;
-# };
+#     return x + y
+# }
 
-# println(add(5, 5));
-# print("E\n");
+# println(add(5, 5))
+# print("E\n")
 
-# println(add(5, 6)); # Prints 11
+# println(add(5, 6)) # Prints 11
 
 # struct Person {
     # let age: int;
     # let name: string;
-# };
+# }
 
-# let p = new Person;
-# p.age = 10;
-# p.name = "Alice";
+# let p = new Person
+# p.age = 10
+# p.name = "Alice"
 
-# println(p.age); # Print 10
-# println(p.name); # Print Alice
+# println(p.age) # Print 10
+# println(p.name) # Print Alice
 
 # struct NewPerson {
-    # let age: int = 50;
-    # let name: string = "John";
-# };
+    # let age: int = 50
+    # let name: string = "John"
+# }
 
-# let nPerson = new NewPerson;
-# println(nPerson.age); # Prints 50
-# println(nPerson.name); # Prints John
+# let nPerson = new NewPerson
+# println(nPerson.age) # Prints 50
+# println(nPerson.name) # Prints John

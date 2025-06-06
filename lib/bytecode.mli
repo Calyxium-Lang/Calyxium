@@ -49,5 +49,5 @@ type opcode =
 
 val function_table : (string, opcode list) Hashtbl.t
 val pp_opcode : Format.formatter -> opcode -> unit
-val compile_expr : Syntax.Ast.Expr.t -> opcode list
-val compile_stmt : Syntax.Ast.Stmt.t -> opcode list
+val compile_expr : Ast.Expr.t -> opcode list
+val compile_stmt : Ast.Stmt.t -> opcode list

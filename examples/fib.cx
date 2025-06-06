@@ -1,7 +1,7 @@
 fun fib(n: int): int {
     if (n < 1) {
-        println("Invalid Number of terms");
-    };
+        println("Invalid Number of terms")
+    }
 
     let PrevOne: int = 1;
     let PrevTwo: int = 0;
@@ -10,22 +10,22 @@ fun fib(n: int): int {
     for (i; i <= n; i++) {
         if (i > 2) {
             let current: int = PrevOne + PrevTwo;
-            PrevOne = PrevOne;
-            PrevOne = current;
-            println(current);
+            PrevOne = PrevOne
+            PrevOne = current
+            println(current)
         } else {
             switch i {
                 case 1:
-                    println(PrevTwo);
+                    println(PrevTwo)
                 case 2:
-                    println(PrevOne);
+                    println(PrevOne)
                 default:
-                    println("Case not supported");
-            };
-        };
-    };
+                    println("Case not supported")
+            }
+        }
+    }
 
-    return 0;
-};
+    return 0
+}
 
-println(fib(10));
+println(fib(10))

@@ -1,2 +1,2 @@
 import "Time";
-println(Time.current());
+println(Time.current())

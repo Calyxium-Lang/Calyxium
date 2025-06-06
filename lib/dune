@@ -1,17 +1,13 @@
 (library
- (name calyxiumlib)
- (libraries syntax bytecode semantics repl vm)
+ (name Calyxiumlib)
+ (modules ast lexer parser typechecker vm bytecode token repl version)
+ (libraries ppx_deriving.show zarith unix)
  (preprocess
-  (pps ppx_deriving.show))
- (flags :standard)
- (modes native))
+  (pps ppx_deriving.show)))
 
 (documentation)
 
-(env
- (dev
-  (flags
-   (:standard -w +a-4)))
- (release
-  (flags
-   (:standard -w -03))))
+(ocamllex lexer)
+
+(menhir
+ (modules parser))

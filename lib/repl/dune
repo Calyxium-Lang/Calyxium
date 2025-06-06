@@ -1,8 +1,0 @@
-(library
- (name repl)
- (modules repl)
- (libraries ppx_deriving.show bytecode semantics vm)
- (preprocess
-  (pps ppx_deriving.show))
- (flags :standard)
- (modes native))

@@ -1,6 +1,3 @@
-open Syntax
-open Syntax.Ast.Stmt
-
 type opcode =
   | LOAD_INT of int64
   | LOAD_FLOAT of float
@@ -49,57 +46,9 @@ type opcode =
   | BREAK
   | DUP
   | INPUT
+[@@deriving show]
 
 let function_table : (string, opcode list) Hashtbl.t = Hashtbl.create 10
-
-let pp_opcode fmt = function
-  | LOAD_INT value -> Format.fprintf fmt "LOAD_INT %d" (Int64.to_int value)
-  | LOAD_FLOAT value -> Format.fprintf fmt "LOAD_FLOAT %f" value
-  | LOAD_VAR name -> Format.fprintf fmt "LOAD_VAR %s" name
-  | STORE_VAR name -> Format.fprintf fmt "STORE_VAR %s" name
-  | LOAD_STRING value -> Format.fprintf fmt "LOAD_STRING %s" value
-  | LOAD_BYTE value -> Format.fprintf fmt "LOAD_BYTE %c" value
-  | LOAD_BOOL value -> Format.fprintf fmt "LOAD_BOOL %b" value
-  | FUNC name -> Format.fprintf fmt "FUNC %s" name
-  | POW -> Format.fprintf fmt "POW"
-  | MOD -> Format.fprintf fmt "MOD"
-  | CONCAT -> Format.fprintf fmt "CONCAT"
-  | FADD -> Format.fprintf fmt "FADD"
-  | FSUB -> Format.fprintf fmt "FSUB"
-  | FMUL -> Format.fprintf fmt "FMUL"
-  | FDIV -> Format.fprintf fmt "FDIV"
-  | POP -> Format.fprintf fmt "POP"
-  | RETURN -> Format.fprintf fmt "RETURN"
-  | HALT -> Format.fprintf fmt "HALT"
-  | AND -> Format.fprintf fmt "AND"
-  | OR -> Format.fprintf fmt "OR"
-  | NOT -> Format.fprintf fmt "NOT"
-  | EQUAL -> Format.fprintf fmt "EQUAL"
-  | NOT_EQUAL -> Format.fprintf fmt "NOT_EQUAL"
-  | GREATER_EQUAL -> Format.fprintf fmt "GREATER_EQUAL"
-  | LESS_EQUAL -> Format.fprintf fmt "LESS_EQUAL"
-  | GREATER -> Format.fprintf fmt "GREATER"
-  | INC -> Format.fprintf fmt "INC"
-  | DEC -> Format.fprintf fmt "DEC"
-  | LESS -> Format.fprintf fmt "LESS"
-  | JUMP label -> Format.fprintf fmt "JUMP %d" label
-  | JUMP_IF_FALSE label -> Format.fprintf fmt "JUMP_IF_FALSE %d" label
-  | PRINT -> Format.fprintf fmt "PRINT"
-  | PRINTLN -> Format.fprintf fmt "PRINTLN"
-  | LEN -> Format.fprintf fmt "LEN"
-  | TOSTRING -> Format.fprintf fmt "TOSTRING"
-  | TOINT -> Format.fprintf fmt "TOINT"
-  | TOFLOAT -> Format.fprintf fmt "TOFLOAT"
-  | LOAD_ARRAY value -> Format.fprintf fmt "LOAD_ARRAY %d" value
-  | LOAD_INDEX -> Format.fprintf fmt "LOAD_INDEX"
-  | CALL name -> Format.fprintf fmt "CALL %s" name
-  | PUSH_ARGS -> Format.fprintf fmt "PUSH ARGS"
-  | SWITCH -> Format.fprintf fmt "SWITCH"
-  | CASE value -> Format.fprintf fmt "CASE %f" value
-  | DEFAULT -> Format.fprintf fmt "DEFAULT"
-  | BREAK -> Format.fprintf fmt "BREAK"
-  | DUP -> Format.fprintf fmt "DUP"
-  | INPUT -> Format.fprintf fmt "INPUT"
 
 let rec compile_expr = function
   | Ast.Expr.IntExpr { value } -> [ LOAD_INT value ]
@@ -115,21 +64,21 @@ let rec compile_expr = function
       let left_bytecode = compile_expr left in
       let right_bytecode = compile_expr right in
       match operator with
-      | Ast.Plus -> left_bytecode @ right_bytecode @ [ FADD ]
-      | Ast.Minus -> left_bytecode @ right_bytecode @ [ FSUB ]
-      | Ast.Star -> left_bytecode @ right_bytecode @ [ FMUL ]
-      | Ast.Slash -> left_bytecode @ right_bytecode @ [ FDIV ]
-      | Ast.Mod -> left_bytecode @ right_bytecode @ [ MOD ]
-      | Ast.Pow -> left_bytecode @ right_bytecode @ [ POW ]
-      | Ast.Carot -> left_bytecode @ right_bytecode @ [ CONCAT ]
-      | Ast.LogicalAnd -> left_bytecode @ right_bytecode @ [ AND ]
-      | Ast.LogicalOr -> left_bytecode @ right_bytecode @ [ OR ]
-      | Ast.Greater -> left_bytecode @ right_bytecode @ [ GREATER ]
-      | Ast.Less -> left_bytecode @ right_bytecode @ [ LESS ]
-      | Ast.Eq -> left_bytecode @ right_bytecode @ [ EQUAL ]
-      | Ast.Geq -> left_bytecode @ right_bytecode @ [ GREATER_EQUAL ]
-      | Ast.Leq -> left_bytecode @ right_bytecode @ [ LESS_EQUAL ]
-      | Ast.Neq -> left_bytecode @ right_bytecode @ [ NOT_EQUAL ]
+      | Token.Plus -> left_bytecode @ right_bytecode @ [ FADD ]
+      | Token.Minus -> left_bytecode @ right_bytecode @ [ FSUB ]
+      | Token.Star -> left_bytecode @ right_bytecode @ [ FMUL ]
+      | Token.Slash -> left_bytecode @ right_bytecode @ [ FDIV ]
+      | Token.Mod -> left_bytecode @ right_bytecode @ [ MOD ]
+      | Token.Pow -> left_bytecode @ right_bytecode @ [ POW ]
+      | Token.Carot -> left_bytecode @ right_bytecode @ [ CONCAT ]
+      | Token.LogicalAnd -> left_bytecode @ right_bytecode @ [ AND ]
+      | Token.LogicalOr -> left_bytecode @ right_bytecode @ [ OR ]
+      | Token.Greater -> left_bytecode @ right_bytecode @ [ GREATER ]
+      | Token.Less -> left_bytecode @ right_bytecode @ [ LESS ]
+      | Token.Eq -> left_bytecode @ right_bytecode @ [ EQUAL ]
+      | Token.Geq -> left_bytecode @ right_bytecode @ [ GREATER_EQUAL ]
+      | Token.Leq -> left_bytecode @ right_bytecode @ [ LESS_EQUAL ]
+      | Token.Neq -> left_bytecode @ right_bytecode @ [ NOT_EQUAL ]
       | _ -> failwith "ByteCode: Unsupported operator")
   | Ast.Expr.CallExpr { callee; arguments } -> (
       match callee with
@@ -177,11 +126,10 @@ let rec compile_expr = function
   | Ast.Expr.UnaryExpr { operator; operand } -> (
       let operand_bytecode = compile_expr operand in
       match operator with
-      | Ast.Not -> operand_bytecode @ [ NOT ]
-      | Ast.Inc -> operand_bytecode @ [ INC ]
-      | Ast.Dec -> operand_bytecode @ [ DEC ]
+      | Token.Not -> operand_bytecode @ [ NOT ]
+      | Token.Inc -> operand_bytecode @ [ INC ]
+      | Token.Dec -> operand_bytecode @ [ DEC ]
       | _ -> failwith "Unsupported unary operator")
-  | Ast.Expr.NullExpr -> failwith "NullExpr not supported"
   | Ast.Expr.NewExpr _ -> failwith "NewExpr not supported"
   | Ast.Expr.PropertyAccessExpr _ -> failwith "PropertyAccessExpr"
   | Ast.Expr.ArrayExpr { elements } ->
@@ -224,7 +172,7 @@ let rec compile_stmt = function
       let function_body = compile_stmt (Ast.Stmt.BlockStmt { body }) in
       let param_bytecodes =
         List.map
-          (fun (param : Syntax.Ast.Stmt.parameter) -> [ STORE_VAR param.name ])
+          (fun (param : Ast.Stmt.parameter) -> [ STORE_VAR param.name ])
           parameters
       in
       let full_function_bytecode =

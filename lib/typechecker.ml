@@ -1,5 +1,3 @@
-open Syntax
-
 module TypeChecker = struct
   module Env = Map.Make (String)
 
@@ -207,7 +205,7 @@ module TypeChecker = struct
         let left_type = check_expr env left in
         let right_type = check_expr env right in
         match operator with
-        | Ast.Assign -> (
+        | Token.Assign -> (
             match left with
             | Ast.Expr.PropertyAccessExpr { object_name; property_name } -> (
                 let obj_type = check_expr env object_name in
@@ -233,14 +231,16 @@ module TypeChecker = struct
                    ^ name)
                 else var_type
             | _ -> failwith "TypeChecker: Invalid left-hand side in assignment")
-        | Ast.Eq | Ast.Neq | Ast.Less | Ast.Greater | Ast.Leq | Ast.Geq ->
+        | Token.Eq | Token.Neq | Token.Less | Token.Greater | Token.Leq
+        | Token.Geq ->
             if left_type = right_type then
               Ast.Type.SymbolType { value = "bool" }
             else failwith "TypeChecker: Type mismatch in comparison expression"
-        | Ast.Plus | Ast.Minus | Ast.Star | Ast.Slash | Ast.Mod | Ast.Pow ->
+        | Token.Plus | Token.Minus | Token.Star | Token.Slash | Token.Mod
+        | Token.Pow ->
             if left_type = right_type then left_type
             else failwith "TypeChecker: Type mismatch in arithmetic expression"
-        | Ast.Carot ->
+        | Token.Carot ->
             if
               left_type = Ast.Type.SymbolType { value = "string" }
               && right_type = Ast.Type.SymbolType { value = "string" }
@@ -249,11 +249,12 @@ module TypeChecker = struct
               failwith
                 "TypeChecker: Type mismatch in string concatenation, both \
                  operands must be strings"
-        | Ast.PlusAssign | Ast.MinusAssign | Ast.StarAssign | Ast.SlashAssign ->
+        | Token.PlusAssign | Token.MinusAssign | Token.StarAssign
+        | Token.SlashAssign ->
             failwith
               "TypeChecker: Assignment operation cannot be used as a condition \
                in an if statement"
-        | Ast.LogicalAnd | Ast.LogicalOr ->
+        | Token.LogicalAnd | Token.LogicalOr ->
             if
               (left_type = Ast.Type.SymbolType { value = "bool" }
               || left_type = Ast.Type.SymbolType { value = "int" })
@@ -274,12 +275,12 @@ module TypeChecker = struct
     | Ast.Expr.UnaryExpr { operator; operand } -> (
         let operand_type = check_expr env operand in
         match operator with
-        | Ast.Not ->
+        | Token.Not ->
             if operand_type = Ast.Type.SymbolType { value = "bool" } then
               Ast.Type.SymbolType { value = "bool" }
             else
               failwith "TypeChecker: Operand of NOT operator must be a boolean"
-        | Ast.Inc ->
+        | Token.Inc ->
             if
               operand_type = Ast.Type.SymbolType { value = "int" }
               || operand_type = Ast.Type.SymbolType { value = "float" }
@@ -288,7 +289,7 @@ module TypeChecker = struct
               failwith
                 "TypeChecker: Operand of unary minus must be an integer or \
                  float"
-        | Ast.Dec ->
+        | Token.Dec ->
             if
               operand_type = Ast.Type.SymbolType { value = "int" }
               || operand_type = Ast.Type.SymbolType { value = "float" }

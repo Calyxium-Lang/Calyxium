@@ -48,22 +48,19 @@ module TypeChecker : sig
     val of_seq : (key * 'a) Seq.t -> 'a t
   end
 
-  type func_sig = {
-    param_types : Syntax.Ast.Type.t list;
-    return_type : Syntax.Ast.Type.t;
-  }
+  type func_sig = { param_types : Ast.Type.t list; return_type : Ast.Type.t }
 
   val print_func_sig : func_sig
   val input_func_sig : func_sig
   val println_func_sig : func_sig
 
   type class_info = {
-    class_type : Syntax.Ast.Type.t;
-    properties : (string * Syntax.Ast.Type.t) list;
+    class_type : Ast.Type.t;
+    properties : (string * Ast.Type.t) list;
   }
 
   type env = {
-    var_type : Syntax.Ast.Type.t Env.t;
+    var_type : Ast.Type.t Env.t;
     func_env : func_sig Env.t;
     class_env : class_info Env.t;
     modules : string list;
@@ -79,33 +76,25 @@ module TypeChecker : sig
   val register_module_functions : env -> string -> func_sig Env.t
   val load_module : env -> string -> env
   val check_function_call : env -> Env.key -> func_sig
-  val lookup_var : env -> Env.key -> Syntax.Ast.Type.t
+  val lookup_var : env -> Env.key -> Ast.Type.t
   val lookup_func : env -> Env.key -> func_sig
   val lookup_class : env -> Env.key -> class_info
   val check_import : env -> string -> env
   val check_export : env -> Env.key -> env
-  val check_expr : env -> Syntax.Ast.Expr.t -> Syntax.Ast.Type.t
-
-  val check_var_decl :
-    env -> Env.key -> Syntax.Ast.Type.t -> Syntax.Ast.Expr.t option -> env
+  val check_expr : env -> Ast.Expr.t -> Ast.Type.t
+  val check_var_decl : env -> Env.key -> Ast.Type.t -> Ast.Expr.t option -> env
 
   val check_func_decl :
     env ->
     Env.key ->
-    Syntax.Ast.Stmt.parameter list ->
-    Syntax.Ast.Type.t ->
-    Syntax.Ast.Stmt.t list ->
+    Ast.Stmt.parameter list ->
+    Ast.Type.t ->
+    Ast.Stmt.t list ->
     env
 
   val check_stmt :
-    env ->
-    expected_return_type:Syntax.Ast.Type.t option ->
-    Syntax.Ast.Stmt.t ->
-    env
+    env -> expected_return_type:Ast.Type.t option -> Ast.Stmt.t -> env
 
   val check_block :
-    env ->
-    Syntax.Ast.Stmt.t list ->
-    expected_return_type:Syntax.Ast.Type.t option ->
-    env
+    env -> Ast.Stmt.t list -> expected_return_type:Ast.Type.t option -> env
 end

@@ -1,72 +1,11 @@
-type token =
-  | Plus
-  | Minus
-  | Star
-  | Slash
-  | Mod
-  | Pow
-  | Carot
-  | LParen
-  | RParen
-  | LBracket
-  | RBracket
-  | LBrace
-  | RBrace
-  | Dot
-  | Question
-  | Colon
-  | Semi
-  | Comma
-  | Not
-  | Pipe
-  | Amspersand
-  | Greater
-  | Less
-  | LogicalOr
-  | LogicalAnd
-  | Eq
-  | Neq
-  | Geq
-  | Leq
-  | Dec
-  | Inc
-  | Assign
-  | PlusAssign
-  | MinusAssign
-  | StarAssign
-  | SlashAssign
-  | Function
-  | If
-  | Else
-  | Return
-  | Var
-  | Const
-  | Switch
-  | Case
-  | Break
-  | Default
-  | For
-  | Import
-  | Export
-  | Class
-  | True
-  | False
-  | New
-  | Null
-  | IntType
-  | FloatType
-  | StringType
-  | ByteType
-  | BoolType
-  | Ident of string
-  | Int of int
-  | Float of float
-  | String of string
-  | Byte of char
-  | Bool of bool
-  | EOF
-
-val pp_token : Format.formatter -> token -> unit
+module Type : sig
+  type t =
+    | SymbolType of { value : string }
+    | ArrayType of { element_type : t }
+    | ClassType of { name : string; properties : (string * t) list }
+    | Any
+  [@@deriving show]
+end
 
 module Expr : sig
   type t =
@@ -76,23 +15,13 @@ module Expr : sig
     | ByteExpr of { value : char }
     | BoolExpr of { value : bool }
     | VarExpr of string
-    | BinaryExpr of { left : t; operator : token; right : t }
+    | BinaryExpr of { left : t; operator : Token.t; right : t }
     | CallExpr of { callee : t; arguments : t list }
-    | UnaryExpr of { operator : token; operand : t }
-    | NullExpr
+    | UnaryExpr of { operator : Token.t; operand : t }
     | NewExpr of { class_name : string; arguments : t list }
     | PropertyAccessExpr of { object_name : t; property_name : string }
     | ArrayExpr of { elements : t list }
     | IndexExpr of { array : t; index : t }
-  [@@deriving show]
-end
-
-module Type : sig
-  type t =
-    | SymbolType of { value : string }
-    | ArrayType of { element_type : t }
-    | ClassType of { name : string; properties : (string * t) list }
-    | Any
   [@@deriving show]
 end
 

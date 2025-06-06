@@ -1,14 +1,14 @@
-let a: int = 5;
-let b: int = 10;
+let a: int = 5
+let b: int = 10
 
 fun num(x: int, y: int): int {
-    return x + y;
-};
+    return x + y
+}
 
-println(num(a, b));
+println(num(a, b))
 
 # fun greet(): string {
-#     return "hello";
-# };
+#     return "hello"
+# }
 
-# println(greet());
+# println(greet())

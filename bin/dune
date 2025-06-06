@@ -1,5 +1,5 @@
 (executable
  (name calyxium)
- (public_name calyxium)
- (modules calyxium)
- (libraries calyxiumlib))
+ (public_name Calyxium)
+ (libraries Calyxiumlib)
+ (modes native))
