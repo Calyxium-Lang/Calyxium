@@ -6,6 +6,7 @@ type opcode =
   | LOAD_STRING of string
   | LOAD_BYTE of char
   | LOAD_BOOL of bool
+  | LOAD_UNIT of unit
   | LOAD_ARRAY of int
   | LOAD_INDEX
   | FUNC of string

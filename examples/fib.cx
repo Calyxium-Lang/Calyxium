@@ -1,15 +1,15 @@
-fun fib(n: int): int {
+fib(n: int): int {
     if (n < 1) {
         println("Invalid Number of terms")
     }
 
-    let PrevOne: int = 1;
-    let PrevTwo: int = 0;
-    let i: int = 1;
+    let PrevOne: int = 1
+    let PrevTwo: int = 0
+    let i: int = 1
 
     for (i; i <= n; i++) {
         if (i > 2) {
-            let current: int = PrevOne + PrevTwo;
+            let current: int = PrevOne + PrevTwo
             PrevOne = PrevOne
             PrevOne = current
             println(current)

@@ -5,15 +5,16 @@
 %right Assign PlusAssign MinusAssign StarAssign SlashAssign
 %nonassoc Inc Dec
 
-%token Function If Else Var Const Switch Case Default For Import Export New Return Class True False 
+%token Function If Else Var Switch Case Default For Import New Return Class True False 
 %token Plus Minus Star Slash Mod Pow LParen RParen LBracket RBracket LBrace RBrace Dot Colon Carot Semi Comma Not Greater Less 
-%token LogicalOr LogicalAnd Eq Neq Geq Leq Dec Inc IntType FloatType StringType ByteType BoolType Assign PlusAssign MinusAssign StarAssign SlashAssign
+%token Implies MapsTo LogicalOr LogicalAnd Eq Neq Geq Leq Dec Inc IntType FloatType StringType ByteType BoolType UnitType Assign PlusAssign MinusAssign StarAssign SlashAssign
 %token <string> Ident
 %token <int64> Int
 %token <float> Float
 %token <string> String
 %token <char> Byte
 %token <bool> Bool
+%token <unit> Unit
 %token EOF
 
 %start program
@@ -38,7 +39,6 @@ simple_stmt:
     VarDeclStmt { $1 }
   | NewVarDeclStmt { $1 }
   | ImportStmt { $1 }
-  | ExportStmt { $1 }
 
 compound_stmt:
     FunctionDeclStmt { $1 }
@@ -97,12 +97,8 @@ default_opt:
   | { None }
 
 FunctionDeclStmt:
-    Function Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace {
-      Ast.Stmt.FunctionDeclStmt { name = $2; parameters = $4; return_type = Some $7; body = $9 }
-    }
-  | Function Ident LParen parameter_list RParen LBrace stmt_list RBrace {
-      Ast.Stmt.FunctionDeclStmt { name = $2; parameters = $4; return_type = None; body = $7 }
-    }
+    Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $1; parameters = $3; return_type = Some $6; body = $8 } }
+    | Ident LParen parameter_list RParen Colon type_expr Implies stmt_list { Ast.Stmt.FunctionDeclStmt { name = $1; parameters= $3; return_type = Some $6; body = $8 } }
 
 parameter_list:
     parameter Comma parameter_list { $1 :: $3 }
@@ -118,6 +114,7 @@ type_expr:
   | StringType { Ast.Type.SymbolType { value = "string" } }
   | ByteType { Ast.Type.SymbolType { value = "byte" } }
   | BoolType { Ast.Type.SymbolType { value = "bool" } }
+  | UnitType { Ast.Type.SymbolType { value = "unit"} }
   | LBracket RBracket type_expr { Ast.Type.ArrayType { element_type = $3 } }
 
 expr:
@@ -156,6 +153,7 @@ expr:
   | String { Ast.Expr.StringExpr { value = $1 } }
   | Byte { Ast.Expr.ByteExpr { value = $1 } }
   | Bool { Ast.Expr.BoolExpr { value = $1 } }
+  | Unit { Ast.Expr.UnitExpr { value = $1 } }
   | Ident { Ast.Expr.VarExpr $1 }
   | LBrace RBrace { Ast.Expr.ArrayExpr { elements = [] } }
   | LBrace expr_list RBrace { Ast.Expr.ArrayExpr { elements = $2 } }
@@ -171,9 +169,7 @@ argument_list:
   | { [] }
 
 ClassDeclStmt:
-    Class Ident LBrace class_body RBrace {
-      Ast.Stmt.ClassDeclStmt { name = $2; properties = fst $4; methods = snd $4 }
-    }
+    Class Ident LBrace class_body RBrace { Ast.Stmt.ClassDeclStmt { name = $2; properties = fst $4; methods = snd $4 } }
 
 class_body:
     class_member class_body { (fst $1 @ fst $2, snd $1 @ snd $2) }
@@ -186,21 +182,8 @@ class_member:
 ImportStmt:
     Import String { Ast.Stmt.ImportStmt { module_name = $2 } }
 
-ExportStmt:
-    Export Ident { Ast.Stmt.ExportStmt { identifier = $2 } }
-
 VarDeclStmt:
-    Var Ident Colon type_expr Assign expr {
-      Ast.Stmt.VarDeclarationStmt { identifier = $2; constant = false; assigned_value = Some $6; explicit_type = $4 }
-    }
-  | Const Ident Colon type_expr Assign expr {
-      Ast.Stmt.VarDeclarationStmt { identifier = $2; constant = true; assigned_value = Some $6; explicit_type = $4 }
-    }
+    Var Ident Colon type_expr Assign expr { Ast.Stmt.VarDeclarationStmt { identifier = $2; constant = true; assigned_value = Some $6; explicit_type = $4 } }
 
 NewVarDeclStmt:
-    Var Ident Assign New Ident {
-      Ast.Stmt.NewVarDeclarationStmt { identifier = $2; constant = false; assigned_value = Some (Ast.Expr.NewExpr { class_name = $5; arguments = [] }); arguments = [] }
-    }
-  | Const Ident Assign New Ident {
-      Ast.Stmt.NewVarDeclarationStmt { identifier = $2; constant = true; assigned_value = Some (Ast.Expr.NewExpr { class_name = $5; arguments = [] }); arguments = [] }
-    }
+    Var Ident Assign New Ident { Ast.Stmt.NewVarDeclarationStmt { identifier = $2; constant = true; assigned_value = Some (Ast.Expr.NewExpr { class_name = $5; arguments = [] }); arguments = [] } }

@@ -15,8 +15,8 @@
 
 (package
  (name Calyxium)
- (synopsis "An interpreted Language")
- (description "Calyxium is a programming language interpreter written in OCaml.")
- (depends ocaml dune menhir)
+ (synopsis "An split Language")
+ (description "Calyxium is a split programming language written in OCaml.")
+ (depends ocaml dune menhir zarith)
  (tags
-  ("interpreter" "language")))
+  ("compiler" "functional" "interpreter" "language")))

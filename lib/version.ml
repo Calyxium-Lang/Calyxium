@@ -1,4 +1,5 @@
 let version = (0, 1, 0)
+let codename = "Amber"
 
 let detect_system () =
   match Sys.os_type with

@@ -14,6 +14,7 @@ module Expr = struct
     | StringExpr of { value : string }
     | ByteExpr of { value : char }
     | BoolExpr of { value : bool }
+    | UnitExpr of { value : unit }
     | VarExpr of string
     | BinaryExpr of { left : t; operator : Token.t; right : t }
     | CallExpr of { callee : t; arguments : t list }
@@ -63,7 +64,6 @@ module Stmt = struct
         methods : t list;
       }
     | ImportStmt of { module_name : string }
-    | ExportStmt of { identifier : string }
     | SwitchStmt of {
         expr : Expr.t;
         cases : (Expr.t * t list) list;

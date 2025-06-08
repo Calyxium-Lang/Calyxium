@@ -1,1 +1,8 @@
-println("Hello, world!")
+let a: int = 5
+let b: int = 10
+
+num(x: int, y: int): int {
+    return x + y
+}
+
+println(num(a, b))

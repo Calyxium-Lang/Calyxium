@@ -6,6 +6,7 @@ type opcode =
   | LOAD_STRING of string
   | LOAD_BYTE of char
   | LOAD_BOOL of bool
+  | LOAD_UNIT of unit
   | LOAD_ARRAY of int
   | LOAD_INDEX
   | FUNC of string
@@ -55,6 +56,7 @@ let rec compile_expr = function
   | Ast.Expr.FloatExpr { value } -> [ LOAD_FLOAT value ]
   | Ast.Expr.StringExpr { value } -> [ LOAD_STRING value ]
   | Ast.Expr.ByteExpr { value } -> [ LOAD_BYTE value ]
+  | Ast.Expr.UnitExpr { value } -> [ LOAD_UNIT value ]
   | Ast.Expr.BoolExpr { value } ->
       if value then [ LOAD_BOOL true ] else [ LOAD_BOOL false ]
   | Ast.Expr.VarExpr name -> [ LOAD_VAR name ]
@@ -168,18 +170,15 @@ let rec compile_stmt = function
   | Ast.Stmt.NewVarDeclarationStmt _ ->
       failwith "NewVarDeclarationStmt not supported"
   | Ast.Stmt.FunctionDeclStmt { name; parameters; body; _ } ->
-      let start_bytecode = [ FUNC name ] in
       let function_body = compile_stmt (Ast.Stmt.BlockStmt { body }) in
       let param_bytecodes =
         List.map
           (fun (param : Ast.Stmt.parameter) -> [ STORE_VAR param.name ])
           parameters
       in
-      let full_function_bytecode =
-        start_bytecode @ List.concat param_bytecodes @ function_body
-      in
-      Hashtbl.add function_table name full_function_bytecode;
-      full_function_bytecode
+      let func_code = List.concat param_bytecodes @ function_body in
+      Hashtbl.replace function_table name func_code;
+      []
   | Ast.Stmt.ForStmt _ -> failwith "ForStmt not implemented"
   | Ast.Stmt.ClassDeclStmt _ -> failwith "ClassStmt not implemented"
   | Ast.Stmt.SwitchStmt { expr; cases; default_case } ->
@@ -219,4 +218,3 @@ let rec compile_stmt = function
       in
       patched_bytecode
   | Ast.Stmt.ImportStmt _ -> failwith "ImportStmt not implemented"
-  | Ast.Stmt.ExportStmt _ -> failwith "ExportStmt not implemented"

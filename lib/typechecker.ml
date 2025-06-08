@@ -28,7 +28,6 @@ module TypeChecker = struct
     func_env : func_sig Env.t;
     class_env : class_info Env.t;
     modules : string list;
-    exports : string list;
   }
 
   let len_func_sig =
@@ -82,7 +81,6 @@ module TypeChecker = struct
         func_env = Env.empty;
         class_env = Env.empty;
         modules = [];
-        exports = [];
       }
     in
     register_builtin_functions base_env
@@ -145,12 +143,6 @@ module TypeChecker = struct
     if List.mem module_name env.modules then
       failwith ("Module " ^ module_name ^ " already imported")
     else { env with modules = module_name :: env.modules }
-
-  let check_export env identifier =
-    if Env.mem identifier env.var_type then
-      { env with exports = identifier :: env.exports }
-    else
-      failwith ("TypeChecker: Cannot export undefined identifier " ^ identifier)
 
   let rec check_expr env = function
     | Ast.Expr.IntExpr _ -> Ast.Type.SymbolType { value = "int" }
@@ -334,7 +326,6 @@ module TypeChecker = struct
         func_env;
         class_env = env.class_env;
         modules = env.modules;
-        exports = env.exports;
       }
     in
     let _ = check_block new_env body ~expected_return_type:(Some return_type) in
@@ -462,7 +453,6 @@ module TypeChecker = struct
         | None -> ());
         env
     | Ast.Stmt.ImportStmt { module_name } -> check_import env module_name
-    | Ast.Stmt.ExportStmt { identifier } -> check_export env identifier
 
   and check_block env stmts ~expected_return_type =
     List.fold_left

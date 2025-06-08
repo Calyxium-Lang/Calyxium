@@ -65,6 +65,8 @@ rule token = parse
     | "<="                  { column := !column + 2; Leq }
     | "--"                  { column := !column + 2; Dec }
     | "++"                  { column := !column + 2; Inc }
+    | "=>"                  { column := !column + 2; Implies }
+    | "->"                  { column := !column + 2; MapsTo }
 
     | "="                   { token_and_update_column Assign lexbuf }
     | "+="                  { column := !column + 2; PlusAssign }
@@ -76,14 +78,13 @@ rule token = parse
     | "if"                  { ignore (update_column_with_lexeme lexbuf); If }
     | "else"                { ignore (update_column_with_lexeme lexbuf); Else }
     | "let"                 { ignore (update_column_with_lexeme lexbuf); Var }
-    | "const"               { ignore (update_column_with_lexeme lexbuf); Const }
     | "switch"              { ignore (update_column_with_lexeme lexbuf); Switch }
     | "case"                { ignore (update_column_with_lexeme lexbuf); Case }
     | "default"             { ignore (update_column_with_lexeme lexbuf); Default }
     | "return"              { ignore (update_column_with_lexeme lexbuf); Return}
     | "for"                 { ignore (update_column_with_lexeme lexbuf); For }
     | "import"              { ignore (update_column_with_lexeme lexbuf); Import }
-    | "export"              { ignore (update_column_with_lexeme lexbuf); Export }
+    | "mod"                 { ignore (update_column_with_lexeme lexbuf); Mod }
     | "struct"              { ignore (update_column_with_lexeme lexbuf); Class }
     | "new"                 { ignore (update_column_with_lexeme lexbuf); New }
     | "true"                { ignore (update_column_with_lexeme lexbuf); True }
@@ -94,6 +95,7 @@ rule token = parse
     | "string"              { ignore (update_column_with_lexeme lexbuf); StringType }
     | "byte"                { ignore (update_column_with_lexeme lexbuf); ByteType }
     | "bool"                { ignore (update_column_with_lexeme lexbuf); BoolType }
+    | "unit"                { ignore (update_column_with_lexeme lexbuf); UnitType }
 
     | Identifier            { let lexeme = Lexing.lexeme lexbuf in column := !column + String.length lexeme; Ident lexeme }
     | Floats                { let lexeme = Lexing.lexeme lexbuf in column := !column + String.length lexeme; Float (float_of_string lexeme) }

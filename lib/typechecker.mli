@@ -64,7 +64,6 @@ module TypeChecker : sig
     func_env : func_sig Env.t;
     class_env : class_info Env.t;
     modules : string list;
-    exports : string list;
   }
 
   val len_func_sig : func_sig
@@ -80,7 +79,6 @@ module TypeChecker : sig
   val lookup_func : env -> Env.key -> func_sig
   val lookup_class : env -> Env.key -> class_info
   val check_import : env -> string -> env
-  val check_export : env -> Env.key -> env
   val check_expr : env -> Ast.Expr.t -> Ast.Type.t
   val check_var_decl : env -> Env.key -> Ast.Type.t -> Ast.Expr.t option -> env
 

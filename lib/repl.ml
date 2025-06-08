@@ -6,18 +6,19 @@ let eval_input input =
     |> ignore;
     ast |> Bytecode.compile_stmt |> Vm.run |> ignore
   with e ->
-    Printf.printf "Repl: An unexpected error occurred: %s\n"
+    Printf.eprintf "Repl: An unexpected error occurred: %s\n"
       (Printexc.to_string e)
 
 let print_repl_info () =
   let major, minor, patch = Version.version in
   let system = Version.detect_system () in
-  Printf.printf "Calyxium %d.%d.%d on %s\n" major minor patch system
+  Printf.printf "Calyxium %d.%d.%d (%s) on %s\n" major minor patch
+    Version.codename system
 
 let rec repl () =
-  Printf.printf ">> ";
+  print_string ">> ";
   let input = read_line () in
   if input <> "help()" && input <> "copyright()" then (
     eval_input input;
     repl ())
-  else Printf.printf "Exiting REPL.\n"
+  else print_endline "Exiting REPL."
