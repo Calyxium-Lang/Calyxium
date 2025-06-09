@@ -2,11 +2,11 @@
 %left Star Slash Mod
 %left Plus Minus
 %left Carot
-%right PlusAssign MinusAssign StarAssign SlashAssign
+%right Assign PlusAssign MinusAssign StarAssign SlashAssign
 %nonassoc Inc Dec
 
 %token Function Recursive If Then Else Let Match With Return For Use Module True False IntType FloatType StringType ByteType BoolType UnitType
-%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
+%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc Implies MapsTo PlusAssign MinusAssign StarAssign SlashAssign
 %token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore
 %token <string> Ident
 %token <int64> Int
@@ -32,6 +32,7 @@ stmt_list:
 stmt:
   simple_stmt { $1 }
   | compound_stmt { $1 }
+  | expr { Ast.Stmt.ExprStmt $1 }
 
 simple_stmt:
   VarDeclStmt { $1 }
@@ -148,4 +149,4 @@ IfStmt:
   | If LParen expr RParen LBrace stmt_list RBrace { Ast.Stmt.IfStmt { condition = $3; then_branch = Ast.Stmt.BlockStmt { body = $6 }; else_branch = None } }
 
 ForStmt:
-    For LParen stmt_opt Semi expr_opt Semi stmt_opt RParen LBrace stmt_list RBrace { let default_condition = Ast.Expr.VarExpr "true" in let increment_stmt = match $7 with | None -> (match $3 with | Some (Ast.Stmt.VarDeclarationStmt { identifier; _ }) -> Some (Ast.Stmt.ExprStmt (Ast.Expr.UnaryExpr { operator = Token.Inc; operand = Ast.Expr.VarExpr identifier })) | Some (Ast.Stmt.ExprStmt (Ast.Expr.VarExpr var_name)) -> Some (Ast.Stmt.ExprStmt (Ast.Expr.UnaryExpr { operator = Token.Inc; operand = Ast.Expr.VarExpr var_name })) | _ -> None) | Some (Ast.Stmt.ExprStmt expr) -> Some (Ast.Stmt.ExprStmt expr) | Some _ -> None in Ast.Stmt.ForStmt { init = $3; condition = Option.value ~default:default_condition $5; increment = increment_stmt; body = Ast.Stmt.BlockStmt { body = $10 } } }
+  For LParen stmt_opt Semi expr_opt Semi stmt_opt RParen LBrace stmt_list RBrace { let default_condition = Ast.Expr.VarExpr "true" in let increment_stmt = match $7 with | None -> (match $3 with | Some (Ast.Stmt.VarDeclarationStmt { identifier; _ }) -> Some (Ast.Stmt.ExprStmt (Ast.Expr.UnaryExpr { operator = Token.Inc; operand = Ast.Expr.VarExpr identifier })) | Some (Ast.Stmt.ExprStmt (Ast.Expr.VarExpr var_name)) -> Some (Ast.Stmt.ExprStmt (Ast.Expr.UnaryExpr { operator = Token.Inc; operand = Ast.Expr.VarExpr var_name })) | _ -> None) | Some (Ast.Stmt.ExprStmt expr) -> Some (Ast.Stmt.ExprStmt expr) | Some _ -> None in Ast.Stmt.ForStmt { init = $3; condition = Option.value ~default:default_condition $5; increment = increment_stmt; body = Ast.Stmt.BlockStmt { body = $10 } } }
