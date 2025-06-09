@@ -1,7 +1,8 @@
-val get_line : unit -> int
-val get_column : unit -> int
+val line : int ref
+val column : int ref
 val update_column : unit -> unit
 val update_line : unit -> unit
-val token_and_update_column : 'a -> Lexing.lexbuf -> 'a
+val advance_by_lexeme : Lexing.lexbuf -> string
+val advance_and_return : 'a -> Lexing.lexbuf -> 'a
+val advance_fixed_width : 'a -> int -> 'a
 val token : Lexing.lexbuf -> Parser.token
-val read_comment : Lexing.lexbuf -> Parser.token

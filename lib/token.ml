@@ -1,11 +1,28 @@
 type t =
+  | Eq
+  | Neq
+  | Geq
+  | Leq
+  | LogicalOr
+  | LogicalAnd
+  | Pow
+  | Dec
+  | Inc
+  | Impiles
+  | MapsTo
+  | PlusAssign
+  | MinusAssign
+  | StarAssign
+  | SlashAssign
   | Plus
   | Minus
   | Star
   | Slash
   | Mod
-  | Pow
   | Carot
+  | Assign
+  | Greater
+  | Less
   | LParen
   | RParen
   | LBracket
@@ -13,56 +30,37 @@ type t =
   | LBrace
   | RBrace
   | Dot
-  | Question
   | Colon
   | Semi
   | Comma
   | Not
   | Pipe
-  | Amspersand
-  | Greater
-  | Less
-  | LogicalOr
-  | LogicalAnd
-  | Eq
-  | Neq
-  | Geq
-  | Leq
-  | Dec
-  | Inc
-  | Assign
-  | PlusAssign
-  | MinusAssign
-  | StarAssign
-  | SlashAssign
+  | UnderScore
   | Function
+  | Recursive
   | If
   | Else
+  | Let
+  | Match
+  | With
   | Return
-  | Var
-  | Const
-  | Switch
-  | Case
-  | Break
-  | Default
   | For
-  | Import
-  | Export
-  | Class
+  | Use
+  | Module
   | True
   | False
-  | New
-  | Null
   | IntType
   | FloatType
   | StringType
   | ByteType
   | BoolType
-  | Ident of string
+  | UnitType
+  | Identifier of string
   | Int of int
   | Float of float
   | String of string
   | Byte of char
   | Bool of bool
+  | Unit of unit
   | EOF
 [@@deriving show]

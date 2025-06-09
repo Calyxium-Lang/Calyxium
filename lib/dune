@@ -1,6 +1,6 @@
 (library
  (name Calyxiumlib)
- (modules ast lexer parser typechecker vm bytecode token repl version)
+ (modules ast lexer parser token version)
  (libraries ppx_deriving.show zarith unix)
  (preprocess
   (pps ppx_deriving.show)))

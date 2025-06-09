@@ -2,19 +2,9 @@ let a: float = input("Enter number one: ")
 let b: float = input("Enter number two: ")
 let op: byte = input("Enter operator: ")
 
-switch op {
-    case '+':
-        println(a + b)
-    case '-':
-        println(a - b)
-    case '*':
-        println(a * b)
-    case '/':
-        if (b == 0.0) {
-            println("Can't divide by zero")
-        } else {
-            println(a / b)
-        }
-    default:
-        println("Case not found!")
-}
+match op with
+    | '+' -> println(a + b)
+    | '-' -> println(a - b)
+    | '*' -> println(a * b)
+    | '/' -> println(a / b)
+    _ -> println("Option not found")

@@ -1,8 +1,0 @@
-1 (A) Add For Loops into programming language
-2 (A) Fix incermentation issue inside For loops
-3 Fix Functions
-5 (B) Add Structs
-6 (B) Add New 
-7 (B) Add PropertyAccess
-8 (D) Add Import
-9 (D) Add Exports
