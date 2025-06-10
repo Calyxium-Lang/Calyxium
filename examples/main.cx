@@ -21,7 +21,7 @@ if (age >= 18) {
 match str with
     | "Hello" -> println("String is: " ^ str)
     | "Helloo" -> println("String is: " ^ str)
-    _ -> println("Neither condition was met string was: " ^ str)
+    | _ -> println("Neither condition was met string was: " ^ str)
 
 # if (str == "Hello") {
 #     println("String is: " ^ str)
@@ -38,7 +38,7 @@ println("Second element of array r: " ^ ToString(r[2]))
 match op with
     | '+' -> println("plus")
     | '-' -> println("minus")
-    _ -> println("default")
+    | _ -> println("default")
 
 println(r)
 

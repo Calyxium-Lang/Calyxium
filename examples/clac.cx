@@ -7,4 +7,4 @@ match op with
     | '-' -> println(a - b)
     | '*' -> println(a * b)
     | '/' -> println(a / b)
-    _ -> println("Option not found")
+    | _ -> println("Option not found")

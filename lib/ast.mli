@@ -51,11 +51,7 @@ module Stmt : sig
       }
     | ImportStmt of { module_name : string }
     | ModuleStmt of { module_name : string; block : t list }
-    | MatchStmt of {
-        expr : Expr.t;
-        cases : (Expr.t * t list) list;
-        default_case : t list option;
-      }
+    | MatchStmt of { expr : Expr.t; cases : (Expr.t option * t list) list }
     | ExprStmt of Expr.t
   [@@deriving show]
 end
