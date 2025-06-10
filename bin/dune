@@ -1,5 +1,5 @@
 (executable
  (name calyxium)
  (public_name Calyxium)
- (libraries Calyxiumlib)
+ (libraries Calyxiumlib ANSITerminal)
  (modes native))

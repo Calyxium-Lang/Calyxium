@@ -1,7 +1,7 @@
 (library
  (name Calyxiumlib)
- (modules ast lexer parser token version)
- (libraries ppx_deriving.show zarith unix)
+ (modules ast lexer parser token version typechecker)
+ (libraries ppx_deriving.show zarith unix ANSITerminal)
  (preprocess
   (pps ppx_deriving.show)))
 

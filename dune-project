@@ -17,6 +17,6 @@
  (name Calyxium)
  (synopsis "An interpretered Language")
  (description "Calyxium is an interpretered programming language written in OCaml.")
- (depends ocaml dune menhir zarith)
+ (depends ocaml dune menhir zarith ANSITerminal)
  (tags
   ("functional" "interpreter" "language")))
