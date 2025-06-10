@@ -1,71 +1,77 @@
-# Calyxium
-Calyxium is a split memory safe language
+# Calyxium: **An Interpreted Programming Language**
 
-- [Installation](#installation)
-- [Getting Started](#getting-started)
-- [Usage](#usage)
-- [Examples](#examples)
-- [Contributing](#contributing)
-- [License](#license)
+<!-- TOC -->
+
+<p align="left"> 
+    <a href="#installation">Installation</a> | 
+    <a href="#getting-started">Getting Started</a> | 
+    <a href="#usage">Usage</a> | 
+    <a href="#contributing">Contributing</a> | 
+    <a href="#license">License</a>
+</p>
+
+<!-- TOC -->
 
 ## Installation
-To install Calyxium, follow these steps:
+Follow these steps to install and build Calyxium:
 
-1. Ensure you have OCaml installed on your system. You can download it from [Linux](https://ocaml.org/install#linux_mac_bsd), [Windows](https://ocaml.org/install#windows)
+1. Install OCaml
 
-2. Clone the Calyxium repository:
-`git clone https://github.com/Calyxium-Lang/Calyxium.git`
+    Download and install OCaml from the [official site](https://ocaml.org/install)
+    - [Linux/macOS/BSD](https://ocaml.org/install#linux_mac_bsd)
+    - [Windows](https://ocaml.org/install#windows)
 
-3. Navigate to the cloned directory:
-`cd Calyxium`
+2. Clone the repository
+    ```bash
+    git clone https://github.com/Calyxium-Lang/Calyxium.git
+    cd Calyxium
+    ```
 
-4. Run the build script `dune build`
+4. Install dependencies
+    ```bash
+    opam install menhir zarith ANSITerminal
+    ```
+
+4. Build the projrct
+    ```bash
+    dune build
+    ```
 
 ## Getting Started
-To start using Calyxium, you need to create a script file with the `.cx` extension. Here's a simple example to get you started:
+Create a new Calyxium script with the `.cx` extension. Here's a basic example:
 ```
 # This is a comment in Calyxium
-println("Hello, world");
+println("Hello, world")
 ```
-To run your script, use the following command:
-`calyxium main.cx`
+To run your script:
+`./calyxium main.cx`
 
 ## Usage
-Calyxium is designed to be easy to learn and use. Here are some basic commands and their usage:
-
-- `println("Hello, world!");`: Prints a message to the standard output.
-- `let x: int = 10;` Declares a variable `x` and assigns it the value of `int 10`.
-- `if (condition) { ... };`: Executes a block of code if the condition is true.
-
-For a more in-depth tutorial, refer to the [official documentation](https://calyxium.cc/docs)
-
-## Examples
-Here are some examples to help you get started with Calyxium:
-
-- **Hello, World**:
+Calyxium is designed to be expressive and easy to use. Here are some common features:
+- **Printing**
     ```
-    println("Hello, World!");
+    println("Hello, world")
     ```
-
-- **Variable Declaration and Printing**:
+- **Variables**
     ```
-    let name: string = "Alice";
-    print("Hello, " ^ name ^ "!");
+    let x: int = 10
+    ```
+- **Conditionals**
+    ```
+    if (x > 5) {
+        println("x is greater than 5")
+    }
     ```
 
-- **Conditional Statements**:
-    ```
-    let age: int = 25;
-    if (age >= 18) {
-        println("You are an adult.");
-    } else {
-        println("You are not an adult.");
-    };
-    ```
+For more detailed documentation, visit the [official documentation](https://calyxium.cc/docs)
 
 ## Contributing
+We welcome contributions! Whether it's a bug report, feature suggestion, or code contribution:
 
-Contributions to Calyxium are welcome! If you find a bug or have a feature request, please open an issue on our [GitHub repository](https://github.com/Calyxium-Lang/Calyxium/issues). If you'd like to contribute code, please fork the repository and submit a pull request.
+- File issues via the [issue tracker](http://github.com/Calyxium-Lang/Calyxium/issues)
+- For the repo and open a pull request
+
+Please follow conventional commit and PR practices where possible.
 
 ## License
 
