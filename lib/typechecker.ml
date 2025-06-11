@@ -2,6 +2,37 @@ open Ast
 
 exception TypeError of string
 
+let builtins : (string * (Type.t list * Type.t) list) list =
+  [
+    ("println", [ ([ Type.Any ], Type.SymbolType { value = "unit" }) ]);
+    ( "input",
+      [
+        ( [ Type.SymbolType { value = "string" } ],
+          Type.SymbolType { value = "unit" } );
+      ] );
+    ( "to_float",
+      [
+        ( [ Type.SymbolType { value = "string" } ],
+          Type.SymbolType { value = "float" } );
+        ( [ Type.SymbolType { value = "int" } ],
+          Type.SymbolType { value = "float" } );
+      ] );
+    ( "to_int",
+      [
+        ( [ Type.SymbolType { value = "string" } ],
+          Type.SymbolType { value = "int" } );
+        ( [ Type.SymbolType { value = "float" } ],
+          Type.SymbolType { value = "int" } );
+      ] );
+    ("to_string", [ ([ Type.Any ], Type.SymbolType { value = "string" }) ]);
+  ]
+
+let rec string_of_type = function
+  | Ast.Type.Any -> "any"
+  | Ast.Type.SymbolType { value } -> value
+  | Ast.Type.ArrayType { element_type } ->
+      "[" ^ string_of_type element_type ^ "]"
+
 let rec type_eq expected actual =
   match (expected, actual) with
   | Type.SymbolType { value = "unit" }, _ -> true
@@ -13,8 +44,8 @@ let rec type_eq expected actual =
   | _ -> false
 
 let rec check_expr (env : (string * Type.t) list)
-    (func_env : (string * (Type.t list * Type.t)) list) (expr : Expr.t) : Type.t
-    =
+    (func_env : (string * (Type.t list * Type.t) list) list) (expr : Expr.t) :
+    Type.t =
   let open Expr in
   match expr with
   | IntExpr _ -> Type.SymbolType { value = "int" }
@@ -35,17 +66,22 @@ let rec check_expr (env : (string * Type.t) list)
       lt
   | CallExpr { callee = VarExpr name; arguments } -> (
       match List.assoc_opt name func_env with
-      | Some (param_types, return_type) ->
+      | Some overloads -> (
           let arg_types = List.map (check_expr env func_env) arguments in
-          if List.length param_types <> List.length arg_types then
-            raise (TypeError "Incorrect number of arguments");
-          List.iter2
-            (fun expected actual ->
-              if not (type_eq expected actual) then
-                raise (TypeError "Function argument type mismatch"))
-            param_types arg_types;
-          return_type
-      | _ -> raise (TypeError ("Unknown function: " ^ name)))
+          let matching =
+            List.find_opt
+              (fun (params, _) ->
+                List.length params = List.length arg_types
+                && List.for_all2 type_eq params arg_types)
+              overloads
+          in
+          match matching with
+          | Some (_, return_type) -> return_type
+          | None ->
+              raise
+                (TypeError ("Function argument type mismatch for `" ^ name ^ "`"))
+          )
+      | None -> raise (TypeError ("Unknown function: " ^ name)))
   | CallExpr _ ->
       raise (TypeError "Only simple function calls supported for now")
   | ArrayExpr { elements } -> (
@@ -98,7 +134,7 @@ let rec find_return_exprs env func_env expr =
   | _ -> []
 
 let rec check_stmt (env : (string * Type.t) list)
-    (func_env : (string * (Type.t list * Type.t)) list) (stmt : Stmt.t) :
+    (func_env : (string * (Type.t list * Type.t) list) list) (stmt : Stmt.t) :
     (string * Type.t) list =
   let open Stmt in
   match stmt with
@@ -115,13 +151,19 @@ let rec check_stmt (env : (string * Type.t) list)
       | None -> (identifier, explicit_type) :: env)
   | FunctionDeclStmt { name; parameters; return_type; body; _ } ->
       let param_types = List.map (fun p -> p.param_type) parameters in
-      let new_func_env = (name, (param_types, return_type)) :: func_env in
+      let new_func = (name, [ (param_types, return_type) ]) in
+      let func_env =
+        match List.assoc_opt name func_env with
+        | Some overloads ->
+            (name, (param_types, return_type) :: overloads)
+            :: List.remove_assoc name func_env
+        | None -> new_func :: func_env
+      in
       let param_env = List.map (fun p -> (p.name, p.param_type)) parameters in
       let rec gather_return_types stmts =
         List.concat_map
           (function
-            | Stmt.ExprStmt e ->
-                find_return_exprs (param_env @ env) new_func_env e
+            | Stmt.ExprStmt e -> find_return_exprs (param_env @ env) func_env e
             | Stmt.BlockStmt { body } -> gather_return_types body
             | Stmt.IfStmt { condition = _; then_branch; else_branch } ->
                 let then_returns = gather_return_types [ then_branch ] in
@@ -142,7 +184,8 @@ let rec check_stmt (env : (string * Type.t) list)
               (TypeError
                  ("Function `" ^ name
                 ^ "` has mismatched return type: expected "
-                ^ Type.show return_type ^ ", got " ^ Type.show actual_type)))
+                ^ string_of_type return_type ^ ", got "
+                ^ string_of_type actual_type)))
         return_expr_types;
       env
   | BlockStmt { body } ->
@@ -162,5 +205,5 @@ let rec check_stmt (env : (string * Type.t) list)
 
 let typecheck_program (stmts : Stmt.t list) =
   let env = [] in
-  let func_env = [] in
+  let func_env = builtins in
   ignore (List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts)

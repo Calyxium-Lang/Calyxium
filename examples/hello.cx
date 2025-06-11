@@ -1,3 +1,3 @@
-add(x: int, y: int): int {
-    if x == 10 then 1 else return x + y
-}
+let x: int = input("Enter input: ")
+let y: string = "the number was" ^ to_string(x)
+println(y)

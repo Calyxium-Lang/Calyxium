@@ -3,7 +3,6 @@ module Type = struct
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
     | Any
-  [@@deriving show]
 end
 
 module Expr = struct
@@ -22,11 +21,10 @@ module Expr = struct
     | IndexExpr of { array : t; index : t }
     | IfExpr of { condition : t; then_branch : t; else_branch : t }
     | ReturnExpr of t
-  [@@deriving show]
 end
 
 module Stmt = struct
-  type parameter = { name : string; param_type : Type.t } [@@deriving show]
+  type parameter = { name : string; param_type : Type.t }
 
   type t =
     | BlockStmt of { body : t list }
@@ -53,5 +51,4 @@ module Stmt = struct
     | ModuleStmt of { module_name : string; block : t list }
     | MatchStmt of { expr : Expr.t; cases : (Expr.t option * t list) list }
     | ExprStmt of Expr.t
-  [@@deriving show]
 end

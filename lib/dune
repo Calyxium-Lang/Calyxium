@@ -1,13 +1,13 @@
 (library
- (name Calyxiumlib)
- (modules ast lexer parser token version typechecker)
- (libraries ppx_deriving.show zarith unix ANSITerminal)
- (preprocess
-  (pps ppx_deriving.show)))
-
-(documentation)
+ (name calyxiumlib)
+ (public_name calyxium.lib)
+ (modules ast lexer parser token version typechecker error help)
+ (libraries unix ANSITerminal))
 
 (ocamllex lexer)
 
 (menhir
- (modules parser))
+ (modules parser)
+ (infer true))
+
+(documentation)

@@ -63,4 +63,3 @@ type t =
   | Bool of bool
   | Unit of unit
   | EOF
-[@@deriving show]
