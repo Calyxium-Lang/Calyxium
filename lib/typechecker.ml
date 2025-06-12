@@ -58,12 +58,16 @@ let rec check_expr (env : (string * Type.t) list)
       try List.assoc name env
       with Not_found -> raise (TypeError ("Unbound variable: " ^ name)))
   | UnaryExpr { operator = _; operand } -> check_expr env func_env operand
-  | BinaryExpr { left; operator = _; right } ->
+  | BinaryExpr { left; operator; right } -> (
       let lt = check_expr env func_env left in
       let rt = check_expr env func_env right in
       if not (type_eq lt rt) then
         raise (TypeError "Binary operands must have same type");
-      lt
+      match operator with
+      | Token.Eq | Token.Neq | Token.Geq | Token.Leq | Token.LogicalAnd
+      | Token.LogicalOr | Token.Not | Token.Less | Token.Greater ->
+          Type.SymbolType { value = "bool" }
+      | _ -> lt)
   | CallExpr { callee = VarExpr name; arguments } -> (
       match List.assoc_opt name func_env with
       | Some overloads -> (
@@ -201,9 +205,47 @@ let rec check_stmt (env : (string * Type.t) list)
         | None -> env
       in
       env
-  | _ -> raise (TypeError "Unsupported statement yet")
+  | ForStmt { init; condition; increment; body } ->
+      let env =
+        match init with
+        | Some stmt -> check_stmt env func_env stmt
+        | None -> env
+      in
+      let ct = check_expr env func_env condition in
+      if not (type_eq ct (Type.SymbolType { value = "bool" })) then
+        raise (TypeError "For loop condition must be boolean");
+      let _ = Option.map (check_stmt env func_env) increment in
+      let _ = check_stmt env func_env body in
+      env
+  | ImportStmt { module_name = _ } -> env
+  | ModuleStmt { module_name = _; block } ->
+      let _ =
+        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env block
+      in
+      env
+  | MatchStmt { expr; cases } ->
+      let et = check_expr env func_env expr in
+      List.iter
+        (fun (pat_opt, case_stmts) ->
+          (match pat_opt with
+          | Some pat_expr ->
+              let pt = check_expr env func_env pat_expr in
+              if not (type_eq et pt) then
+                raise (TypeError "Pattern type does not match match expression")
+          | None -> ());
+          ignore
+            (List.fold_left
+               (fun e stmt -> check_stmt e func_env stmt)
+               env case_stmts))
+        cases;
+      env
 
 let typecheck_program (stmts : Stmt.t list) =
-  let env = [] in
+  let env =
+    [
+      ("true", Type.SymbolType { value = "bool" });
+      ("false", Type.SymbolType { value = "bool" });
+    ]
+  in
   let func_env = builtins in
   ignore (List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts)
