@@ -1,16 +1,15 @@
 let x: int = 10 + 5
 let a: int = 10
 let b: float = 5.5
-let c: float = ToFloat(a) + b
+let c: float = to_float(a) + b
 let age: int = 18
 let str: string = "Hellooo"
 let r: []int = {1, 2, 3}
 let op: byte = '+'
 
-println("result of x: " ^ ToString(x))
-print("Random Print with newline escape char\n")
+println("result of x: " ^ to_string(x))
 
-println("Floating point answer of c: " ^ ToString(c))
+println("Floating point answer of c: " ^ to_string(c))
 
 if (age >= 18) {
     println("You are an adult.")
@@ -23,17 +22,17 @@ match str with
     | "Helloo" -> println("String is: " ^ str)
     | _ -> println("Neither condition was met string was: " ^ str)
 
-# if (str == "Hello") {
-#     println("String is: " ^ str)
-# } else {
-#     if (str == "Helloo") {
-#         println("String is: " ^ str)
-#     } else {
-#         println("Neither condition was met string was: " ^ str)
-#     }
-# }
+if (str == "Hello") {
+    println("String is: " ^ str)
+} else {
+    if (str == "Helloo") {
+        println("String is: " ^ str)
+    } else {
+        println("Neither condition was met string was: " ^ str)
+    }
+}
 
-println("Second element of array r: " ^ ToString(r[2]))
+println("Second element of array r: " ^ to_string(r[2]))
 
 match op with
     | '+' -> println("plus")
@@ -44,14 +43,11 @@ println(r)
 
 let i: int = 1
 for (i; i <= 10; i++) {
-    print("Hello")
+    println("Hello")
 }
 
 add(x: int, y: int): int {
     return x + y
 }
 
-println(add(5, 5))
-print("E\n")
-
-println(add(5, 6)) # Prints 11
+println(add(5, 6))

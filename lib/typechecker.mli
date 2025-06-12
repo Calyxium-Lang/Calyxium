@@ -20,5 +20,8 @@ val check_stmt :
   Ast.Stmt.t ->
   (string * Ast.Type.t) list
 
+val collect_functions :
+  Ast.Stmt.t list -> (string * (Ast.Type.t list * Ast.Type.t) list) list
+
 val typecheck_program : Ast.Stmt.t list -> unit
 val string_of_type : Ast.Type.t -> string

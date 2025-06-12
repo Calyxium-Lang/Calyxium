@@ -240,6 +240,27 @@ let rec check_stmt (env : (string * Type.t) list)
         cases;
       env
 
+let rec collect_functions stmts =
+  let rec collect_from_stmt stmt acc =
+    match stmt with
+    | Stmt.FunctionDeclStmt { name; parameters; return_type; _ } ->
+        let param_types = List.map (fun p -> p.Stmt.param_type) parameters in
+        let overload =
+          match List.assoc_opt name acc with
+          | Some overloads -> (name, (param_types, return_type) :: overloads)
+          | None -> (name, [ (param_types, return_type) ])
+        in
+        overload :: List.remove_assoc name acc
+    | Stmt.BlockStmt { body } -> collect_functions body @ acc
+    | Stmt.IfStmt { then_branch; else_branch; _ } -> (
+        let acc = collect_from_stmt then_branch acc in
+        match else_branch with
+        | Some else_stmt -> collect_from_stmt else_stmt acc
+        | None -> acc)
+    | _ -> acc
+  in
+  List.fold_right collect_from_stmt stmts builtins
+
 let typecheck_program (stmts : Stmt.t list) =
   let env =
     [
@@ -247,5 +268,5 @@ let typecheck_program (stmts : Stmt.t list) =
       ("false", Type.SymbolType { value = "bool" });
     ]
   in
-  let func_env = builtins in
+  let func_env = collect_functions stmts in
   ignore (List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts)
