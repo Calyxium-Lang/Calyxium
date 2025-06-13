@@ -21,6 +21,7 @@ module Expr : sig
     | IndexExpr of { array : t; index : t }
     | IfExpr of { condition : t; then_branch : t; else_branch : t }
     | ReturnExpr of t
+    | DotExpr of { left : t; right : string }
 end
 
 module Stmt : sig

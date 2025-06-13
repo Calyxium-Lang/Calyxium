@@ -57,7 +57,24 @@ let rec check_expr (env : (string * Type.t) list)
   | VarExpr name -> (
       try List.assoc name env
       with Not_found -> raise (TypeError ("Unbound variable: " ^ name)))
-  | UnaryExpr { operator = _; operand } -> check_expr env func_env operand
+  | UnaryExpr { operator; operand } -> (
+      let operand_type = check_expr env func_env operand in
+      match operator with
+      | Token.Not ->
+          if not (type_eq operand_type (Type.SymbolType { value = "bool" }))
+          then
+            raise (TypeError "Unary `not` operator requires a boolean operand");
+          Type.SymbolType { value = "bool" }
+      | Token.Inc | Token.Dec ->
+          if
+            not
+              (type_eq operand_type (Type.SymbolType { value = "int" })
+              || type_eq operand_type (Type.SymbolType { value = "float" }))
+          then
+            raise
+              (TypeError "Increment/Decrement requires int or float operand");
+          operand_type
+      | _ -> raise (TypeError "Unsupported unary operator"))
   | BinaryExpr { left; operator; right } -> (
       let lt = check_expr env func_env left in
       let rt = check_expr env func_env right in
@@ -65,7 +82,7 @@ let rec check_expr (env : (string * Type.t) list)
         raise (TypeError "Binary operands must have same type");
       match operator with
       | Token.Eq | Token.Neq | Token.Geq | Token.Leq | Token.LogicalAnd
-      | Token.LogicalOr | Token.Not | Token.Less | Token.Greater ->
+      | Token.LogicalOr | Token.Less | Token.Greater ->
           Type.SymbolType { value = "bool" }
       | _ -> lt)
   | CallExpr { callee = VarExpr name; arguments } -> (
@@ -115,6 +132,7 @@ let rec check_expr (env : (string * Type.t) list)
         raise (TypeError "Branches of if must return same type");
       t_then
   | ReturnExpr expr -> check_expr env func_env expr
+  | DotExpr _ -> raise (TypeError "Dot Expression not implemented")
 
 let rec find_return_exprs env func_env expr =
   let open Expr in
@@ -240,7 +258,7 @@ let rec check_stmt (env : (string * Type.t) list)
         cases;
       env
 
-let rec collect_functions stmts =
+let collect_functions stmts =
   let rec collect_from_stmt stmt acc =
     match stmt with
     | Stmt.FunctionDeclStmt { name; parameters; return_type; _ } ->
@@ -251,12 +269,22 @@ let rec collect_functions stmts =
           | None -> (name, [ (param_types, return_type) ])
         in
         overload :: List.remove_assoc name acc
-    | Stmt.BlockStmt { body } -> collect_functions body @ acc
+    | Stmt.BlockStmt { body } -> List.fold_right collect_from_stmt body acc
     | Stmt.IfStmt { then_branch; else_branch; _ } -> (
         let acc = collect_from_stmt then_branch acc in
         match else_branch with
         | Some else_stmt -> collect_from_stmt else_stmt acc
         | None -> acc)
+    | Stmt.ForStmt { init; body; increment; _ } ->
+        let acc =
+          match init with Some s -> collect_from_stmt s acc | None -> acc
+        in
+        let acc =
+          match increment with Some s -> collect_from_stmt s acc | None -> acc
+        in
+        collect_from_stmt body acc
+    | Stmt.ModuleStmt { block; _ } ->
+        List.fold_right collect_from_stmt block acc
     | _ -> acc
   in
   List.fold_right collect_from_stmt stmts builtins

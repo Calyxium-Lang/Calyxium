@@ -54,7 +54,6 @@ rule token = parse
   | "|"                      { Pipe }
   | "_"                      { UnderScore }
 
-  | "fun"                    { Function }
   | "rec"                    { Recursive }
   | "if"                     { If }
   | "then"                   { Then }

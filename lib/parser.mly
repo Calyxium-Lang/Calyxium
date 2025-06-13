@@ -1,14 +1,10 @@
 %right Pow
-%left Star Slash Mod
-%left Plus Minus
-%left Carot
-%left LogicalOr
-%left LogicalAnd
+%left Star Slash Mod Plus Minus Carot LogicalOr LogicalAnd Dot
 %right Assign PlusAssign MinusAssign StarAssign SlashAssign
 %nonassoc Eq Neq Geq Leq Greater Less Inc Dec UnaryMinus NotPrec LowPrec
 
-%token Function Recursive If Then Else Let Match With Return For Use Module True False IntType FloatType StringType ByteType BoolType UnitType
-%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc Implies MapsTo PlusAssign MinusAssign StarAssign SlashAssign
+%token Recursive If Then Else Let Match With Return For Use Module True False IntType FloatType StringType ByteType BoolType UnitType
+%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
 %token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore
 %token <string> Ident
 %token <int64> Int
@@ -112,6 +108,7 @@ expr:
   | LBrace RBrace { Ast.Expr.ArrayExpr { elements = [] } }
   | LBrace expr_list RBrace { Ast.Expr.ArrayExpr { elements = $2 } }
   | Ident LBracket expr RBracket { Ast.Expr.IndexExpr { array = Ast.Expr.VarExpr $1; index = $3 } }
+  | expr Dot Ident { Ast.Expr.DotExpr { left = $1; right = $3 } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }

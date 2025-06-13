@@ -1,4 +1,4 @@
-# Calyxium: **An Interpreted Programming Language**
+# Calyxium: **An Interpreted Multi-Paradigm Programming Language**
 
 <!-- TOC -->
 
