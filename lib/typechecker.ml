@@ -79,7 +79,7 @@ let rec check_expr (env : (string * Type.t) list)
       let lt = check_expr env func_env left in
       let rt = check_expr env func_env right in
       if not (type_eq lt rt) then
-        raise (TypeError "Binary operands must have same type");
+        raise (TypeError "Binary operands must have the same type");
       match operator with
       | Token.Eq | Token.Neq | Token.Geq | Token.Leq | Token.LogicalAnd
       | Token.LogicalOr | Token.Less | Token.Greater ->
@@ -199,6 +199,23 @@ let rec check_stmt (env : (string * Type.t) list)
           stmts
       in
       let return_expr_types = gather_return_types body in
+
+      let last_expr_type =
+        match
+          List.rev body
+          |> List.find_opt (function Stmt.ExprStmt _ -> true | _ -> false)
+        with
+        | Some (Stmt.ExprStmt expr) ->
+            Some (check_expr (param_env @ env) func_env expr)
+        | _ -> None
+      in
+
+      let all_return_types =
+        match last_expr_type with
+        | Some t -> if return_expr_types = [] then [ t ] else return_expr_types
+        | None -> return_expr_types
+      in
+
       List.iter
         (fun actual_type ->
           if not (type_eq return_type actual_type) then
@@ -208,7 +225,7 @@ let rec check_stmt (env : (string * Type.t) list)
                 ^ "` has mismatched return type: expected "
                 ^ string_of_type return_type ^ ", got "
                 ^ string_of_type actual_type)))
-        return_expr_types;
+        all_return_types;
       env
   | BlockStmt { body } ->
       List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
