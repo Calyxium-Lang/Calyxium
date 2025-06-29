@@ -29,7 +29,7 @@ Follow these steps to install and build Calyxium:
 
 4. Install dependencies
     ```bash
-    opam install menhir zarith ANSITerminal
+    opam install menhir zarith
     ```
 
 4. Build the projrct

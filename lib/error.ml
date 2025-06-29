@@ -1,4 +1,4 @@
-open ANSITerminal
+open Color
 
 let get_line filename n =
   let ic = open_in filename in
@@ -15,12 +15,11 @@ let get_line filename n =
   aux n
 
 let print_error ~file ~line ~col ~msg ~source =
-  print_string [ red; Bold ] "Error: ";
-  print_string [ white ] msg;
-  Printf.printf "\n  --> %s:%d:%d\n" file line col;
+  Printf.printf "%s%sError:%s %s\n" bold red reset msg;
+  Printf.printf "  --> %s:%d:%d\n" file line col;
   match source with
   | Some txt ->
-      Printf.printf "   %d | %s\n     | %s" line txt
-        (String.make (max 0 (col - 1)) ' ');
-      print_string [ red; Bold ] "^\n"
+      Printf.printf "   %d | %s\n     | %s%s^%s\n" line txt
+        (String.make (max 0 (col - 1)) ' ')
+        (bold ^ red) reset
   | None -> ()
