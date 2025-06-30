@@ -1,8 +1,22 @@
 (library
  (name calyxiumlib)
  (public_name calyxium.lib)
- (modules ast lexer parser token version typechecker error help color)
- (libraries unix))
+ (modules
+  ast
+  lexer
+  parser
+  token
+  version
+  typechecker
+  error
+  help
+  color
+  bytecode
+  opcode
+  vm)
+ (libraries unix ppx_deriving.show)
+ (preprocess
+  (pps ppx_deriving.show)))
 
 (ocamllex lexer)
 

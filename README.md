@@ -40,28 +40,10 @@ Follow these steps to install and build Calyxium:
 ## Getting Started
 Create a new Calyxium script with the `.cx` extension. Here's a basic example:
 ```
-# This is a comment in Calyxium
 println("Hello, world")
 ```
 To run your script:
 `./calyxium main.cx`
-
-## Usage
-Calyxium is designed to be expressive and easy to use. Here are some common features:
-- **Printing**
-    ```
-    println("Hello, world")
-    ```
-- **Variables**
-    ```
-    let x: int = 10
-    ```
-- **Conditionals**
-    ```
-    if (x > 5) {
-        println("x is greater than 5")
-    }
-    ```
 
 For more detailed documentation, visit the [official documentation](https://calyxium.cc/docs)
 

@@ -1,45 +1,40 @@
 open Ast
+open Ast.Type
+open Ast.Stmt
+open Token
 
 exception TypeError of string
 
 let builtins : (string * (Type.t list * Type.t) list) list =
   [
-    ("println", [ ([ Type.Any ], Type.SymbolType { value = "unit" }) ]);
+    ("println", [ ([ Any ], SymbolType { value = "unit" }) ]);
     ( "input",
-      [
-        ( [ Type.SymbolType { value = "string" } ],
-          Type.SymbolType { value = "unit" } );
-      ] );
+      [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]
+    );
     ( "to_float",
       [
-        ( [ Type.SymbolType { value = "string" } ],
-          Type.SymbolType { value = "float" } );
-        ( [ Type.SymbolType { value = "int" } ],
-          Type.SymbolType { value = "float" } );
+        ([ SymbolType { value = "string" } ], SymbolType { value = "float" });
+        ([ SymbolType { value = "int" } ], SymbolType { value = "float" });
       ] );
     ( "to_int",
       [
-        ( [ Type.SymbolType { value = "string" } ],
-          Type.SymbolType { value = "int" } );
-        ( [ Type.SymbolType { value = "float" } ],
-          Type.SymbolType { value = "int" } );
+        ([ SymbolType { value = "string" } ], SymbolType { value = "int" });
+        ([ SymbolType { value = "float" } ], SymbolType { value = "int" });
       ] );
-    ("to_string", [ ([ Type.Any ], Type.SymbolType { value = "string" }) ]);
+    ("to_string", [ ([ Any ], SymbolType { value = "string" }) ]);
   ]
 
 let rec string_of_type = function
-  | Ast.Type.Any -> "any"
-  | Ast.Type.SymbolType { value } -> value
-  | Ast.Type.ArrayType { element_type } ->
-      "[" ^ string_of_type element_type ^ "]"
+  | Any -> "any"
+  | SymbolType { value } -> value
+  | ArrayType { element_type } -> "[" ^ string_of_type element_type ^ "]"
 
 let rec type_eq expected actual =
   match (expected, actual) with
-  | Type.SymbolType { value = "unit" }, _ -> true
-  | Type.Any, _ | _, Type.Any -> true
-  | Type.SymbolType { value = v1 }, Type.SymbolType { value = v2 } -> v1 = v2
-  | Type.ArrayType { element_type = e1 }, Type.ArrayType { element_type = e2 }
-    ->
+  | SymbolType { value = "unit" }, _ -> true
+  | Any, _ | _, Any -> true
+  | SymbolType { value = v1 }, SymbolType { value = v2 } -> v1 = v2
+  | ArrayType { element_type = e1 }, ArrayType { element_type = e2 } ->
       type_eq e1 e2
   | _ -> false
 
@@ -48,28 +43,27 @@ let rec check_expr (env : (string * Type.t) list)
     Type.t =
   let open Expr in
   match expr with
-  | IntExpr _ -> Type.SymbolType { value = "int" }
-  | FloatExpr _ -> Type.SymbolType { value = "float" }
-  | StringExpr _ -> Type.SymbolType { value = "string" }
-  | BoolExpr _ -> Type.SymbolType { value = "bool" }
-  | ByteExpr _ -> Type.SymbolType { value = "byte" }
-  | UnitExpr _ -> Type.SymbolType { value = "unit" }
+  | IntExpr _ -> SymbolType { value = "int" }
+  | FloatExpr _ -> SymbolType { value = "float" }
+  | StringExpr _ -> SymbolType { value = "string" }
+  | BoolExpr _ -> SymbolType { value = "bool" }
+  | ByteExpr _ -> SymbolType { value = "byte" }
+  | UnitExpr _ -> SymbolType { value = "unit" }
   | VarExpr name -> (
       try List.assoc name env
       with Not_found -> raise (TypeError ("Unbound variable: " ^ name)))
   | UnaryExpr { operator; operand } -> (
       let operand_type = check_expr env func_env operand in
       match operator with
-      | Token.Not ->
-          if not (type_eq operand_type (Type.SymbolType { value = "bool" }))
-          then
+      | Not ->
+          if not (type_eq operand_type (SymbolType { value = "bool" })) then
             raise (TypeError "Unary `not` operator requires a boolean operand");
-          Type.SymbolType { value = "bool" }
-      | Token.Inc | Token.Dec ->
+          SymbolType { value = "bool" }
+      | Inc | Dec ->
           if
             not
-              (type_eq operand_type (Type.SymbolType { value = "int" })
-              || type_eq operand_type (Type.SymbolType { value = "float" }))
+              (type_eq operand_type (SymbolType { value = "int" })
+              || type_eq operand_type (SymbolType { value = "float" }))
           then
             raise
               (TypeError "Increment/Decrement requires int or float operand");
@@ -81,9 +75,8 @@ let rec check_expr (env : (string * Type.t) list)
       if not (type_eq lt rt) then
         raise (TypeError "Binary operands must have the same type");
       match operator with
-      | Token.Eq | Token.Neq | Token.Geq | Token.Leq | Token.LogicalAnd
-      | Token.LogicalOr | Token.Less | Token.Greater ->
-          Type.SymbolType { value = "bool" }
+      | Eq | Neq | Geq | Leq | LogicalAnd | LogicalOr | Less | Greater ->
+          SymbolType { value = "bool" }
       | _ -> lt)
   | CallExpr { callee = VarExpr name; arguments } -> (
       match List.assoc_opt name func_env with
@@ -108,19 +101,19 @@ let rec check_expr (env : (string * Type.t) list)
   | ArrayExpr { elements } -> (
       let types = List.map (check_expr env func_env) elements in
       match types with
-      | [] -> Type.ArrayType { element_type = Type.Any }
+      | [] -> ArrayType { element_type = Any }
       | hd :: tl ->
           List.iter
             (fun t ->
               if not (type_eq t hd) then
                 raise (TypeError "Array element type mismatch"))
             tl;
-          Type.ArrayType { element_type = hd })
+          ArrayType { element_type = hd })
   | IndexExpr { array; index } -> (
       let at = check_expr env func_env array in
       let _ = check_expr env func_env index in
       match at with
-      | Type.ArrayType { element_type } -> element_type
+      | ArrayType { element_type } -> element_type
       | _ -> raise (TypeError "Can only index into arrays"))
   | IfExpr { condition; then_branch; else_branch } ->
       let ct = check_expr env func_env condition in
@@ -185,9 +178,9 @@ let rec check_stmt (env : (string * Type.t) list)
       let rec gather_return_types stmts =
         List.concat_map
           (function
-            | Stmt.ExprStmt e -> find_return_exprs (param_env @ env) func_env e
-            | Stmt.BlockStmt { body } -> gather_return_types body
-            | Stmt.IfStmt { condition = _; then_branch; else_branch } ->
+            | ExprStmt e -> find_return_exprs (param_env @ env) func_env e
+            | BlockStmt { body } -> gather_return_types body
+            | IfStmt { condition = _; then_branch; else_branch } ->
                 let then_returns = gather_return_types [ then_branch ] in
                 let else_returns =
                   match else_branch with
@@ -203,9 +196,9 @@ let rec check_stmt (env : (string * Type.t) list)
       let last_expr_type =
         match
           List.rev body
-          |> List.find_opt (function Stmt.ExprStmt _ -> true | _ -> false)
+          |> List.find_opt (function ExprStmt _ -> true | _ -> false)
         with
-        | Some (Stmt.ExprStmt expr) ->
+        | Some (ExprStmt expr) ->
             Some (check_expr (param_env @ env) func_env expr)
         | _ -> None
       in
@@ -231,7 +224,7 @@ let rec check_stmt (env : (string * Type.t) list)
       List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
   | IfStmt { condition; then_branch; else_branch } ->
       let ct = check_expr env func_env condition in
-      if not (type_eq ct (Type.SymbolType { value = "bool" })) then
+      if not (type_eq ct (SymbolType { value = "bool" })) then
         raise (TypeError "If condition must be boolean");
       let _ = check_stmt env func_env then_branch in
       let _ =
@@ -247,7 +240,7 @@ let rec check_stmt (env : (string * Type.t) list)
         | None -> env
       in
       let ct = check_expr env func_env condition in
-      if not (type_eq ct (Type.SymbolType { value = "bool" })) then
+      if not (type_eq ct (SymbolType { value = "bool" })) then
         raise (TypeError "For loop condition must be boolean");
       let _ = Option.map (check_stmt env func_env) increment in
       let _ = check_stmt env func_env body in
@@ -278,21 +271,21 @@ let rec check_stmt (env : (string * Type.t) list)
 let collect_functions stmts =
   let rec collect_from_stmt stmt acc =
     match stmt with
-    | Stmt.FunctionDeclStmt { name; parameters; return_type; _ } ->
-        let param_types = List.map (fun p -> p.Stmt.param_type) parameters in
+    | FunctionDeclStmt { name; parameters; return_type; _ } ->
+        let param_types = List.map (fun p -> p.param_type) parameters in
         let overload =
           match List.assoc_opt name acc with
           | Some overloads -> (name, (param_types, return_type) :: overloads)
           | None -> (name, [ (param_types, return_type) ])
         in
         overload :: List.remove_assoc name acc
-    | Stmt.BlockStmt { body } -> List.fold_right collect_from_stmt body acc
-    | Stmt.IfStmt { then_branch; else_branch; _ } -> (
+    | BlockStmt { body } -> List.fold_right collect_from_stmt body acc
+    | IfStmt { then_branch; else_branch; _ } -> (
         let acc = collect_from_stmt then_branch acc in
         match else_branch with
         | Some else_stmt -> collect_from_stmt else_stmt acc
         | None -> acc)
-    | Stmt.ForStmt { init; body; increment; _ } ->
+    | ForStmt { init; body; increment; _ } ->
         let acc =
           match init with Some s -> collect_from_stmt s acc | None -> acc
         in
@@ -300,8 +293,7 @@ let collect_functions stmts =
           match increment with Some s -> collect_from_stmt s acc | None -> acc
         in
         collect_from_stmt body acc
-    | Stmt.ModuleStmt { block; _ } ->
-        List.fold_right collect_from_stmt block acc
+    | ModuleStmt { block; _ } -> List.fold_right collect_from_stmt block acc
     | _ -> acc
   in
   List.fold_right collect_from_stmt stmts builtins

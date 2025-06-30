@@ -1,3 +1,7 @@
-rec fib(n: int): int {
-    if n <= 1 then n else fib(n - 1) + fib(n - 2)~
+let string_name: []string = {"Zombii", "Azlo"}
+
+greet(name: string): string {
+    return "Hello, " ^ name
 }
+
+println(greet(string_name[1]))
