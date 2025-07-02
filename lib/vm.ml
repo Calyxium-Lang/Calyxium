@@ -1,4 +1,5 @@
 open Opcode
+open Gc
 
 exception RuntimeError of string
 
@@ -20,13 +21,7 @@ let runtime_error msg =
   print_trace ();
   raise (RuntimeError ("Runtime Error: " ^ msg))
 
-let stack : float Stack.t = Stack.create ()
-let string_table = Hashtbl.create 16
-
-let add_string str =
-  let id = Hashtbl.hash str in
-  Hashtbl.replace string_table id str;
-  id
+let stack : Gc.value Stack.t = Stack.create ()
 
 let escape_sequences =
   [ ("\\n", '\n'); ("\\t", '\t'); ("\\r", '\r'); ("\\\\", '\\') ]
@@ -66,23 +61,35 @@ let pop2 name =
 
 let binary_op name op =
   let b, a = pop2 name in
-  Stack.push (op b a) stack
+  match (a, b) with
+  | VFloat a, VFloat b -> Stack.push (VFloat (op a b)) stack
+  | _ -> runtime_error ("binary_op '" ^ name ^ "' expected two floats")
 
 let compare_op name cmp =
   let b, a = pop2 name in
-  Stack.push (if cmp b a then 1.0 else 0.0) stack
+  match (a, b) with
+  | VFloat a, VFloat b ->
+      Stack.push (if cmp a b then VFloat 1.0 else VFloat 0.0) stack
+  | _ -> runtime_error ("compare_op '" ^ name ^ "' expected two floats")
 
 let logic_op name op =
   let b, a = pop2 name in
-  Stack.push (if op b a then 1.0 else 0.0) stack
+  match (a, b) with
+  | VFloat a, VFloat b ->
+      Stack.push (if op a b then VFloat 1.0 else VFloat 0.0) stack
+  | _ -> runtime_error ("logic_op '" ^ name ^ "' expected two floats")
 
 let unary_logic_op name op =
   let a = pop1 ("unary logic op '" ^ name ^ "'") in
-  Stack.push (if op a then 1.0 else 0.0) stack
+  match a with
+  | VFloat x -> Stack.push (if op x then VFloat 1.0 else VFloat 0.0) stack
+  | _ -> runtime_error ("unary_logic_op '" ^ name ^ "' expected float")
 
 let unary_op name op =
   let x = pop1 ("unary op '" ^ name ^ "'") in
-  Stack.push (op x) stack
+  match x with
+  | VFloat f -> Stack.push (VFloat (op f)) stack
+  | _ -> runtime_error ("unary_op '" ^ name ^ "' expected float")
 
 let get_var env name =
   match List.assoc_opt name env with
@@ -91,11 +98,15 @@ let get_var env name =
 
 let get_string_from_stack_value value =
   let id = int_of_float value in
-  match Hashtbl.find_opt string_table id with
+  match Gc.get_string id with
   | Some s -> s
   | None ->
       runtime_error
         ("Expected string on stack, but no string with ID " ^ string_of_int id)
+
+let extract_float = function
+  | VFloat f -> f
+  | _ -> runtime_error "Expected a float value"
 
 let resolve_function_body function_name =
   try Hashtbl.find Bytecode.function_table function_name
@@ -115,32 +126,34 @@ let extract_param_names = function
 let rec execute instructions env pc =
   let next () = execute instructions env (pc + 1) in
   if pc >= Array.length instructions then
-    match Stack.top_opt stack with Some r -> r | None -> 0.0
+    match Stack.top_opt stack with Some r -> r | None -> VFloat 0.0
   else
     match instructions.(pc) with
     | LOAD_INT v ->
         push_trace pc ("LOAD_INT " ^ Int64.to_string v);
-        Stack.push (Int64.to_float v) stack;
+        Stack.push (VFloat (Int64.to_float v)) stack;
         next ()
     | LOAD_FLOAT v ->
         push_trace pc ("LOAD_FLOAT " ^ string_of_float v);
-        Stack.push v stack;
+        Stack.push (VFloat v) stack;
         next ()
     | LOAD_STRING s ->
         push_trace pc ("LOAD_STRING " ^ s);
-        Stack.push (float_of_int (add_string s)) stack;
+        let v = Gc.alloc_string_with_gc stack env s in
+        Stack.push v stack;
         next ()
     | LOAD_BYTE c ->
         push_trace pc ("LOAD_BYTE " ^ String.make 1 c);
-        Stack.push (float_of_int (add_string (String.make 1 c))) stack;
+        let v = Gc.alloc_string_with_gc stack env (String.make 1 c) in
+        Stack.push v stack;
         next ()
     | LOAD_BOOL b ->
         push_trace pc ("LOAD_BOOL " ^ string_of_bool b);
-        Stack.push (if b then 1.0 else 0.0) stack;
+        Stack.push (VFloat (if b then 1.0 else 0.0)) stack;
         next ()
     | LOAD_UNIT _ ->
         push_trace pc "LOAD_UNIT";
-        Stack.push nan stack;
+        Stack.push (VFloat nan) stack;
         next ()
     | LOAD_VAR name ->
         push_trace pc ("LOAD_VAR " ^ name);
@@ -162,8 +175,11 @@ let rec execute instructions env pc =
         push_trace pc "SLASH";
         let a = Stack.pop stack in
         let b = Stack.pop stack in
-        if a = 0.0 then runtime_error "Division by zero in SLASH"
-        else Stack.push (b /. a) stack;
+        (match (a, b) with
+        | VFloat a_val, VFloat b_val ->
+            if a_val = 0.0 then runtime_error "Division by zero in SLASH"
+            else Stack.push (VFloat (b_val /. a_val)) stack
+        | _ -> runtime_error "SLASH operation requires two floats");
         next ()
     | MOD ->
         push_trace pc "MOD";
@@ -177,14 +193,19 @@ let rec execute instructions env pc =
         push_trace pc "CONCAT";
         let b, a = pop2 "CONCAT" in
         let result =
-          get_string_from_stack_value b ^ get_string_from_stack_value a
+          get_string_from_stack_value (extract_float b)
+          ^ get_string_from_stack_value (extract_float a)
         in
-        Stack.push (float_of_int (add_string result)) stack;
+        let v = Gc.alloc_string_with_gc stack env result in
+        (match v with
+        | VHeapRef id -> Stack.push (VFloat (float_of_int id)) stack
+        | _ -> runtime_error "Expected heap ref for concatenated string");
         next ()
     | JUMP_IF_FALSE offset -> (
         push_trace pc ("JUMP_IF_FALSE " ^ string_of_int offset);
         match Stack.pop_opt stack with
-        | Some cond when cond = 0.0 -> execute instructions env (pc + offset)
+        | Some cond when cond = VFloat 0.0 ->
+            execute instructions env (pc + offset)
         | Some _ -> next ()
         | None -> runtime_error "JUMP_IF_FALSE with empty stack")
     | JUMP n ->
@@ -212,7 +233,17 @@ let rec execute instructions env pc =
         next ()
     | EQUAL ->
         push_trace pc "EQUAL";
-        compare_op "EQUAL" ( = );
+        let b, a = pop2 "EQUAL" in
+        let result =
+          match (a, b) with
+          | VHeapRef id1, VHeapRef id2 -> (
+              match (Gc.get_string id1, Gc.get_string id2) with
+              | Some sa, Some sb -> sa = sb
+              | _ -> id1 = id2)
+          | VFloat f1, VFloat f2 -> f1 = f2
+          | _ -> false
+        in
+        Stack.push (VFloat (if result then 1.0 else 0.0)) stack;
         next ()
     | AND ->
         push_trace pc "AND";
@@ -250,29 +281,28 @@ let rec execute instructions env pc =
           runtime_error
             ("LOAD_ARRAY expects " ^ string_of_int length ^ " elements on stack")
         else
-          let array = Stack.create () in
-          for _ = 1 to length do
-            Stack.push (Stack.pop stack) array
-          done;
-          Stack.push (Obj.magic array : float) stack;
+          let items = List.init length (fun _ -> Stack.pop stack) |> List.rev in
+          Stack.push (VArray items) stack;
           next ()
     | LOAD_INDEX ->
         push_trace pc "LOAD_INDEX";
         if Stack.length stack < 2 then
           runtime_error
             "LOAD_INDEX requires two values on the stack (array, index)";
-        let index = int_of_float (Stack.pop stack) in
-        let array_stack =
-          try (Obj.magic (Stack.pop stack) : float Stack.t)
-          with _ -> runtime_error "LOAD_INDEX failed to cast array"
+        let index =
+          match Stack.pop stack with
+          | VFloat f -> int_of_float f
+          | _ -> runtime_error "Expected float for index in LOAD_INDEX"
         in
-        let array_list =
-          Stack.fold (fun acc x -> x :: acc) [] array_stack |> List.rev
+        let array_val =
+          match Stack.pop stack with
+          | VArray values -> values
+          | _ -> runtime_error "Expected array for LOAD_INDEX"
         in
-        if index < 0 || index >= List.length array_list then
+        if index < 0 || index >= List.length array_val then
           runtime_error
             ("Index out of bounds in LOAD_INDEX: " ^ string_of_int index)
-        else Stack.push (List.nth array_list index) stack;
+        else Stack.push (List.nth array_val index) stack;
         next ()
     | FUNCTION _ ->
         let rec skip_function pc =
@@ -301,6 +331,8 @@ let rec execute instructions env pc =
         let local_env =
           List.combine param_names (List.map (fun v -> (v, true)) args)
         in
+        let roots = Gc.get_stack_roots stack in
+        Gc.maybe_collect_gc roots local_env;
         let skip_header = 1 + List.length param_names in
         let body = List.drop skip_header function_body in
         let return_value = execute (Array.of_list body) local_env 0 in
@@ -321,51 +353,76 @@ let rec execute instructions env pc =
           let value = Stack.pop stack in
           let env = (name, (value, true)) :: env in
           execute instructions env (pc + 1)
-    | PRINTLN ->
+    | PRINTLN -> (
         push_trace pc "PRINTLN";
         if Stack.is_empty stack then
           runtime_error "PRINTLN attempted with empty stack"
         else
           let value = Stack.pop stack in
-          if Float.is_nan value then (
-            Printf.printf "unit\n";
-            next ())
-          else if value = Float.infinity then (
-            Printf.printf "inf\n";
-            next ())
-          else if value = Float.neg_infinity then (
-            Printf.printf "-inf\n";
-            next ())
-          else
-            let int_value = int_of_float value in
-            if Hashtbl.mem string_table int_value then
-              let str = Hashtbl.find string_table int_value in
-              let processed_str = replace_escape_sequences str in
-              Printf.printf "%s\n" processed_str
-            else if floor value = value then
-              Printf.printf "%Ld\n" (Int64.of_float value)
-            else Printf.printf "%.10f\n" value;
-            next ()
-    | INPUT ->
+          match value with
+          | VFloat f when Float.is_nan f ->
+              Printf.printf "unit\n";
+              next ()
+          | VFloat f when f = Float.infinity ->
+              Printf.printf "inf\n";
+              next ()
+          | VFloat f when f = Float.neg_infinity ->
+              Printf.printf "-inf\n";
+              next ()
+          | VFloat f ->
+              if floor f = f then Printf.printf "%Ld\n" (Int64.of_float f)
+              else Printf.printf "%.10f\n" f;
+              next ()
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some str ->
+                  Printf.printf "%s\n" (replace_escape_sequences str);
+                  next ()
+              | None ->
+                  runtime_error
+                    ("PRINTLN failed: no string with id " ^ string_of_int id))
+          | VArray items ->
+              let string_of_value = function
+                | VFloat f when Float.is_nan f -> "unit"
+                | VFloat f when f = Float.infinity -> "inf"
+                | VFloat f when f = Float.neg_infinity -> "-inf"
+                | VFloat f ->
+                    if floor f = f then Int64.to_string (Int64.of_float f)
+                    else Printf.sprintf "%.10f" f
+                | VHeapRef id -> (
+                    match Gc.get_string id with
+                    | Some s -> "\"" ^ replace_escape_sequences s ^ "\""
+                    | None -> "<invalid ref>")
+                | VArray _ -> "[...]"
+              in
+              let contents =
+                items |> List.map string_of_value |> String.concat ", "
+              in
+              Printf.printf "[%s]\n" contents;
+              next ())
+    | INPUT -> (
         push_trace pc "INPUT";
         if Stack.is_empty stack then
           runtime_error "Stack underflow during INPUT"
         else
           let value = Stack.pop stack in
-          let int_value = int_of_float value in
-          if Hashtbl.mem string_table int_value then (
-            let prompt = Hashtbl.find string_table int_value in
-            Printf.printf "%s" prompt;
-            let input_value = read_line () in
-            let processed_value =
-              try float_of_string input_value
-              with Failure _ ->
-                let id = add_string input_value in
-                float_of_int id
-            in
-            Stack.push processed_value stack;
-            next ())
-          else runtime_error "Invalid prompt ID for INPUT"
+          let id =
+            match value with
+            | VHeapRef id -> id
+            | _ -> runtime_error "INPUT expected a heap reference ID"
+          in
+          match Gc.get_string id with
+          | Some prompt ->
+              Printf.printf "%s" prompt;
+              let input_value = read_line () in
+              let processed_value =
+                try VFloat (float_of_string input_value)
+                with Failure _ ->
+                  Gc.alloc_string_with_gc stack env input_value
+              in
+              Stack.push processed_value stack;
+              next ()
+          | None -> runtime_error "Invalid prompt ID for INPUT")
 
 let run instructions =
   try

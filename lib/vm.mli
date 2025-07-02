@@ -1,6 +1,4 @@
-val stack : float Stack.t
-val string_table : (int, string) Hashtbl.t
-val add_string : string -> int
+val stack : Gc.value Stack.t
 val escape_sequences : (string * char) list
 val replace_escape_sequences : string -> string
 val binary_op : string -> (float -> float -> float) -> unit
@@ -14,6 +12,6 @@ val resolve_function_body : string -> Opcode.opcode list
 val extract_param_names : Opcode.opcode list -> string list
 
 val execute :
-  Opcode.opcode array -> (string * (float * bool)) list -> int -> float
+  Opcode.opcode array -> (string * (Gc.value * bool)) list -> int -> Gc.value
 
-val run : Opcode.opcode list -> float
+val run : Opcode.opcode list -> Gc.value

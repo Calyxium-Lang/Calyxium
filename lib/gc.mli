@@ -1,0 +1,25 @@
+open Opcode
+
+type heap_obj =
+  | HString of string
+  | HArray of float array
+  | HClosure of string * opcode list * (string * (value * bool)) list
+
+and value = VFloat of float | VHeapRef of int | VArray of value list
+
+val allocation_count : int ref
+val allocation_threshold : int
+val alloc_id : unit -> int
+val alloc_in_young : heap_obj -> value
+val get_string : int -> string option
+val get_array : int -> float array option
+val mark_and_promote : value list -> (string * (value * bool)) list -> unit
+val reset_heap : unit -> unit
+val maybe_collect_gc : value list -> (string * (value * bool)) list -> unit
+val get_stack_roots : value Stack.t -> value list
+
+val alloc_string_with_gc :
+  value Stack.t -> (string * (value * bool)) list -> string -> value
+
+val alloc_array_with_gc :
+  value Stack.t -> (string * (value * bool)) list -> float array -> value

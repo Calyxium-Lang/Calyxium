@@ -13,7 +13,8 @@
   color
   bytecode
   opcode
-  vm)
+  vm
+  gc)
  (libraries unix ppx_deriving.show)
  (preprocess
   (pps ppx_deriving.show)))
