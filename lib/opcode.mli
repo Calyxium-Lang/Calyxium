@@ -4,6 +4,7 @@ type opcode =
   | LOAD_STRING of string
   | LOAD_BYTE of char
   | LOAD_BOOL of bool
+  | LOAD_UNIT of unit
   | LOAD_ARRAY of int
   | LOAD_VAR of string
   | STORE_VAR of string
@@ -29,4 +30,10 @@ type opcode =
   | NOT_EQUAL
   | RETURN
   | PRINTLN
+  | NOT
+  | INC
+  | DEC
+  | DUP
+  | POP
+  | INPUT
 [@@deriving show]

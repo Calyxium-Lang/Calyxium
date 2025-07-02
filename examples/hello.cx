@@ -1,3 +1,5 @@
-let x: int = input("Enter input: ")
-let y: string = "the number was" ^ to_string(x)
-println(y)
+let i: int = 5
+
+for (i; i <= 10; i--) {
+    println(i)
+}
