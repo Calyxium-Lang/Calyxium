@@ -46,6 +46,11 @@ let rec compile_expr = function
             List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
           in
           args_bytecode @ [ PRINTLN ]
+      | VarExpr "to_float" ->
+          let args_bytecode =
+            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
+          in
+          args_bytecode @ [ FLOAT ]
       | VarExpr "input" ->
           let args_bytecode =
             List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
@@ -66,6 +71,7 @@ let rec compile_expr = function
       | Not -> operand @ [ NOT ]
       | Inc -> operand @ [ INC ]
       | Dec -> operand @ [ DEC ]
+      | Minus -> operand @ [ NEG ]
       | _ -> failwith "Unsupported unary operator")
   | IfExpr { condition; then_branch; else_branch } ->
       let condition_code = compile_expr condition in
@@ -81,18 +87,22 @@ let rec compile_expr = function
 let rec compile_stmt = function
   | ExprStmt expr -> compile_expr expr
   | BlockStmt { body } -> List.flatten (List.map compile_stmt body)
-  | FunctionDeclStmt { name; parameters; body; _ } ->
+  | FunctionDeclStmt { name; is_rec; parameters; body; _ } ->
       let start_bytecode = [ FUNCTION name ] in
-      let function_body = compile_stmt (Ast.Stmt.BlockStmt { body }) in
+      if is_rec then Hashtbl.add function_table name [];
+      let function_body = compile_stmt (BlockStmt { body }) in
       let param_bytecodes =
         List.map
           (fun (param : parameter) -> [ STORE_VAR param.name ])
           parameters
       in
       let full_function_bytecode =
-        start_bytecode @ List.concat param_bytecodes @ function_body
+        start_bytecode
+        @ List.concat param_bytecodes
+        @ function_body @ [ RETURN ]
       in
-      Hashtbl.add function_table name full_function_bytecode;
+
+      Hashtbl.replace function_table name full_function_bytecode;
       []
   | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
       let expr_bytecode =

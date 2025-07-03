@@ -1,5 +1,2 @@
-let i: int = 5
-
-for (i; i <= 10; i--) {
-    println(i)
-}
+let x: []int = {1, 2, 3}
+println(x[5])

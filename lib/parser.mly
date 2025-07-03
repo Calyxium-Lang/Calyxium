@@ -1,3 +1,7 @@
+%{
+  open Ast
+%}
+
 %right Pow
 %left Star Slash Mod Plus Minus Carot LogicalOr LogicalAnd Dot
 %right Assign PlusAssign MinusAssign StarAssign SlashAssign
@@ -16,12 +20,12 @@
 %token EOF
 
 %start program
-%type <Ast.Stmt.t> program
+%type <Stmt.t> program
 
 %%
 
 program:
-    stmt_list EOF { Ast.Stmt.BlockStmt { body = $1 } }
+    stmt_list EOF { Stmt.BlockStmt { body = $1 } }
 
 stmt_list:
   stmt stmt_list { $1 :: $2 }
@@ -35,9 +39,9 @@ stmt:
   | ForStmt { $1 }
   | MatchStmt { $1 }
   | ModuleStmt { $1 }
-  | expr { Ast.Stmt.ExprStmt $1 }
-  | Return expr %prec LowPrec { Ast.Stmt.ExprStmt (Ast.Expr.ReturnExpr $2) }
-  | If expr Then expr Else expr { Ast.Stmt.ExprStmt (Ast.Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; }) }
+  | expr { Stmt.ExprStmt $1 }
+  | Return expr %prec LowPrec { Stmt.ExprStmt (Expr.ReturnExpr $2) }
+  | If expr Then expr Else expr { Stmt.ExprStmt (Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; }) }
 
 stmt_opt:
   | stmt { Some $1 }
@@ -60,55 +64,55 @@ parameter_list:
   | parameter { [$1] }
 
 parameter:
-  | Ident Colon type_expr { { Ast.Stmt.name = $1; param_type = $3 } }
+  | Ident Colon type_expr { { Stmt.name = $1; param_type = $3 } }
 
 type_expr:
-  | IntType { Ast.Type.SymbolType { value = "int" } }
-  | FloatType { Ast.Type.SymbolType { value = "float" } }
-  | StringType { Ast.Type.SymbolType { value = "string" } }
-  | ByteType { Ast.Type.SymbolType { value = "byte" } }
-  | BoolType { Ast.Type.SymbolType { value = "bool" } }
-  | UnitType { Ast.Type.SymbolType { value = "unit"} }
-  | LBracket RBracket type_expr { Ast.Type.ArrayType { element_type = $3 } }
+  | IntType { Type.SymbolType { value = "int" } }
+  | FloatType { Type.SymbolType { value = "float" } }
+  | StringType { Type.SymbolType { value = "string" } }
+  | ByteType { Type.SymbolType { value = "byte" } }
+  | BoolType { Type.SymbolType { value = "bool" } }
+  | UnitType { Type.SymbolType { value = "unit"} }
+  | LBracket RBracket type_expr { Type.ArrayType { element_type = $3 } }
 
 expr:
-  | True { Ast.Expr.BoolExpr { value = true } }
-  | False { Ast.Expr.BoolExpr { value = false } }
-  | expr Plus expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Plus; right = $3 } }
-  | expr Carot expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Carot; right = $3 } }
-  | expr Minus expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Minus; right = $3 } }
-  | expr Star expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Star; right = $3 } }
-  | expr Slash expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Slash; right = $3 } }
-  | expr Mod expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Mod; right = $3 } }
-  | expr Pow expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Pow; right = $3 } }
-  | expr Greater expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Greater; right = $3 } }
-  | expr Less expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Less; right = $3 } }
-  | expr LogicalOr expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.LogicalOr; right = $3 } }
-  | expr LogicalAnd expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.LogicalAnd; right = $3 } }
-  | expr Eq expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Eq; right = $3 } }
-  | expr Neq expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Neq; right = $3 } }
-  | expr Geq expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Geq; right = $3 } }
-  | expr Leq expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Leq; right = $3 } }
-  | expr PlusAssign expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.PlusAssign; right = $3 } }
-  | expr MinusAssign expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.MinusAssign; right = $3 } }
-  | expr StarAssign expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.StarAssign; right = $3 } }
-  | expr SlashAssign expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.SlashAssign; right = $3 } }
-  | Not expr %prec NotPrec { Ast.Expr.UnaryExpr { operator = Token.Not; operand = $2 } }
-  | expr Inc { Ast.Expr.UnaryExpr { operator = Token.Inc; operand = $1 } }
-  | expr Dec { Ast.Expr.UnaryExpr { operator = Token.Dec; operand = $1 } }
-  | Ident LParen argument_list RParen { Ast.Expr.CallExpr { callee = Ast.Expr.VarExpr $1; arguments = $3 } }
-  | Minus expr %prec UnaryMinus { Ast.Expr.UnaryExpr { operator = Token.Minus; operand = $2 } }
-  | Int { Ast.Expr.IntExpr { value = $1 } }
-  | Float { Ast.Expr.FloatExpr { value = $1 } }
-  | String { Ast.Expr.StringExpr { value = $1 } }
-  | Byte { Ast.Expr.ByteExpr { value = $1 } }
-  | Bool { Ast.Expr.BoolExpr { value = $1 } }
-  | Unit { Ast.Expr.UnitExpr { value = $1 } }
-  | Ident { Ast.Expr.VarExpr $1 }
-  | LBrace RBrace { Ast.Expr.ArrayExpr { elements = [] } }
-  | LBrace expr_list RBrace { Ast.Expr.ArrayExpr { elements = $2 } }
-  | Ident LBracket expr RBracket { Ast.Expr.IndexExpr { array = Ast.Expr.VarExpr $1; index = $3 } }
-  | expr Dot Ident { Ast.Expr.DotExpr { left = $1; right = $3 } }
+  | True { Expr.BoolExpr { value = true } }
+  | False { Expr.BoolExpr { value = false } }
+  | expr Plus expr { Expr.BinaryExpr { left = $1; operator = Token.Plus; right = $3 } }
+  | expr Carot expr { Expr.BinaryExpr { left = $1; operator = Token.Carot; right = $3 } }
+  | expr Minus expr { Expr.BinaryExpr { left = $1; operator = Token.Minus; right = $3 } }
+  | expr Star expr { Expr.BinaryExpr { left = $1; operator = Token.Star; right = $3 } }
+  | expr Slash expr { Expr.BinaryExpr { left = $1; operator = Token.Slash; right = $3 } }
+  | expr Mod expr { Expr.BinaryExpr { left = $1; operator = Token.Mod; right = $3 } }
+  | expr Pow expr { Expr.BinaryExpr { left = $1; operator = Token.Pow; right = $3 } }
+  | expr Greater expr { Expr.BinaryExpr { left = $1; operator = Token.Greater; right = $3 } }
+  | expr Less expr { Expr.BinaryExpr { left = $1; operator = Token.Less; right = $3 } }
+  | expr LogicalOr expr { Expr.BinaryExpr { left = $1; operator = Token.LogicalOr; right = $3 } }
+  | expr LogicalAnd expr { Expr.BinaryExpr { left = $1; operator = Token.LogicalAnd; right = $3 } }
+  | expr Eq expr { Expr.BinaryExpr { left = $1; operator = Token.Eq; right = $3 } }
+  | expr Neq expr { Expr.BinaryExpr { left = $1; operator = Token.Neq; right = $3 } }
+  | expr Geq expr { Expr.BinaryExpr { left = $1; operator = Token.Geq; right = $3 } }
+  | expr Leq expr { Expr.BinaryExpr { left = $1; operator = Token.Leq; right = $3 } }
+  | expr PlusAssign expr { Expr.BinaryExpr { left = $1; operator = Token.PlusAssign; right = $3 } }
+  | expr MinusAssign expr { Expr.BinaryExpr { left = $1; operator = Token.MinusAssign; right = $3 } }
+  | expr StarAssign expr { Expr.BinaryExpr { left = $1; operator = Token.StarAssign; right = $3 } }
+  | expr SlashAssign expr { Expr.BinaryExpr { left = $1; operator = Token.SlashAssign; right = $3 } }
+  | Not expr %prec NotPrec { Expr.UnaryExpr { operator = Token.Not; operand = $2 } }
+  | expr Inc { Expr.UnaryExpr { operator = Token.Inc; operand = $1 } }
+  | expr Dec { Expr.UnaryExpr { operator = Token.Dec; operand = $1 } }
+  | Ident LParen argument_list RParen { Expr.CallExpr { callee = Expr.VarExpr $1; arguments = $3 } }
+  | Minus expr %prec UnaryMinus { Expr.UnaryExpr { operator = Token.Minus; operand = $2 } }
+  | Int { Expr.IntExpr { value = $1 } }
+  | Float { Expr.FloatExpr { value = $1 } }
+  | String { Expr.StringExpr { value = $1 } }
+  | Byte { Expr.ByteExpr { value = $1 } }
+  | Bool { Expr.BoolExpr { value = $1 } }
+  | Unit { Expr.UnitExpr { value = $1 } }
+  | Ident { Expr.VarExpr $1 }
+  | LBrace RBrace { Expr.ArrayExpr { elements = [] } }
+  | LBrace expr_list RBrace { Expr.ArrayExpr { elements = $2 } }
+  | Ident LBracket expr RBracket { Expr.IndexExpr { array = Expr.VarExpr $1; index = $3 } }
+  | expr Dot Ident { Expr.DotExpr { left = $1; right = $3 } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }
@@ -119,24 +123,24 @@ argument_list:
   | expr { [$1] }
 
 ImportStmt:
-  | Use String { Ast.Stmt.ImportStmt { module_name = $2 } }
+  | Use String { Stmt.ImportStmt { module_name = $2 } }
 
 ModuleStmt:
-  | Module Ident LBrace stmt_list RBrace { Ast.Stmt.ModuleStmt { module_name = $2; block = $4 } }
+  | Module Ident LBrace stmt_list RBrace { Stmt.ModuleStmt { module_name = $2; block = $4 } }
 
 VarDeclStmt:
-  | Let Ident Colon type_expr Assign expr { Ast.Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
+  | Let Ident Colon type_expr Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
 
 FunctionDeclStmt:
-  | Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = $3; return_type = $6; body = $8 } }
-  | Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $2; is_rec = true; parameters = $4; return_type = $7; body = $9 } }
+  | Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = $3; return_type = $6; body = $8 } }
+  | Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = true; parameters = $4; return_type = $7; body = $9 } }
   
 MatchStmt:
-  | Match expr With case_list { Ast.Stmt.MatchStmt { expr = $2; cases = $4; } }
+  | Match expr With case_list { Stmt.MatchStmt { expr = $2; cases = $4; } }
 
 IfStmt:
-  | If LParen expr RParen LBrace stmt_list RBrace Else LBrace stmt_list RBrace { Ast.Stmt.IfStmt { condition = $3; then_branch = Ast.Stmt.BlockStmt { body = $6 }; else_branch = Some (Ast.Stmt.BlockStmt { body = $10 }) } }
-  | If LParen expr RParen LBrace stmt_list RBrace { Ast.Stmt.IfStmt { condition = $3; then_branch = Ast.Stmt.BlockStmt { body = $6 }; else_branch = None } }
+  | If LParen expr RParen LBrace stmt_list RBrace Else LBrace stmt_list RBrace { Stmt.IfStmt { condition = $3; then_branch = Stmt.BlockStmt { body = $6 }; else_branch = Some (Stmt.BlockStmt { body = $10 }) } }
+  | If LParen expr RParen LBrace stmt_list RBrace { Stmt.IfStmt { condition = $3; then_branch = Stmt.BlockStmt { body = $6 }; else_branch = None } }
 
 ForStmt:
-  | For LParen stmt_opt Semi expr_opt Semi stmt_opt RParen LBrace stmt_list RBrace { let default_condition = Ast.Expr.BoolExpr { value = true } in let increment_stmt = match $7 with | None -> (match $3 with | Some (Ast.Stmt.VarDeclarationStmt { identifier; _ }) -> Some (Ast.Stmt.ExprStmt (Ast.Expr.UnaryExpr { operator = Token.Inc; operand = Ast.Expr.VarExpr identifier })) | Some (Ast.Stmt.ExprStmt (Ast.Expr.VarExpr var_name)) -> Some (Ast.Stmt.ExprStmt (Ast.Expr.UnaryExpr { operator = Token.Inc; operand = Ast.Expr.VarExpr var_name })) | _ -> None) | Some (Ast.Stmt.ExprStmt expr) -> Some (Ast.Stmt.ExprStmt expr) | Some _ -> None in Ast.Stmt.ForStmt { init = $3; condition = Option.value ~default:default_condition $5; increment = increment_stmt; body = Ast.Stmt.BlockStmt { body = $10 } } }
+  | For LParen stmt_opt Semi expr_opt Semi stmt_opt RParen LBrace stmt_list RBrace { let default_condition = Expr.BoolExpr { value = true } in let increment_stmt = match $7 with | None -> (match $3 with | Some (Stmt.VarDeclarationStmt { identifier; _ }) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr identifier })) | Some (Stmt.ExprStmt (Expr.VarExpr var_name)) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr var_name })) | _ -> None) | Some (Stmt.ExprStmt expr) -> Some (Stmt.ExprStmt expr) | Some _ -> None in Stmt.ForStmt { init = $3; condition = Option.value ~default:default_condition $5; increment = increment_stmt; body = Stmt.BlockStmt { body = $10 } } }

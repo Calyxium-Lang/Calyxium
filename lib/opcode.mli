@@ -36,4 +36,6 @@ type opcode =
   | DUP
   | POP
   | INPUT
+  | NEG
+  | FLOAT
 [@@deriving show]

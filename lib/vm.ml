@@ -22,6 +22,7 @@ let runtime_error msg =
   raise (RuntimeError ("Runtime Error: " ^ msg))
 
 let stack : Gc.value Stack.t = Stack.create ()
+let global_env : (string * (Gc.value * bool)) list ref = ref []
 
 let escape_sequences =
   [ ("\\n", '\n'); ("\\t", '\t'); ("\\r", '\r'); ("\\\\", '\\') ]
@@ -60,20 +61,20 @@ let pop2 name =
     runtime_error ("Stack underflow during '" ^ name ^ "' (need 2 values)")
 
 let binary_op name op =
-  let b, a = pop2 name in
+  let a, b = pop2 name in
   match (a, b) with
   | VFloat a, VFloat b -> Stack.push (VFloat (op a b)) stack
   | _ -> runtime_error ("binary_op '" ^ name ^ "' expected two floats")
 
 let compare_op name cmp =
-  let b, a = pop2 name in
+  let a, b = pop2 name in
   match (a, b) with
   | VFloat a, VFloat b ->
       Stack.push (if cmp a b then VFloat 1.0 else VFloat 0.0) stack
   | _ -> runtime_error ("compare_op '" ^ name ^ "' expected two floats")
 
 let logic_op name op =
-  let b, a = pop2 name in
+  let a, b = pop2 name in
   match (a, b) with
   | VFloat a, VFloat b ->
       Stack.push (if op a b then VFloat 1.0 else VFloat 0.0) stack
@@ -94,7 +95,11 @@ let unary_op name op =
 let get_var env name =
   match List.assoc_opt name env with
   | Some (v, _) -> v
-  | None -> runtime_error ("Variable '" ^ name ^ "' not found in environment")
+  | None -> (
+      match List.assoc_opt name !global_env with
+      | Some (v, _) -> v
+      | None ->
+          runtime_error ("Variable '" ^ name ^ "' not found in environment"))
 
 let get_string_from_stack_value value =
   let id = int_of_float value in
@@ -347,12 +352,17 @@ let rec execute instructions env pc =
         push_trace pc ("STORE_VAR " ^ name);
         if Stack.is_empty stack then
           runtime_error ("STORE_VAR '" ^ name ^ "' failed: stack is empty")
-        else if List.mem_assoc name env then
-          runtime_error ("STORE_VAR: Variable '" ^ name ^ "' already declared")
         else
           let value = Stack.pop stack in
-          let env = (name, (value, true)) :: env in
-          execute instructions env (pc + 1)
+          if List.mem_assoc name env then
+            let env =
+              List.remove_assoc name env |> fun e -> (name, (value, true)) :: e
+            in
+            execute instructions env (pc + 1)
+          else (
+            global_env :=
+              List.remove_assoc name !global_env @ [ (name, (value, true)) ];
+            execute instructions env (pc + 1))
     | PRINTLN -> (
         push_trace pc "PRINTLN";
         if Stack.is_empty stack then
@@ -423,6 +433,31 @@ let rec execute instructions env pc =
               Stack.push processed_value stack;
               next ()
           | None -> runtime_error "Invalid prompt ID for INPUT")
+    | NEG ->
+        push_trace pc "NEG";
+        let v = Stack.pop stack in
+        (match v with
+        | VFloat f -> Stack.push (VFloat (-.f)) stack
+        | _ -> runtime_error "NEG expects a float");
+        next ()
+    | FLOAT ->
+        push_trace pc "FLOAT";
+        let v = Stack.pop stack in
+        let float_val =
+          match v with
+          | VFloat f -> f
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some s -> (
+                  try float_of_string s
+                  with Failure _ ->
+                    runtime_error ("FLOAT: invalid float string: " ^ s))
+              | None -> runtime_error "FLOAT: invalid heap reference for string"
+              )
+          | _ -> runtime_error "FLOAT: unsupported type for float conversion"
+        in
+        Stack.push (VFloat float_val) stack;
+        next ()
 
 let run instructions =
   try

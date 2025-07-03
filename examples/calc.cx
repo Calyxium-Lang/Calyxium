@@ -1,6 +1,6 @@
-let a: float = input("Enter number one: ")
-let b: float = input("Enter number two: ")
-let op: byte = input("Eneter Operator: ")
+let a: float = 10.0
+let b: float = 5.0
+let op: byte = '/'
 
 safeDiv(a: float, b: float): unit {
     if b == 0.0 then println("Can't divide by zero") else println(a / b)

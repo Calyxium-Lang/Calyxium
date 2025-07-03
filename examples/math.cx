@@ -1,0 +1,52 @@
+let pi: float = 3.14159265358979323846
+
+rec fact(n: int): float {
+    if n <= 1 then 1.0 else to_float(n) * fact(n - 1)
+}
+
+pow(base: float, exp: float): float {
+    return base ** exp
+}
+
+abs(x: float): float {
+    if (x <= 0.0) {
+        return -x
+    } else {
+        return x
+    }
+}
+
+degToRad(deg: float): float {
+    return deg * pi / 180.0
+}
+
+radToDeg(rad: float): float {
+    return rad * 180.0 / pi
+}
+
+sin_term(x: float, n: int): float {
+    return pow(-1.0, to_float(n)) * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1)
+}
+
+rec sin_helper(x: float, terms: int, n: int, acc: float): float {
+    if (n >= terms) {
+        return acc
+    } else {
+        return sin_helper(x, terms, n + 1, acc + sin_term(x, n))
+    }
+}
+
+sin(x: float, terms: int): float {
+    return sin_helper(x, terms, 0, 0.0)
+}
+
+csc(x: float, terms: int): float {
+    return 1.0 / sin(x, terms)
+}
+
+arcsin(x: float, terms: int): float {
+    if (x < -1.0 || x > 1.0) {
+        println("Error: arcsin(x) is undefined for x < -1")
+    }
+    # Will finish later
+}

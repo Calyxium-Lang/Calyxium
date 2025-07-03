@@ -68,6 +68,15 @@ let rec check_expr (env : (string * Type.t) list)
             raise
               (TypeError "Increment/Decrement requires int or float operand");
           operand_type
+      | Minus ->
+          if
+            not
+              (type_eq operand_type (SymbolType { value = "int" })
+              || type_eq operand_type (SymbolType { value = "float" }))
+          then
+            raise
+              (TypeError "Increment/Decrement requires int or float operand");
+          operand_type
       | _ -> raise (TypeError "Unsupported unary operator"))
   | BinaryExpr { left; operator; right } -> (
       let lt = check_expr env func_env left in
@@ -164,7 +173,67 @@ let rec check_stmt (env : (string * Type.t) list)
             raise (TypeError ("Type mismatch in declaration of " ^ identifier));
           (identifier, explicit_type) :: env
       | None -> (identifier, explicit_type) :: env)
-  | FunctionDeclStmt { name; parameters; return_type; body; _ } ->
+  | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
+      let rec contains_recursive_call fname expr =
+        let open Expr in
+        match expr with
+        | CallExpr { callee = VarExpr callee_name; _ } -> callee_name = fname
+        | CallExpr { callee; arguments } ->
+            contains_recursive_call fname callee
+            || List.exists (contains_recursive_call fname) arguments
+        | UnaryExpr { operand; _ } -> contains_recursive_call fname operand
+        | BinaryExpr { left; right; _ } ->
+            contains_recursive_call fname left
+            || contains_recursive_call fname right
+        | IfExpr { condition; then_branch; else_branch } ->
+            contains_recursive_call fname condition
+            || contains_recursive_call fname then_branch
+            || contains_recursive_call fname else_branch
+        | ArrayExpr { elements } ->
+            List.exists (contains_recursive_call fname) elements
+        | IndexExpr { array; index } ->
+            contains_recursive_call fname array
+            || contains_recursive_call fname index
+        | ReturnExpr e -> contains_recursive_call fname e
+        | _ -> false
+      in
+
+      let rec contains_recursive_call_stmt fname stmt =
+        let open Stmt in
+        match stmt with
+        | ExprStmt e -> contains_recursive_call fname e
+        | BlockStmt { body } ->
+            List.exists (contains_recursive_call_stmt fname) body
+        | IfStmt { condition; then_branch; else_branch } -> (
+            contains_recursive_call fname condition
+            || contains_recursive_call_stmt fname then_branch
+            ||
+            match else_branch with
+            | Some b -> contains_recursive_call_stmt fname b
+            | None -> false)
+        | ForStmt { init; condition; increment; body } ->
+            (match init with
+            | Some s -> contains_recursive_call_stmt fname s
+            | None -> false)
+            || contains_recursive_call fname condition
+            || (match increment with
+               | Some s -> contains_recursive_call_stmt fname s
+               | None -> false)
+            || contains_recursive_call_stmt fname body
+        | _ -> false
+      in
+
+      let has_recursive_call =
+        List.exists (contains_recursive_call_stmt name) body
+      in
+
+      if has_recursive_call && not is_rec then
+        raise
+          (TypeError
+             ("Function `" ^ name
+            ^ "` calls itself recursively but is not marked `rec`. Please add \
+               `rec`."));
+
       let param_types = List.map (fun p -> p.param_type) parameters in
       let new_func = (name, [ (param_types, return_type) ]) in
       let func_env =
