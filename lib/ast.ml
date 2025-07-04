@@ -22,6 +22,7 @@ module Expr = struct
     | IfExpr of { condition : t; then_branch : t; else_branch : t }
     | ReturnExpr of t
     | DotExpr of { left : t; right : string }
+    | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
 end
 
 module Stmt = struct

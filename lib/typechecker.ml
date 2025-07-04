@@ -135,6 +135,18 @@ let rec check_expr (env : (string * Type.t) list)
       t_then
   | ReturnExpr expr -> check_expr env func_env expr
   | DotExpr _ -> raise (TypeError "Dot Expression not implemented")
+  | TernaryExpr { cond; onTrue; onFalse } ->
+      let ct = check_expr env func_env cond in
+      if not (type_eq ct (SymbolType { value = "bool" })) then
+        raise (TypeError "Ternary condition must be boolean");
+      let t_true = check_expr env func_env onTrue in
+      let t_false = check_expr env func_env onFalse in
+      if type_eq t_true t_false then t_true
+      else
+        raise
+          (TypeError
+             ("Ternary branches must return same type, but got "
+            ^ string_of_type t_true ^ " and " ^ string_of_type t_false))
 
 let rec find_return_exprs env func_env expr =
   let open Expr in
@@ -174,6 +186,17 @@ let rec check_stmt (env : (string * Type.t) list)
           (identifier, explicit_type) :: env
       | None -> (identifier, explicit_type) :: env)
   | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
+      let local_funcs = collect_functions body in
+      let param_types = List.map (fun p -> p.param_type) parameters in
+      let this_func = (name, [ (param_types, return_type) ]) in
+      let func_env =
+        let base_env = local_funcs @ func_env in
+        match List.assoc_opt name base_env with
+        | Some overloads ->
+            (name, (param_types, return_type) :: overloads)
+            :: List.remove_assoc name base_env
+        | None -> this_func :: base_env
+      in
       let rec contains_recursive_call fname expr =
         let open Expr in
         match expr with
@@ -234,15 +257,6 @@ let rec check_stmt (env : (string * Type.t) list)
             ^ "` calls itself recursively but is not marked `rec`. Please add \
                `rec`."));
 
-      let param_types = List.map (fun p -> p.param_type) parameters in
-      let new_func = (name, [ (param_types, return_type) ]) in
-      let func_env =
-        match List.assoc_opt name func_env with
-        | Some overloads ->
-            (name, (param_types, return_type) :: overloads)
-            :: List.remove_assoc name func_env
-        | None -> new_func :: func_env
-      in
       let param_env = List.map (fun p -> (p.name, p.param_type)) parameters in
       let rec gather_return_types stmts =
         List.concat_map
@@ -337,7 +351,7 @@ let rec check_stmt (env : (string * Type.t) list)
         cases;
       env
 
-let collect_functions stmts =
+and collect_functions stmts =
   let rec collect_from_stmt stmt acc =
     match stmt with
     | FunctionDeclStmt { name; parameters; return_type; _ } ->

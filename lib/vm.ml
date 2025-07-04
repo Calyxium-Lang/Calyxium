@@ -323,26 +323,36 @@ let rec execute instructions env pc =
         push_trace pc ("CALL " ^ function_name);
         let function_body = resolve_function_body function_name in
         let param_names = extract_param_names function_body in
-        if Stack.length stack < List.length param_names then
+        let arg_count = List.length param_names in
+
+        if Stack.length stack < arg_count then
           runtime_error
             ("CALL to '" ^ function_name ^ "' requires "
-            ^ string_of_int (List.length param_names)
-            ^ " arguments, but stack has only "
+           ^ string_of_int arg_count ^ " arguments, but stack has only "
             ^ string_of_int (Stack.length stack));
-        let args =
-          List.rev
-            (List.init (List.length param_names) (fun _ -> Stack.pop stack))
-        in
+
+        let args = List.rev (List.init arg_count (fun _ -> Stack.pop stack)) in
         let local_env =
           List.combine param_names (List.map (fun v -> (v, true)) args)
         in
+
         let roots = Gc.get_stack_roots stack in
         Gc.maybe_collect_gc roots local_env;
-        let skip_header = 1 + List.length param_names in
-        let body = List.drop skip_header function_body in
-        let return_value = execute (Array.of_list body) local_env 0 in
-        Stack.push return_value stack;
-        next ()
+
+        let is_tail_position =
+          pc + 1 < Array.length instructions && instructions.(pc + 1) = RETURN
+        in
+
+        if is_tail_position then
+          let skip_header = 1 + List.length param_names in
+          let body = List.drop skip_header function_body in
+          execute (Array.of_list body) local_env 0
+        else
+          let skip_header = 1 + List.length param_names in
+          let body = List.drop skip_header function_body in
+          let return_value = execute (Array.of_list body) local_env 0 in
+          Stack.push return_value stack;
+          next ()
     | RETURN ->
         push_trace pc "RETURN";
         if Stack.is_empty stack then
@@ -381,7 +391,7 @@ let rec execute instructions env pc =
               next ()
           | VFloat f ->
               if floor f = f then Printf.printf "%Ld\n" (Int64.of_float f)
-              else Printf.printf "%.10f\n" f;
+              else Printf.printf "%.17g" f;
               next ()
           | VHeapRef id -> (
               match Gc.get_string id with
@@ -398,7 +408,7 @@ let rec execute instructions env pc =
                 | VFloat f when f = Float.neg_infinity -> "-inf"
                 | VFloat f ->
                     if floor f = f then Int64.to_string (Int64.of_float f)
-                    else Printf.sprintf "%.10f" f
+                    else Printf.sprintf "%.17g" f
                 | VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> "\"" ^ replace_escape_sequences s ^ "\""
@@ -457,6 +467,95 @@ let rec execute instructions env pc =
           | _ -> runtime_error "FLOAT: unsupported type for float conversion"
         in
         Stack.push (VFloat float_val) stack;
+        next ()
+    | PLUSASSIGN ->
+        push_trace pc "PLUSASSIGN";
+        let value = pop1 "PLUSASSIGN" in
+        let var = pop1 "PLUSASSIGN target" in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None ->
+                  runtime_error "PLUSASSIGN: invalid variable name reference")
+          | _ -> runtime_error "PLUSASSIGN: expected variable name"
+        in
+        let old_value = get_var env name in
+        (match (old_value, value) with
+        | VFloat oldf, VFloat newf ->
+            let result = VFloat (oldf +. newf) in
+            global_env :=
+              List.remove_assoc name !global_env @ [ (name, (result, true)) ];
+            Stack.push result stack
+        | _ -> runtime_error "PLUSASSIGN: only float types are supported");
+        next ()
+    | MINUSASSIGN ->
+        push_trace pc "MINUSASSIGN";
+        let value = pop1 "MINUSASSIGN" in
+        let var = pop1 "MINUSASSIGN target" in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None ->
+                  runtime_error "MINUSASSIGN: invalid variable name reference")
+          | _ -> runtime_error "MINUSASSIGN: expected variable name"
+        in
+        let old_value = get_var env name in
+        (match (old_value, value) with
+        | VFloat oldf, VFloat newf ->
+            let result = VFloat (oldf -. newf) in
+            global_env :=
+              List.remove_assoc name !global_env @ [ (name, (result, true)) ];
+            Stack.push result stack
+        | _ -> runtime_error "MINUSASSIGN: only float types are supported");
+        next ()
+    | STARASSIGN ->
+        push_trace pc "STARASSIGN";
+        let value = pop1 "STARASSIGN" in
+        let var = pop1 "STARASSIGN target" in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None ->
+                  runtime_error "STARASSIGN: invalid variable name reference")
+          | _ -> runtime_error "STARASSIGN: expected variable name"
+        in
+        let old_value = get_var env name in
+        (match (old_value, value) with
+        | VFloat oldf, VFloat newf ->
+            let result = VFloat (oldf *. newf) in
+            global_env :=
+              List.remove_assoc name !global_env @ [ (name, (result, true)) ];
+            Stack.push result stack
+        | _ -> runtime_error "STARASSIGN: only float types are supported");
+        next ()
+    | SLASHASSIGN ->
+        push_trace pc "SLASHASSIGN";
+        let value = pop1 "SLASHASSIGN" in
+        let var = pop1 "SLASHASSIGN target" in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None ->
+                  runtime_error "SLASHASSIGN: invalid variable name reference")
+          | _ -> runtime_error "SLASHASSIGN: expected variable name"
+        in
+        let old_value = get_var env name in
+        (match (old_value, value) with
+        | VFloat oldf, VFloat newf ->
+            if newf = 0.0 then runtime_error "SLASHASSIGN: division by zero";
+            let result = VFloat (oldf /. newf) in
+            global_env :=
+              List.remove_assoc name !global_env @ [ (name, (result, true)) ];
+            Stack.push result stack
+        | _ -> runtime_error "SLASHASSIGN: only float types are supported");
         next ()
 
 let run instructions =

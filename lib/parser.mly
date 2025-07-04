@@ -5,11 +5,11 @@
 %right Pow
 %left Star Slash Mod Plus Minus Carot LogicalOr LogicalAnd Dot
 %right Assign PlusAssign MinusAssign StarAssign SlashAssign
-%nonassoc Eq Neq Geq Leq Greater Less Inc Dec UnaryMinus NotPrec LowPrec
+%nonassoc Eq Neq Geq Leq Greater Less Inc Dec UnaryMinus NotPrec LowPrec IfThenElse
 
 %token Recursive If Then Else Let Match With Return For Use Module True False IntType FloatType StringType ByteType BoolType UnitType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
-%token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore
+%token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore Question
 %token <string> Ident
 %token <int64> Int
 %token <float> Float
@@ -41,7 +41,7 @@ stmt:
   | ModuleStmt { $1 }
   | expr { Stmt.ExprStmt $1 }
   | Return expr %prec LowPrec { Stmt.ExprStmt (Expr.ReturnExpr $2) }
-  | If expr Then expr Else expr { Stmt.ExprStmt (Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; }) }
+  | If expr Then expr Else expr %prec IfThenElse { Stmt.ExprStmt (Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; }) }
 
 stmt_opt:
   | stmt { Some $1 }
@@ -113,6 +113,7 @@ expr:
   | LBrace expr_list RBrace { Expr.ArrayExpr { elements = $2 } }
   | Ident LBracket expr RBracket { Expr.IndexExpr { array = Expr.VarExpr $1; index = $3 } }
   | expr Dot Ident { Expr.DotExpr { left = $1; right = $3 } }
+  | LParen expr RParen Question expr Colon expr { Expr.TernaryExpr { cond = $2; onTrue = $5; onFalse = $7; } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }

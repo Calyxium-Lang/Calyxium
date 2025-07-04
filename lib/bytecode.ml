@@ -5,6 +5,13 @@ open Ast.Stmt
 
 let function_table : (string, opcode list) Hashtbl.t = Hashtbl.create 10
 
+let builtins =
+  [
+    ("println", fun args -> args @ [ PRINTLN ]);
+    ("to_float", fun args -> args @ [ FLOAT ]);
+    ("input", fun args -> args @ [ INPUT ]);
+  ]
+
 let opcode_of_binop = function
   | Plus -> PLUS
   | Minus -> MINUS
@@ -34,34 +41,29 @@ let rec compile_expr = function
   | VarExpr name -> [ LOAD_VAR name ]
   | IndexExpr { array; index } ->
       compile_expr array @ compile_expr index @ [ LOAD_INDEX ]
-  | BinaryExpr { left; operator; right } ->
-      let left = compile_expr left in
-      let right = compile_expr right in
-      left @ right @ [ opcode_of_binop operator ]
+  | BinaryExpr { left = VarExpr name; operator; right } -> (
+      match operator with
+      | PlusAssign ->
+          [ LOAD_VAR name ] @ compile_expr right @ [ PLUS; STORE_VAR name ]
+      | MinusAssign ->
+          [ LOAD_VAR name ] @ compile_expr right @ [ MINUS; STORE_VAR name ]
+      | StarAssign ->
+          [ LOAD_VAR name ] @ compile_expr right @ [ STAR; STORE_VAR name ]
+      | SlashAssign ->
+          [ LOAD_VAR name ] @ compile_expr right @ [ SLASH; STORE_VAR name ]
+      | _ ->
+          let left = [ LOAD_VAR name ] in
+          let right = compile_expr right in
+          left @ right @ [ opcode_of_binop operator ])
   | ReturnExpr expr -> compile_expr expr @ [ RETURN ]
   | CallExpr { callee; arguments } -> (
+      let args_bytecode = List.concat (List.map compile_expr arguments) in
       match callee with
-      | VarExpr "println" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ PRINTLN ]
-      | VarExpr "to_float" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ FLOAT ]
-      | VarExpr "input" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ INPUT ]
-      | VarExpr function_name ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ CALL function_name ]
-      | _ -> failwith "Not implemented")
+      | VarExpr name -> (
+          match List.assoc_opt name builtins with
+          | Some handler -> handler args_bytecode
+          | None -> args_bytecode @ [ CALL name ])
+      | _ -> failwith "Unsupported call expression")
   | ArrayExpr { elements } ->
       let elements_bytecode = List.concat (List.map compile_expr elements) in
       elements_bytecode @ [ LOAD_ARRAY (List.length elements) ]
@@ -69,8 +71,14 @@ let rec compile_expr = function
       let operand = compile_expr operand in
       match operator with
       | Not -> operand @ [ NOT ]
-      | Inc -> operand @ [ INC ]
-      | Dec -> operand @ [ DEC ]
+      | Inc -> (
+          match operand with
+          | [ LOAD_VAR name ] -> [ LOAD_VAR name; INC; DUP; STORE_VAR name ]
+          | _ -> failwith "INC expects a variable")
+      | Dec -> (
+          match operand with
+          | [ LOAD_VAR name ] -> [ LOAD_VAR name; DEC; DUP; STORE_VAR name ]
+          | _ -> failwith "DEC expects a variable")
       | Minus -> operand @ [ NEG ]
       | _ -> failwith "Unsupported unary operator")
   | IfExpr { condition; then_branch; else_branch } ->
@@ -82,6 +90,15 @@ let rec compile_expr = function
       condition_code
       @ [ JUMP_IF_FALSE then_jump ]
       @ then_code @ [ JUMP else_jump ] @ else_code
+  | TernaryExpr { cond; onTrue; onFalse } ->
+      let cond_code = compile_expr cond in
+      let true_code = compile_expr onTrue in
+      let false_code = compile_expr onFalse in
+      let true_jump = List.length true_code + 2 in
+      let false_jump = List.length false_code + 1 in
+      cond_code
+      @ [ JUMP_IF_FALSE true_jump ]
+      @ true_code @ [ JUMP false_jump ] @ false_code
   | _ -> failwith "Not implemented"
 
 let rec compile_stmt = function
@@ -167,13 +184,16 @@ let rec compile_stmt = function
       let increment_code =
         match increment with Some stmt -> compile_stmt stmt | None -> []
       in
+
+      let init_len = List.length init_code in
       let cond_len = List.length condition_code in
       let body_len = List.length body_code in
       let incr_len = List.length increment_code in
-      let jump_past_body = body_len + incr_len + 1 in
-      let jump_back_to_condition = -(cond_len + 1 + body_len + incr_len) in
+
+      let jump_to_end = init_len + body_len + incr_len + 1 in
+      let jump_back = -(cond_len + body_len + incr_len + 1) in
+
       init_code @ condition_code
-      @ [ JUMP_IF_FALSE jump_past_body ]
-      @ body_code @ increment_code
-      @ [ JUMP jump_back_to_condition ]
+      @ [ JUMP_IF_FALSE jump_to_end ]
+      @ body_code @ increment_code @ [ JUMP jump_back ]
   | _ -> failwith ""

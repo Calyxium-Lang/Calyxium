@@ -53,6 +53,7 @@ rule token = parse
   | "!"                      { Not }
   | "|"                      { Pipe }
   | "_"                      { UnderScore }
+  | "?"                      { Question }
 
   | "rec"                    { Recursive }
   | "if"                     { If }

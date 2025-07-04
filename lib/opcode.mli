@@ -38,4 +38,8 @@ type opcode =
   | INPUT
   | NEG
   | FLOAT
+  | PLUSASSIGN
+  | MINUSASSIGN
+  | STARASSIGN
+  | SLASHASSIGN
 [@@deriving show]

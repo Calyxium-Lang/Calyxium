@@ -1,2 +1,5 @@
-let x: []int = {1, 2, 3}
-println(x[5])
+loop(): (int, float) {
+    return (5, 5.4)
+}
+
+println(loop())

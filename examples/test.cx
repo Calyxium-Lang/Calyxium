@@ -1,0 +1,3 @@
+let age: int = 19
+let result: string = (age >= 18) ? "Adult" : "Not Adult"
+println(result)
