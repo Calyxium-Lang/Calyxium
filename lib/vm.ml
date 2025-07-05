@@ -384,9 +384,15 @@ let rec execute instructions env pc =
           | VFloat f when f = Float.neg_infinity ->
               Printf.printf "-inf\n";
               next ()
+          | VFloat f when f = 0.0 ->
+              Printf.printf "false\n";
+              next ()
+          | VFloat f when f = 1.0 ->
+              Printf.printf "true\n";
+              next ()
           | VFloat f ->
               if floor f = f then Printf.printf "%Ld\n" (Int64.of_float f)
-              else Printf.printf "%.12g" f;
+              else Printf.printf "%.12g\n" f;
               next ()
           | VHeapRef id -> (
               match Gc.get_string id with
@@ -401,6 +407,8 @@ let rec execute instructions env pc =
                 | VFloat f when Float.is_nan f -> "unit"
                 | VFloat f when f = Float.infinity -> "inf"
                 | VFloat f when f = Float.neg_infinity -> "-inf"
+                | VFloat f when f = 0.0 -> "false"
+                | VFloat f when f = 1.0 -> "true"
                 | VFloat f ->
                     if floor f = f then Int64.to_string (Int64.of_float f)
                     else Printf.sprintf "%.12g" f
@@ -551,6 +559,11 @@ let rec execute instructions env pc =
               List.remove_assoc name !global_env @ [ (name, (result, true)) ];
             Stack.push result stack
         | _ -> runtime_error "SLASHASSIGN: only float types are supported");
+        next ()
+    | LOAD_VAR_REF name ->
+        push_trace pc ("LOAD_VAR_REF " ^ name);
+        let v = Gc.alloc_string_with_gc stack env name in
+        Stack.push v stack;
         next ()
 
 let run instructions =

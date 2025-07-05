@@ -5,7 +5,4 @@ fib(n: int): int {
     aux(n, 0, 1)
 }
 
-let result: int = fib(92)
-if (result == 7540113804746346429) {
-    println("true")
-}
+println(fib(92))

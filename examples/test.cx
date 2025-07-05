@@ -1,6 +1,3 @@
-greet(n: string): string {
-    let string_greet: string = "Hello, "
-    return string_greet ^ n
-}
+use Random.x
 
-println(greet("bob"))
+println(x)

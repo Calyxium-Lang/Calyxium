@@ -9,6 +9,7 @@ type opcode =
   | LOAD_VAR of string
   | STORE_VAR of string
   | FUNCTION of string
+  | LOAD_VAR_REF of string
   | JUMP of int
   | JUMP_IF_FALSE of int
   | CALL of string

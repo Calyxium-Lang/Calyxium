@@ -19,7 +19,7 @@ let print_error ~file ~line ~col ~msg ~source =
   Printf.printf "  --> %s:%d:%d\n" file line col;
   match source with
   | Some txt ->
-      Printf.printf "   %d | %s\n     | %s%s^%s\n" line txt
-        (String.make (max 0 (col - 1)) ' ')
+      Printf.printf "   %d | %s\n       %s%s^%s\n" line txt
+        (String.make (max 0 col) ' ')
         (bold ^ red) reset
   | None -> ()

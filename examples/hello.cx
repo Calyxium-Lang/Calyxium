@@ -1,5 +1,4 @@
-loop(): (int, float) {
-    return (5, 5.4)
+let i: int = 0
+for (;;) {
+    println(i)
 }
-
-println(loop())

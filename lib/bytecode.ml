@@ -50,9 +50,9 @@ let rec compile_expr = function
       | PlusAssign | MinusAssign | StarAssign | SlashAssign -> (
           match left with
           | VarExpr name ->
-              let load = compile_expr left in
+              let load_ref = [ LOAD_VAR_REF name ] in
               let rhs = compile_expr right in
-              load @ rhs @ [ opcode_of_binop operator; STORE_VAR name ]
+              load_ref @ rhs @ [ opcode_of_binop operator ]
           | _ -> failwith "Assignment target must be a variable")
       | _ ->
           let l = compile_expr left in
