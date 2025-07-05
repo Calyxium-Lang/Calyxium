@@ -111,10 +111,6 @@ let get_string_from_stack_value = function
            ^ string_of_int id))
   | _ -> runtime_error "Expected a string heap reference on stack"
 
-let extract_float = function
-  | VFloat f -> f
-  | _ -> runtime_error "Expected a float value"
-
 let resolve_function_body function_name =
   try Hashtbl.find Bytecode.function_table function_name
   with Not_found ->

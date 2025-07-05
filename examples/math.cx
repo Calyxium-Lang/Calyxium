@@ -94,5 +94,3 @@ arctan(x: float, terms: int): float {
 wrapAngle(angle: float): float {
     return angle % (2.0 * pi)
 }
-
-println(sin(0.5, 10))
