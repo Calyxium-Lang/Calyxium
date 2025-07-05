@@ -28,6 +28,10 @@ let opcode_of_binop = function
   | Geq -> GREATER_EQUAL
   | Leq -> LESS_EQUAL
   | Neq -> NOT_EQUAL
+  | PlusAssign -> PLUSASSIGN
+  | MinusAssign -> MINUSASSIGN
+  | StarAssign -> STARASSIGN
+  | SlashAssign -> SLASHASSIGN
   | _ -> failwith "Unsupported operator"
 
 let rec compile_expr = function
@@ -41,20 +45,19 @@ let rec compile_expr = function
   | VarExpr name -> [ LOAD_VAR name ]
   | IndexExpr { array; index } ->
       compile_expr array @ compile_expr index @ [ LOAD_INDEX ]
-  | BinaryExpr { left = VarExpr name; operator; right } -> (
+  | BinaryExpr { left; operator; right } -> (
       match operator with
-      | PlusAssign ->
-          [ LOAD_VAR name ] @ compile_expr right @ [ PLUS; STORE_VAR name ]
-      | MinusAssign ->
-          [ LOAD_VAR name ] @ compile_expr right @ [ MINUS; STORE_VAR name ]
-      | StarAssign ->
-          [ LOAD_VAR name ] @ compile_expr right @ [ STAR; STORE_VAR name ]
-      | SlashAssign ->
-          [ LOAD_VAR name ] @ compile_expr right @ [ SLASH; STORE_VAR name ]
+      | PlusAssign | MinusAssign | StarAssign | SlashAssign -> (
+          match left with
+          | VarExpr name ->
+              let load = compile_expr left in
+              let rhs = compile_expr right in
+              load @ rhs @ [ opcode_of_binop operator; STORE_VAR name ]
+          | _ -> failwith "Assignment target must be a variable")
       | _ ->
-          let left = [ LOAD_VAR name ] in
-          let right = compile_expr right in
-          left @ right @ [ opcode_of_binop operator ])
+          let l = compile_expr left in
+          let r = compile_expr right in
+          l @ r @ [ opcode_of_binop operator ])
   | ReturnExpr expr -> compile_expr expr @ [ RETURN ]
   | CallExpr { callee; arguments } -> (
       let args_bytecode = List.concat (List.map compile_expr arguments) in

@@ -258,31 +258,38 @@ let rec check_stmt (env : (string * Type.t) list)
                `rec`."));
 
       let param_env = List.map (fun p -> (p.name, p.param_type)) parameters in
-      let rec gather_return_types stmts =
+      let env_with_params = param_env @ env in
+      let _final_env =
+        List.fold_left
+          (fun e stmt -> check_stmt e func_env stmt)
+          env_with_params body
+      in
+      let rec gather_return_types env func_env stmts =
         List.concat_map
           (function
-            | ExprStmt e -> find_return_exprs (param_env @ env) func_env e
-            | BlockStmt { body } -> gather_return_types body
+            | ExprStmt e -> find_return_exprs env func_env e
+            | BlockStmt { body } -> gather_return_types env func_env body
             | IfStmt { condition = _; then_branch; else_branch } ->
-                let then_returns = gather_return_types [ then_branch ] in
+                let then_returns =
+                  gather_return_types env func_env [ then_branch ]
+                in
                 let else_returns =
                   match else_branch with
-                  | Some b -> gather_return_types [ b ]
+                  | Some b -> gather_return_types env func_env [ b ]
                   | None -> []
                 in
                 then_returns @ else_returns
             | _ -> [])
           stmts
       in
-      let return_expr_types = gather_return_types body in
+      let return_expr_types = gather_return_types _final_env func_env body in
 
       let last_expr_type =
         match
           List.rev body
           |> List.find_opt (function ExprStmt _ -> true | _ -> false)
         with
-        | Some (ExprStmt expr) ->
-            Some (check_expr (param_env @ env) func_env expr)
+        | Some (ExprStmt expr) -> Some (check_expr _final_env func_env expr)
         | _ -> None
       in
 
@@ -304,7 +311,10 @@ let rec check_stmt (env : (string * Type.t) list)
         all_return_types;
       env
   | BlockStmt { body } ->
-      List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
+      let _final_env =
+        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
+      in
+      _final_env
   | IfStmt { condition; then_branch; else_branch } ->
       let ct = check_expr env func_env condition in
       if not (type_eq ct (SymbolType { value = "bool" })) then

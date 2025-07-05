@@ -1,3 +1,6 @@
-let age: int = 19
-let result: string = (age >= 18) ? "Adult" : "Not Adult"
-println(result)
+greet(n: string): string {
+    let string_greet: string = "Hello, "
+    return string_greet ^ n
+}
+
+println(greet("bob"))

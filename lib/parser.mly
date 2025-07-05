@@ -114,6 +114,7 @@ expr:
   | Ident LBracket expr RBracket { Expr.IndexExpr { array = Expr.VarExpr $1; index = $3 } }
   | expr Dot Ident { Expr.DotExpr { left = $1; right = $3 } }
   | LParen expr RParen Question expr Colon expr { Expr.TernaryExpr { cond = $2; onTrue = $5; onFalse = $7; } }
+  | LParen expr RParen { $2 }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }
@@ -124,7 +125,7 @@ argument_list:
   | expr { [$1] }
 
 ImportStmt:
-  | Use String { Stmt.ImportStmt { module_name = $2 } }
+  | Use Ident { Stmt.ImportStmt { module_name = $2 } }
 
 ModuleStmt:
   | Module Ident LBrace stmt_list RBrace { Stmt.ModuleStmt { module_name = $2; block = $4 } }

@@ -101,13 +101,15 @@ let get_var env name =
       | None ->
           runtime_error ("Variable '" ^ name ^ "' not found in environment"))
 
-let get_string_from_stack_value value =
-  let id = int_of_float value in
-  match Gc.get_string id with
-  | Some s -> s
-  | None ->
-      runtime_error
-        ("Expected string on stack, but no string with ID " ^ string_of_int id)
+let get_string_from_stack_value = function
+  | VHeapRef id -> (
+      match Gc.get_string id with
+      | Some s -> s
+      | None ->
+          runtime_error
+            ("Expected string on stack, but no string with ID "
+           ^ string_of_int id))
+  | _ -> runtime_error "Expected a string heap reference on stack"
 
 let extract_float = function
   | VFloat f -> f
@@ -198,13 +200,10 @@ let rec execute instructions env pc =
         push_trace pc "CONCAT";
         let b, a = pop2 "CONCAT" in
         let result =
-          get_string_from_stack_value (extract_float b)
-          ^ get_string_from_stack_value (extract_float a)
+          get_string_from_stack_value b ^ get_string_from_stack_value a
         in
         let v = Gc.alloc_string_with_gc stack env result in
-        (match v with
-        | VHeapRef id -> Stack.push (VFloat (float_of_int id)) stack
-        | _ -> runtime_error "Expected heap ref for concatenated string");
+        Stack.push v stack;
         next ()
     | JUMP_IF_FALSE offset -> (
         push_trace pc ("JUMP_IF_FALSE " ^ string_of_int offset);
@@ -391,7 +390,7 @@ let rec execute instructions env pc =
               next ()
           | VFloat f ->
               if floor f = f then Printf.printf "%Ld\n" (Int64.of_float f)
-              else Printf.printf "%.17g" f;
+              else Printf.printf "%.12g" f;
               next ()
           | VHeapRef id -> (
               match Gc.get_string id with
@@ -408,7 +407,7 @@ let rec execute instructions env pc =
                 | VFloat f when f = Float.neg_infinity -> "-inf"
                 | VFloat f ->
                     if floor f = f then Int64.to_string (Int64.of_float f)
-                    else Printf.sprintf "%.17g" f
+                    else Printf.sprintf "%.12g" f
                 | VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> "\"" ^ replace_escape_sequences s ^ "\""

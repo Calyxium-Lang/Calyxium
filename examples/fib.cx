@@ -1,4 +1,4 @@
-rec fib(n: int): int {
+fib(n: int): int {
     rec aux(n: int, a: int, b: int): int {
         if n == 0 then a else aux(n - 1, b, a + b)
     }
