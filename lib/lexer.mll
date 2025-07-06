@@ -67,15 +67,16 @@ rule token = parse
   | "true"                   { True }
   | "false"                  { False }
 
-  | "int"                    { IntType }
+  | "int"                    { Int64Type }
   | "float"                  { FloatType }
   | "string"                 { StringType }
   | "byte"                   { ByteType }
   | "bool"                   { BoolType }
   | "unit"                   { UnitType }
+  | "tuple"                  { TupleType }
 
   | floats as f              { Float (float_of_string f) }
-  | digits as d              { Int (Int64.of_string d) }
+  | digits as d              { Int64 (Int64.of_string d) }
   | identifier as id         { Ident id }
 
   | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\'' { let c = match esc with | 'n'  -> '\n' | 't'  -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | _    -> esc in Byte c }

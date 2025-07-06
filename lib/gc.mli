@@ -5,7 +5,13 @@ type heap_obj =
   | HArray of float array
   | HClosure of string * opcode list * (string * (value * bool)) list
 
-and value = VFloat of float | VHeapRef of int | VArray of value list
+and value =
+  | VFloat of float
+  | VInt64 of int64
+  | VBool of bool
+  | VHeapRef of int
+  | VArray of value list
+  | VTuple of value list
 
 val allocation_count : int ref
 val allocation_threshold : int

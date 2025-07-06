@@ -35,13 +35,16 @@ let opcode_of_binop = function
   | _ -> failwith "Unsupported operator"
 
 let rec compile_expr = function
-  | IntExpr { value } -> [ LOAD_INT value ]
+  | Int64Expr { value } -> [ LOAD_INT64 value ]
   | FloatExpr { value } -> [ LOAD_FLOAT value ]
   | StringExpr { value } -> [ LOAD_STRING value ]
   | ByteExpr { value } -> [ LOAD_BYTE value ]
   | UnitExpr { value } -> [ LOAD_UNIT value ]
   | BoolExpr { value } ->
       if value then [ LOAD_BOOL true ] else [ LOAD_BOOL false ]
+  | TupleExpr elements ->
+      let compiled_elements = List.concat_map compile_expr elements in
+      compiled_elements @ [ LOAD_TUPLE (List.length elements) ]
   | VarExpr name -> [ LOAD_VAR name ]
   | IndexExpr { array; index } ->
       compile_expr array @ compile_expr index @ [ LOAD_INDEX ]
@@ -58,6 +61,9 @@ let rec compile_expr = function
           let l = compile_expr left in
           let r = compile_expr right in
           l @ r @ [ opcode_of_binop operator ])
+  | ReturnExpr (CallExpr { callee = VarExpr name; arguments }) ->
+      let args_bytecode = List.concat (List.map compile_expr arguments) in
+      args_bytecode @ [ TAIL_CALL name ]
   | ReturnExpr expr -> compile_expr expr @ [ RETURN ]
   | CallExpr { callee; arguments } -> (
       let args_bytecode = List.concat (List.map compile_expr arguments) in
@@ -107,30 +113,38 @@ let rec compile_expr = function
 let rec compile_stmt = function
   | ExprStmt expr -> compile_expr expr
   | BlockStmt { body } -> List.flatten (List.map compile_stmt body)
-  | FunctionDeclStmt { name; is_rec; parameters; body; _ } ->
+  | FunctionDeclStmt { name; is_rec = _; parameters; body; _ } ->
       let start_bytecode = [ FUNCTION name ] in
-      if is_rec then Hashtbl.add function_table name [];
-      let function_body = compile_stmt (BlockStmt { body }) in
       let param_bytecodes =
         List.map
           (fun (param : parameter) -> [ STORE_VAR param.name ])
           parameters
       in
+      let function_body = compile_stmt (BlockStmt { body }) in
       let full_function_bytecode =
         start_bytecode
         @ List.concat param_bytecodes
         @ function_body @ [ RETURN ]
       in
-
       Hashtbl.replace function_table name full_function_bytecode;
       []
   | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
       let expr_bytecode =
         match assigned_value with
         | Some expr -> compile_expr expr
-        | None -> [ LOAD_INT 0L ]
+        | None -> [ LOAD_INT64 0L ]
       in
       expr_bytecode @ [ STORE_VAR identifier ]
+  | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
+      let expr_code = compile_expr assigned_value in
+      let destructure_code =
+        List.mapi
+          (fun i ident ->
+            [ DUP; LOAD_INT64 (Int64.of_int i); LOAD_INDEX; STORE_VAR ident ])
+          identifier
+        |> List.concat
+      in
+      expr_code @ destructure_code
   | IfStmt { condition; then_branch; else_branch } ->
       let condition = compile_expr condition in
       let then_branch = compile_stmt then_branch in

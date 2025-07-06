@@ -7,11 +7,11 @@
 %right Assign PlusAssign MinusAssign StarAssign SlashAssign
 %nonassoc Eq Neq Geq Leq Greater Less Inc Dec UnaryMinus NotPrec LowPrec IfThenElse
 
-%token Recursive If Then Else Let Match With Return For Use Module True False IntType FloatType StringType ByteType BoolType UnitType
+%token Recursive If Then Else Let Match With Return For Use Module True False Int64Type FloatType StringType ByteType BoolType UnitType TupleType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
 %token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore Question
 %token <string> Ident
-%token <int64> Int
+%token <int64> Int64
 %token <float> Float
 %token <string> String
 %token <char> Byte
@@ -67,12 +67,13 @@ parameter:
   | Ident Colon type_expr { { Stmt.name = $1; param_type = $3 } }
 
 type_expr:
-  | IntType { Type.SymbolType { value = "int" } }
+  | Int64Type { Type.SymbolType { value = "int" } }
   | FloatType { Type.SymbolType { value = "float" } }
   | StringType { Type.SymbolType { value = "string" } }
   | ByteType { Type.SymbolType { value = "byte" } }
   | BoolType { Type.SymbolType { value = "bool" } }
   | UnitType { Type.SymbolType { value = "unit"} }
+  | TupleType { Type.SymbolType { value = "tuple" } }
   | LBracket RBracket type_expr { Type.ArrayType { element_type = $3 } }
 
 expr:
@@ -102,7 +103,7 @@ expr:
   | expr Dec { Expr.UnaryExpr { operator = Token.Dec; operand = $1 } }
   | Ident LParen argument_list RParen { Expr.CallExpr { callee = Expr.VarExpr $1; arguments = $3 } }
   | Minus expr %prec UnaryMinus { Expr.UnaryExpr { operator = Token.Minus; operand = $2 } }
-  | Int { Expr.IntExpr { value = $1 } }
+  | Int64 { Expr.Int64Expr { value = $1 } }
   | Float { Expr.FloatExpr { value = $1 } }
   | String { Expr.StringExpr { value = $1 } }
   | Byte { Expr.ByteExpr { value = $1 } }
@@ -114,6 +115,7 @@ expr:
   | Ident LBracket expr RBracket { Expr.IndexExpr { array = Expr.VarExpr $1; index = $3 } }
   | expr Dot Ident { Expr.DotExpr { left = $1; right = $3 } }
   | LParen expr RParen Question expr Colon expr { Expr.TernaryExpr { cond = $2; onTrue = $5; onFalse = $7; } }
+  | LParen expr_list RParen { match $2 with | [single] -> single | multiple -> Expr.TupleExpr multiple }
   | LParen expr RParen { $2 }
 
 expr_list:
@@ -124,6 +126,10 @@ argument_list:
   | expr Comma argument_list { $1 :: $3 }
   | expr { [$1] }
 
+ident_list:
+  | Ident Comma ident_list { $1 :: $3 }
+  | Ident { [$1] }
+
 ImportStmt:
   | Use Ident { Stmt.ImportStmt { module_name = $2 } }
 
@@ -132,6 +138,7 @@ ModuleStmt:
 
 VarDeclStmt:
   | Let Ident Colon type_expr Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
+  | Let ident_list Colon type_expr Assign expr { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4 } }
 
 FunctionDeclStmt:
   | Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = $3; return_type = $6; body = $8 } }

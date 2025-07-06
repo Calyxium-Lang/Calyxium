@@ -56,10 +56,11 @@ type t =
   | BoolType
   | UnitType
   | Identifier of string
-  | Int of int
+  | Int of int64
   | Float of float
   | String of string
   | Byte of char
   | Bool of bool
   | Unit of unit
+  | Tuple of t list
   | EOF

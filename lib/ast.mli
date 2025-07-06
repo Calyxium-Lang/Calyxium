@@ -2,12 +2,13 @@ module Type : sig
   type t =
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
+    | TupleType of t list
     | Any
 end
 
 module Expr : sig
   type t =
-    | IntExpr of { value : int64 }
+    | Int64Expr of { value : int64 }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
     | ByteExpr of { value : char }
@@ -23,6 +24,7 @@ module Expr : sig
     | ReturnExpr of t
     | DotExpr of { left : t; right : string }
     | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
+    | TupleExpr of t list
 end
 
 module Stmt : sig
@@ -33,6 +35,11 @@ module Stmt : sig
     | VarDeclarationStmt of {
         identifier : string;
         assigned_value : Expr.t option;
+        explicit_type : Type.t;
+      }
+    | MultiVarDeclarationStmt of {
+        identifier : string list;
+        assigned_value : Expr.t;
         explicit_type : Type.t;
       }
     | FunctionDeclStmt of {

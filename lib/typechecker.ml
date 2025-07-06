@@ -28,6 +28,8 @@ let rec string_of_type = function
   | Any -> "any"
   | SymbolType { value } -> value
   | ArrayType { element_type } -> "[" ^ string_of_type element_type ^ "]"
+  | TupleType types ->
+      "(" ^ String.concat ", " (List.map string_of_type types) ^ ")"
 
 let rec type_eq expected actual =
   match (expected, actual) with
@@ -36,6 +38,10 @@ let rec type_eq expected actual =
   | SymbolType { value = v1 }, SymbolType { value = v2 } -> v1 = v2
   | ArrayType { element_type = e1 }, ArrayType { element_type = e2 } ->
       type_eq e1 e2
+  | SymbolType { value = "tuple" }, TupleType _ -> true
+  | TupleType _, SymbolType { value = "tuple" } -> true
+  | TupleType xs, TupleType ys ->
+      List.length xs = List.length ys && List.for_all2 type_eq xs ys
   | _ -> false
 
 let rec check_expr (env : (string * Type.t) list)
@@ -43,12 +49,15 @@ let rec check_expr (env : (string * Type.t) list)
     Type.t =
   let open Expr in
   match expr with
-  | IntExpr _ -> SymbolType { value = "int" }
+  | Int64Expr _ -> SymbolType { value = "int" }
   | FloatExpr _ -> SymbolType { value = "float" }
   | StringExpr _ -> SymbolType { value = "string" }
   | BoolExpr _ -> SymbolType { value = "bool" }
   | ByteExpr _ -> SymbolType { value = "byte" }
   | UnitExpr _ -> SymbolType { value = "unit" }
+  | TupleExpr elements ->
+      let element_types = List.map (check_expr env func_env) elements in
+      TupleType element_types
   | VarExpr name -> (
       try List.assoc name env
       with Not_found -> raise (TypeError ("Unbound variable: " ^ name)))
@@ -185,6 +194,15 @@ let rec check_stmt (env : (string * Type.t) list)
             raise (TypeError ("Type mismatch in declaration of " ^ identifier));
           (identifier, explicit_type) :: env
       | None -> (identifier, explicit_type) :: env)
+  | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } ->
+      let expr_type = check_expr env func_env assigned_value in
+      if not (type_eq expr_type explicit_type) then
+        raise
+          (TypeError
+             ("Type mismatch in declaration of " ^ String.concat ", " identifier));
+      List.fold_left
+        (fun acc_env ident -> (ident, explicit_type) :: acc_env)
+        env identifier
   | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
       let local_funcs = collect_functions body in
       let param_types = List.map (fun p -> p.param_type) parameters in

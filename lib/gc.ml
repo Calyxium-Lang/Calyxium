@@ -5,7 +5,13 @@ type heap_obj =
   | HArray of float array
   | HClosure of string * opcode list * (string * (value * bool)) list
 
-and value = VFloat of float | VHeapRef of int | VArray of value list
+and value =
+  | VFloat of float
+  | VInt64 of int64
+  | VBool of bool
+  | VHeapRef of int
+  | VArray of value list
+  | VTuple of value list
 
 type generation = {
   objs : (int, heap_obj) Hashtbl.t;
@@ -49,10 +55,13 @@ let mark id gen =
 
 let rec mark_value = function
   | VFloat _ -> ()
+  | VInt64 _ -> ()
+  | VBool _ -> ()
   | VHeapRef id ->
       if Hashtbl.mem young_gen.objs id then mark id young_gen
       else if Hashtbl.mem old_gen.objs id then mark id old_gen
   | VArray values -> List.iter mark_value values
+  | VTuple values -> List.iter mark_value values
 
 let mark_env env = List.iter (fun (_, (v, _)) -> mark_value v) env
 

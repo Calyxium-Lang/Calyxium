@@ -60,36 +60,43 @@ let pop2 name =
   with Stack.Empty ->
     runtime_error ("Stack underflow during '" ^ name ^ "' (need 2 values)")
 
-let binary_op name op =
+let binary_op name op op_int64 =
   let a, b = pop2 name in
   match (a, b) with
   | VFloat a, VFloat b -> Stack.push (VFloat (op a b)) stack
+  | VInt64 a, VInt64 b -> Stack.push (VInt64 (op_int64 a b)) stack
   | _ -> runtime_error ("binary_op '" ^ name ^ "' expected two floats")
 
-let compare_op name cmp =
+let compare_op name cmp cmp_int64 =
   let a, b = pop2 name in
   match (a, b) with
   | VFloat a, VFloat b ->
       Stack.push (if cmp a b then VFloat 1.0 else VFloat 0.0) stack
+  | VInt64 a, VInt64 b ->
+      Stack.push (if cmp_int64 a b then VInt64 1L else VInt64 0L) stack
   | _ -> runtime_error ("compare_op '" ^ name ^ "' expected two floats")
 
-let logic_op name op =
+let logic_op name op op_int64 =
   let a, b = pop2 name in
   match (a, b) with
   | VFloat a, VFloat b ->
       Stack.push (if op a b then VFloat 1.0 else VFloat 0.0) stack
+  | VInt64 a, VInt64 b ->
+      Stack.push (if op_int64 a b then VInt64 1L else VInt64 0L) stack
   | _ -> runtime_error ("logic_op '" ^ name ^ "' expected two floats")
 
-let unary_logic_op name op =
+let unary_logic_op name op op_int64 =
   let a = pop1 ("unary logic op '" ^ name ^ "'") in
   match a with
   | VFloat x -> Stack.push (if op x then VFloat 1.0 else VFloat 0.0) stack
+  | VInt64 x -> Stack.push (if op_int64 x then VInt64 1L else VInt64 0L) stack
   | _ -> runtime_error ("unary_logic_op '" ^ name ^ "' expected float")
 
-let unary_op name op =
+let unary_op name op op_int64 =
   let x = pop1 ("unary op '" ^ name ^ "'") in
   match x with
   | VFloat f -> Stack.push (VFloat (op f)) stack
+  | VInt64 i -> Stack.push (VInt64 (op_int64 i)) stack
   | _ -> runtime_error ("unary_op '" ^ name ^ "' expected float")
 
 let get_var env name =
@@ -126,15 +133,23 @@ let extract_param_names = function
       collect [] rest
   | _ -> runtime_error "Malformed function body during parameter extraction"
 
+let rec int64_pow base exp =
+  if exp < 0L then invalid_arg "int64_pow: negative exponent"
+  else if exp = 0L then Int64.one
+  else if Int64.rem exp 2L = 0L then
+    let half = int64_pow base (Int64.div exp 2L) in
+    Int64.mul half half
+  else Int64.mul base (int64_pow base (Int64.sub exp 1L))
+
 let rec execute instructions env pc =
   let next () = execute instructions env (pc + 1) in
   if pc >= Array.length instructions then
     match Stack.top_opt stack with Some r -> r | None -> VFloat 0.0
   else
     match instructions.(pc) with
-    | LOAD_INT v ->
-        push_trace pc ("LOAD_INT " ^ Int64.to_string v);
-        Stack.push (VFloat (Int64.to_float v)) stack;
+    | LOAD_INT64 v ->
+        push_trace pc ("LOAD_INT64 " ^ Int64.to_string v);
+        Stack.push (VInt64 v) stack;
         next ()
     | LOAD_FLOAT v ->
         push_trace pc ("LOAD_FLOAT " ^ string_of_float v);
@@ -152,27 +167,36 @@ let rec execute instructions env pc =
         next ()
     | LOAD_BOOL b ->
         push_trace pc ("LOAD_BOOL " ^ string_of_bool b);
-        Stack.push (VFloat (if b then 1.0 else 0.0)) stack;
+        Stack.push (VBool b) stack;
         next ()
     | LOAD_UNIT _ ->
         push_trace pc "LOAD_UNIT";
         Stack.push (VFloat nan) stack;
         next ()
+    | LOAD_TUPLE n ->
+        push_trace pc ("LOAD_TUPLE " ^ string_of_int n);
+        if Stack.length stack < n then
+          runtime_error
+            ("LOAD_TUPLE expects " ^ string_of_int n ^ " values on the stack")
+        else
+          let items = List.init n (fun _ -> Stack.pop stack) |> List.rev in
+          Stack.push (VTuple items) stack;
+          next ()
     | LOAD_VAR name ->
         push_trace pc ("LOAD_VAR " ^ name);
         Stack.push (get_var env name) stack;
         next ()
     | PLUS ->
         push_trace pc "PLUS";
-        binary_op "PLUS" ( +. );
+        binary_op "PLUS" ( +. ) Int64.add;
         next ()
     | MINUS ->
         push_trace pc "MINUS";
-        binary_op "MINUS" ( -. );
+        binary_op "MINUS" ( -. ) Int64.sub;
         next ()
     | STAR ->
         push_trace pc "STAR";
-        binary_op "STAR" ( *. );
+        binary_op "STAR" ( *. ) Int64.mul;
         next ()
     | SLASH ->
         push_trace pc "SLASH";
@@ -186,11 +210,11 @@ let rec execute instructions env pc =
         next ()
     | MOD ->
         push_trace pc "MOD";
-        binary_op "MOD" mod_float;
+        binary_op "MOD" mod_float Int64.rem;
         next ()
     | POW ->
         push_trace pc "POW";
-        binary_op "POW" ( ** );
+        binary_op "POW" ( ** ) int64_pow;
         next ()
     | CONCAT ->
         push_trace pc "CONCAT";
@@ -213,23 +237,23 @@ let rec execute instructions env pc =
         execute instructions env (pc + n)
     | LESS ->
         push_trace pc "LESS";
-        compare_op "LESS" ( < );
+        compare_op "LESS" ( < ) (fun a b -> Int64.compare a b < 0);
         next ()
     | GREATER ->
         push_trace pc "GREATER";
-        compare_op "GREATER" ( > );
+        compare_op "GREATER" ( > ) (fun a b -> Int64.compare a b > 0);
         next ()
     | LESS_EQUAL ->
         push_trace pc "LESS_EQUAL";
-        compare_op "LESS_EQUAL" ( <= );
+        compare_op "LESS_EQUAL" ( <= ) (fun a b -> Int64.compare a b <= 0);
         next ()
     | GREATER_EQUAL ->
         push_trace pc "GREATER_EQUAL";
-        compare_op "GREATER_EQUAL" ( >= );
+        compare_op "GREATER_EQUAL" ( >= ) (fun a b -> Int64.compare a b >= 0);
         next ()
     | NOT_EQUAL ->
         push_trace pc "NOT_EQUAL";
-        compare_op "NOT_EQUAL" ( <> );
+        compare_op "NOT_EQUAL" ( <> ) (fun a b -> a <> b);
         next ()
     | EQUAL ->
         push_trace pc "EQUAL";
@@ -241,29 +265,67 @@ let rec execute instructions env pc =
               | Some sa, Some sb -> sa = sb
               | _ -> id1 = id2)
           | VFloat f1, VFloat f2 -> f1 = f2
+          | VInt64 i1, VInt64 i2 -> i1 = i2
           | _ -> false
         in
         Stack.push (VFloat (if result then 1.0 else 0.0)) stack;
         next ()
     | AND ->
         push_trace pc "AND";
-        logic_op "AND" (fun x y -> x <> 0.0 && y <> 0.0);
+        let a, b = pop2 "AND" in
+        let bool_val = function
+          | VFloat f -> f <> 0.0
+          | VInt64 i -> i <> 0L
+          | _ -> runtime_error "AND expects float or int64"
+        in
+        Stack.push
+          (VFloat (if bool_val a && bool_val b then 1.0 else 0.0))
+          stack;
         next ()
     | OR ->
         push_trace pc "OR";
-        logic_op "OR" (fun x y -> x <> 0.0 || y <> 0.0);
+        let a, b = pop2 "OR" in
+        let bool_val = function
+          | VFloat f -> f <> 0.0
+          | VInt64 i -> i <> 0L
+          | _ -> runtime_error "OR expects float or int64"
+        in
+        Stack.push
+          (VFloat (if bool_val a || bool_val b then 1.0 else 0.0))
+          stack;
         next ()
     | NOT ->
         push_trace pc "NOT";
-        unary_logic_op "NOT" (fun x -> x = 0.0);
+        let v = pop1 "NOT" in
+        let bool_val =
+          match v with
+          | VFloat f -> f <> 0.0
+          | VInt64 i -> i <> 0L
+          | _ -> runtime_error "NOT expects float or int64"
+        in
+        Stack.push (VFloat (if not bool_val then 1.0 else 0.0)) stack;
         next ()
     | INC ->
         push_trace pc "INC";
-        unary_op "INC" (fun x -> x +. 1.0);
+        let v = pop1 "INC" in
+        let result =
+          match v with
+          | VFloat f -> VFloat (f +. 1.0)
+          | VInt64 i -> VInt64 Int64.(add i 1L)
+          | _ -> runtime_error "INC expects float or int64"
+        in
+        Stack.push result stack;
         next ()
     | DEC ->
         push_trace pc "DEC";
-        unary_op "DEC" (fun x -> x -. 1.0);
+        let v = pop1 "DEC" in
+        let result =
+          match v with
+          | VFloat f -> VFloat (f -. 1.0)
+          | VInt64 i -> VInt64 Int64.(sub i 1L)
+          | _ -> runtime_error "DEC expects float or int64"
+        in
+        Stack.push result stack;
         next ()
     | DUP ->
         push_trace pc "DUP";
@@ -288,21 +350,23 @@ let rec execute instructions env pc =
         push_trace pc "LOAD_INDEX";
         if Stack.length stack < 2 then
           runtime_error
-            "LOAD_INDEX requires two values on the stack (array, index)";
+            "LOAD_INDEX requires two values on the stack (collection, index)";
         let index =
           match Stack.pop stack with
           | VFloat f -> int_of_float f
-          | _ -> runtime_error "Expected float for index in LOAD_INDEX"
+          | VInt64 i -> Int64.to_int i
+          | _ -> runtime_error "Expected float or int for index in LOAD_INDEX"
         in
-        let array_val =
+        let collection =
           match Stack.pop stack with
           | VArray values -> values
-          | _ -> runtime_error "Expected array for LOAD_INDEX"
+          | VTuple values -> values
+          | _ -> runtime_error "Expected array or tuple for LOAD_INDEX"
         in
-        if index < 0 || index >= List.length array_val then
+        if index < 0 || index >= List.length collection then
           runtime_error
             ("Index out of bounds in LOAD_INDEX: " ^ string_of_int index)
-        else Stack.push (List.nth array_val index) stack;
+        else Stack.push (List.nth collection index) stack;
         next ()
     | FUNCTION _ ->
         let rec skip_function pc =
@@ -334,24 +398,36 @@ let rec execute instructions env pc =
         let roots = Gc.get_stack_roots stack in
         Gc.maybe_collect_gc roots local_env;
 
-        let is_tail_position =
-          pc + 1 < Array.length instructions && instructions.(pc + 1) = RETURN
+        let skip_header = 1 + arg_count in
+        let body = List.drop skip_header function_body in
+        let return_value = execute (Array.of_list body) local_env 0 in
+        Stack.push return_value stack;
+        next ()
+    | TAIL_CALL function_name ->
+        push_trace pc ("TAIL_CALL " ^ function_name);
+        let function_body = resolve_function_body function_name in
+        let param_names = extract_param_names function_body in
+        let arg_count = List.length param_names in
+
+        if Stack.length stack < arg_count then
+          runtime_error
+            ("TAIL_CALL to '" ^ function_name ^ "' requires "
+           ^ string_of_int arg_count ^ " arguments, but stack has only "
+            ^ string_of_int (Stack.length stack));
+
+        let args = List.rev (List.init arg_count (fun _ -> Stack.pop stack)) in
+        let local_env =
+          List.combine param_names (List.map (fun v -> (v, true)) args)
         in
 
-        if is_tail_position then
-          let skip_header = 1 + List.length param_names in
-          let body = List.drop skip_header function_body in
-          execute (Array.of_list body) local_env 0
-        else
-          let skip_header = 1 + List.length param_names in
-          let body = List.drop skip_header function_body in
-          let return_value = execute (Array.of_list body) local_env 0 in
-          Stack.push return_value stack;
-          next ()
+        let skip_header = 1 + arg_count in
+        let body = List.drop skip_header function_body in
+        execute (Array.of_list body) local_env 0
     | RETURN ->
         push_trace pc "RETURN";
-        if Stack.is_empty stack then
-          runtime_error "RETURN attempted with empty stack"
+        if Stack.is_empty stack then (
+          Stack.push (VFloat nan) stack;
+          Stack.pop stack)
         else Stack.pop stack
     | STORE_VAR name ->
         push_trace pc ("STORE_VAR " ^ name);
@@ -378,21 +454,20 @@ let rec execute instructions env pc =
           | VFloat f when Float.is_nan f ->
               Printf.printf "unit\n";
               next ()
-          | VFloat f when f = Float.infinity ->
-              Printf.printf "inf\n";
-              next ()
-          | VFloat f when f = Float.neg_infinity ->
-              Printf.printf "-inf\n";
-              next ()
-          | VFloat f when f = 0.0 ->
-              Printf.printf "false\n";
-              next ()
-          | VFloat f when f = 1.0 ->
+          | VBool true ->
               Printf.printf "true\n";
               next ()
+          | VBool false ->
+              Printf.printf "false\n";
+              next ()
+          | VFloat f when Float.is_infinite f ->
+              Printf.printf "%s\n" (if f > 0.0 then "inf" else "-inf");
+              next ()
           | VFloat f ->
-              if floor f = f then Printf.printf "%Ld\n" (Int64.of_float f)
-              else Printf.printf "%.12g\n" f;
+              Printf.printf "%.12g\n" f;
+              next ()
+          | VInt64 i ->
+              Printf.printf "%Ld\n" i;
               next ()
           | VHeapRef id -> (
               match Gc.get_string id with
@@ -405,23 +480,44 @@ let rec execute instructions env pc =
           | VArray items ->
               let string_of_value = function
                 | VFloat f when Float.is_nan f -> "unit"
-                | VFloat f when f = Float.infinity -> "inf"
-                | VFloat f when f = Float.neg_infinity -> "-inf"
-                | VFloat f when f = 0.0 -> "false"
-                | VFloat f when f = 1.0 -> "true"
-                | VFloat f ->
-                    if floor f = f then Int64.to_string (Int64.of_float f)
-                    else Printf.sprintf "%.12g" f
+                | VBool true -> "true"
+                | VBool false -> "false"
+                | VFloat f when Float.is_infinite f ->
+                    if f > 0.0 then "inf" else "-inf"
+                | VFloat f -> Printf.sprintf "%.12g" f
+                | VInt64 i -> Printf.sprintf "%Ld" i
                 | VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> "\"" ^ replace_escape_sequences s ^ "\""
                     | None -> "<invalid ref>")
                 | VArray _ -> "[...]"
+                | VTuple _ -> "(...)"
               in
               let contents =
                 items |> List.map string_of_value |> String.concat ", "
               in
               Printf.printf "[%s]\n" contents;
+              next ()
+          | VTuple items ->
+              let string_of_value = function
+                | VFloat f when Float.is_nan f -> "unit"
+                | VBool true -> "true"
+                | VBool false -> "false"
+                | VFloat f when Float.is_infinite f ->
+                    if f > 0.0 then "inf" else "-inf"
+                | VFloat f -> Printf.sprintf "%.12g" f
+                | VInt64 i -> Printf.sprintf "%Ld" i
+                | VHeapRef id -> (
+                    match Gc.get_string id with
+                    | Some s -> "\"" ^ replace_escape_sequences s ^ "\""
+                    | None -> "<invalid ref>")
+                | VArray _ -> "[...]"
+                | VTuple _ -> "(...)"
+              in
+              let contents =
+                items |> List.map string_of_value |> String.concat ", "
+              in
+              Printf.printf "(%s)\n" contents;
               next ())
     | INPUT -> (
         push_trace pc "INPUT";
