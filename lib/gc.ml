@@ -1,5 +1,7 @@
 open Opcode
 
+let interned_strings : (string, int) Hashtbl.t = Hashtbl.create 100
+
 type heap_obj =
   | HString of string
   | HArray of float array
@@ -100,9 +102,16 @@ let get_stack_roots (stack : value Stack.t) : value list =
   Stack.fold (fun acc v -> v :: acc) [] stack
 
 let alloc_string_with_gc stack env s =
-  let roots = get_stack_roots stack in
-  maybe_collect_gc roots env;
-  alloc_in_young (HString s)
+  match Hashtbl.find_opt interned_strings s with
+  | Some id -> VHeapRef id
+  | None ->
+      let roots = get_stack_roots stack in
+      maybe_collect_gc roots env;
+      let id = !next_id in
+      incr next_id;
+      Hashtbl.add young_gen.objs id (HString s);
+      Hashtbl.add interned_strings s id;
+      VHeapRef id
 
 let alloc_array_with_gc stack env arr =
   let roots = get_stack_roots stack in

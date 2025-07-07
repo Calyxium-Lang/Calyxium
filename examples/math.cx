@@ -20,20 +20,15 @@ radToDeg(rad: float): float {
     return rad * 180.0 / pi
 }
 
-sin_term(x: float, n: int): float {
-    return pow(-1.0, to_float(n)) * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1)
-}
-
-rec sin_helper(x: float, terms: int, n: int, acc: float): float {
-    if (n >= terms) {
-        return acc
-    } else {
-        return sin_helper(x, terms, n + 1, acc + sin_term(x, n))
-    }
-}
-
 sin(x: float, terms: int): float {
-    return sin_helper(x, terms, 0, 0.0)
+    let result: float = 0.0
+    let n: int = 0
+    for (n; n < terms; n++) {
+        let sign: int = ((n % 2) == 0) ? 1 : -1
+        let term: float = to_float(sign) * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1)
+        result += term
+    }
+    return result
 }
 
 csc(x: float, terms: int): float {
@@ -61,36 +56,10 @@ cos(x: float, terms: int): float {
     let n: int = 0
     for (n; n < terms; n++) {
         let sign: int = ((n % 2) == 0) ? 1 : -1
-        result += to_float(sign) * pow(x, to_float(2 * n)) / fact(2 * n)
+        let term: float = to_float(sign) * pow(x, to_float(2 * n)) / fact(2 * n)
+        result += term
     }
     return result
 }
 
-sec(x: float, terms: int): float {
-    return 1.0 / cos(x, terms)
-}
-
-arccos(x: float, terms: int): float {
-    return pi / 2.0 - arcsin(x, terms)
-}
-
-tan(x: float, terms: int): float {
-    return sin(x, terms) / cos(x, terms)
-}
-
-cot(x: float, terms: int): float {
-    return cos(x, terms) / sin(x, terms) 
-}
-
-arctan(x: float, terms: int): float {
-    let result: float = 0.0
-    let n: int = 0
-    for (n; n < terms; n++) {
-        result += pow(-1.0, to_float(2 * n + 1)) * pow(x, to_float(2 * n + 1)) / to_float(2 * n + 1)
-    }
-    return result
-}
-
-wrapAngle(angle: float): float {
-    return angle % (2.0 * pi)
-}
+println(cos(0.5, 10))

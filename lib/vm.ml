@@ -228,7 +228,7 @@ let rec execute instructions env pc =
     | JUMP_IF_FALSE offset -> (
         push_trace pc ("JUMP_IF_FALSE " ^ string_of_int offset);
         match Stack.pop_opt stack with
-        | Some cond when cond = VFloat 0.0 ->
+        | Some (VFloat 0.0) | Some (VInt64 0L) | Some (VBool false) ->
             execute instructions env (pc + offset)
         | Some _ -> next ()
         | None -> runtime_error "JUMP_IF_FALSE with empty stack")
@@ -464,7 +464,7 @@ let rec execute instructions env pc =
               Printf.printf "%s\n" (if f > 0.0 then "inf" else "-inf");
               next ()
           | VFloat f ->
-              Printf.printf "%.12g\n" f;
+              Printf.printf "%.12f\n" f;
               next ()
           | VInt64 i ->
               Printf.printf "%Ld\n" i;
@@ -484,7 +484,7 @@ let rec execute instructions env pc =
                 | VBool false -> "false"
                 | VFloat f when Float.is_infinite f ->
                     if f > 0.0 then "inf" else "-inf"
-                | VFloat f -> Printf.sprintf "%.12g" f
+                | VFloat f -> Printf.sprintf "%.12f" f
                 | VInt64 i -> Printf.sprintf "%Ld" i
                 | VHeapRef id -> (
                     match Gc.get_string id with
@@ -505,7 +505,7 @@ let rec execute instructions env pc =
                 | VBool false -> "false"
                 | VFloat f when Float.is_infinite f ->
                     if f > 0.0 then "inf" else "-inf"
-                | VFloat f -> Printf.sprintf "%.12g" f
+                | VFloat f -> Printf.sprintf "%.12f" f
                 | VInt64 i -> Printf.sprintf "%Ld" i
                 | VHeapRef id -> (
                     match Gc.get_string id with
@@ -547,7 +547,8 @@ let rec execute instructions env pc =
         let v = Stack.pop stack in
         (match v with
         | VFloat f -> Stack.push (VFloat (-.f)) stack
-        | _ -> runtime_error "NEG expects a float");
+        | VInt64 i -> Stack.push (VInt64 (Int64.neg i)) stack
+        | _ -> runtime_error "NEG expects a float or int");
         next ()
     | FLOAT ->
         push_trace pc "FLOAT";
@@ -555,6 +556,7 @@ let rec execute instructions env pc =
         let float_val =
           match v with
           | VFloat f -> f
+          | VInt64 i -> Int64.to_float i
           | VHeapRef id -> (
               match Gc.get_string id with
               | Some s -> (
@@ -581,14 +583,15 @@ let rec execute instructions env pc =
           | _ -> runtime_error "PLUSASSIGN: expected variable name"
         in
         let old_value = get_var env name in
-        (match (old_value, value) with
-        | VFloat oldf, VFloat newf ->
-            let result = VFloat (oldf +. newf) in
-            global_env :=
-              List.remove_assoc name !global_env @ [ (name, (result, true)) ];
-            Stack.push result stack
-        | _ -> runtime_error "PLUSASSIGN: only float types are supported");
-        next ()
+        let result =
+          match (old_value, value) with
+          | VFloat oldf, VFloat newf -> VFloat (oldf +. newf)
+          | VInt64 oldi, VInt64 newi -> VInt64 (Int64.add oldi newi)
+          | _ -> runtime_error "PLUSASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
     | MINUSASSIGN ->
         push_trace pc "MINUSASSIGN";
         let value = pop1 "MINUSASSIGN" in
@@ -603,14 +606,15 @@ let rec execute instructions env pc =
           | _ -> runtime_error "MINUSASSIGN: expected variable name"
         in
         let old_value = get_var env name in
-        (match (old_value, value) with
-        | VFloat oldf, VFloat newf ->
-            let result = VFloat (oldf -. newf) in
-            global_env :=
-              List.remove_assoc name !global_env @ [ (name, (result, true)) ];
-            Stack.push result stack
-        | _ -> runtime_error "MINUSASSIGN: only float types are supported");
-        next ()
+        let result =
+          match (old_value, value) with
+          | VFloat oldf, VFloat newf -> VFloat (oldf -. newf)
+          | VInt64 oldi, VInt64 newi -> VInt64 (Int64.sub oldi newi)
+          | _ -> runtime_error "MINUSASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
     | STARASSIGN ->
         push_trace pc "STARASSIGN";
         let value = pop1 "STARASSIGN" in
@@ -625,14 +629,15 @@ let rec execute instructions env pc =
           | _ -> runtime_error "STARASSIGN: expected variable name"
         in
         let old_value = get_var env name in
-        (match (old_value, value) with
-        | VFloat oldf, VFloat newf ->
-            let result = VFloat (oldf *. newf) in
-            global_env :=
-              List.remove_assoc name !global_env @ [ (name, (result, true)) ];
-            Stack.push result stack
-        | _ -> runtime_error "STARASSIGN: only float types are supported");
-        next ()
+        let result =
+          match (old_value, value) with
+          | VFloat oldf, VFloat newf -> VFloat (oldf *. newf)
+          | VInt64 oldi, VInt64 newi -> VInt64 (Int64.mul oldi newi)
+          | _ -> runtime_error "STARASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
     | SLASHASSIGN ->
         push_trace pc "SLASHASSIGN";
         let value = pop1 "SLASHASSIGN" in
@@ -647,20 +652,48 @@ let rec execute instructions env pc =
           | _ -> runtime_error "SLASHASSIGN: expected variable name"
         in
         let old_value = get_var env name in
-        (match (old_value, value) with
-        | VFloat oldf, VFloat newf ->
-            if newf = 0.0 then runtime_error "SLASHASSIGN: division by zero";
-            let result = VFloat (oldf /. newf) in
-            global_env :=
-              List.remove_assoc name !global_env @ [ (name, (result, true)) ];
-            Stack.push result stack
-        | _ -> runtime_error "SLASHASSIGN: only float types are supported");
-        next ()
+        let result =
+          match (old_value, value) with
+          | VFloat oldf, VFloat newf ->
+              if newf = 0.0 then runtime_error "SLASHASSIGN: division by zero";
+              VFloat (oldf /. newf)
+          | VInt64 oldi, VInt64 newi ->
+              if newi = 0L then runtime_error "SLASHASSIGN: division by zero";
+              VInt64 (Int64.div oldi newi)
+          | _ -> runtime_error "SLASHASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
     | LOAD_VAR_REF name ->
         push_trace pc ("LOAD_VAR_REF " ^ name);
         let v = Gc.alloc_string_with_gc stack env name in
         Stack.push v stack;
         next ()
+
+and update_variable name result env =
+  let updated = ref false in
+  let new_env =
+    List.map
+      (fun (k, (v, mutable_)) ->
+        if k = name then (
+          updated := true;
+          (k, (result, mutable_)))
+        else (k, (v, mutable_)))
+      env
+  in
+  if !updated then new_env
+  else
+    let updated_globals =
+      List.map
+        (fun (k, (v, mutable_)) ->
+          if k = name then (k, (result, mutable_)) else (k, (v, mutable_)))
+        !global_env
+    in
+    if List.exists (fun (k, _) -> k = name) !global_env then
+      global_env := updated_globals
+    else global_env := (name, (result, true)) :: !global_env;
+    env
 
 let run instructions =
   try

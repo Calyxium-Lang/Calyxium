@@ -1,2 +1,1 @@
-let x: []tuple = {(1, "Hello", true), (2, "bye", false)}
-println(x[0])
+println(to_float(10))

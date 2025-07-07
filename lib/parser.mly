@@ -123,6 +123,7 @@ expr_list:
   | expr { [$1] }
 
 argument_list:
+  | /* empty */ { [] }
   | expr Comma argument_list { $1 :: $3 }
   | expr { [$1] }
 
@@ -139,10 +140,11 @@ ModuleStmt:
 VarDeclStmt:
   | Let Ident Colon type_expr Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
   | Let ident_list Colon type_expr Assign expr { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4 } }
-
+  
 FunctionDeclStmt:
   | Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = $3; return_type = $6; body = $8 } }
   | Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = true; parameters = $4; return_type = $7; body = $9 } }
+  | Ident LParen RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = []; return_type = $5; body = $7 } }
   
 MatchStmt:
   | Match expr With case_list { Stmt.MatchStmt { expr = $2; cases = $4; } }

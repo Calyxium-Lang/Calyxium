@@ -1,4 +1,4 @@
-let i: int = 0
-for (;;) {
-    println(i)
+let i: int = 1
+for (i; i <= 5; i++) {
+    println("Hello")
 }
