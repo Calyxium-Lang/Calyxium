@@ -9,6 +9,8 @@ let builtins =
   [
     ("println", fun args -> args @ [ PRINTLN ]);
     ("to_float", fun args -> args @ [ FLOAT ]);
+    ("to_int", fun args -> args @ [ INT ]);
+    ("to_string", fun args -> args @ [ STRING ]);
     ("input", fun args -> args @ [ INPUT ]);
   ]
 
@@ -36,6 +38,7 @@ let opcode_of_binop = function
 
 let rec compile_expr = function
   | Int64Expr { value } -> [ LOAD_INT64 value ]
+  | BinaryLitExpr { value } -> [ LOAD_BINARY value ]
   | FloatExpr { value } -> [ LOAD_FLOAT value ]
   | StringExpr { value } -> [ LOAD_STRING value ]
   | ByteExpr { value } -> [ LOAD_BYTE value ]
@@ -53,14 +56,14 @@ let rec compile_expr = function
       | PlusAssign | MinusAssign | StarAssign | SlashAssign -> (
           match left with
           | VarExpr name ->
-              let load_ref = [ LOAD_VAR_REF name ] in
-              let rhs = compile_expr right in
-              load_ref @ rhs @ [ opcode_of_binop operator ]
+              let load_var_ref_code = [ LOAD_VAR_REF name ] in
+              let rhs_code = compile_expr right in
+              load_var_ref_code @ rhs_code @ [ opcode_of_binop operator ]
           | _ -> failwith "Assignment target must be a variable")
       | _ ->
-          let l = compile_expr left in
-          let r = compile_expr right in
-          l @ r @ [ opcode_of_binop operator ])
+          let left_code = compile_expr left in
+          let right_code = compile_expr right in
+          left_code @ right_code @ [ opcode_of_binop operator ])
   | ReturnExpr (CallExpr { callee = VarExpr name; arguments }) ->
       let args_bytecode = List.concat (List.map compile_expr arguments) in
       args_bytecode @ [ TAIL_CALL name ]

@@ -18,6 +18,7 @@ let builtins : (string * (Type.t list * Type.t) list) list =
       ] );
     ( "to_int",
       [
+        ([ SymbolType { value = "byte" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "string" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "float" } ], SymbolType { value = "int" });
       ] );
@@ -50,6 +51,7 @@ let rec check_expr (env : (string * Type.t) list)
   let open Expr in
   match expr with
   | Int64Expr _ -> SymbolType { value = "int" }
+  | BinaryLitExpr _ -> SymbolType { value = "int" }
   | FloatExpr _ -> SymbolType { value = "float" }
   | StringExpr _ -> SymbolType { value = "string" }
   | BoolExpr _ -> SymbolType { value = "bool" }
@@ -129,10 +131,28 @@ let rec check_expr (env : (string * Type.t) list)
           ArrayType { element_type = hd })
   | IndexExpr { array; index } -> (
       let at = check_expr env func_env array in
-      let _ = check_expr env func_env index in
+      let index_type = check_expr env func_env index in
+      if not (type_eq index_type (SymbolType { value = "int" })) then
+        raise (TypeError "Index must be an integer");
       match at with
       | ArrayType { element_type } -> element_type
-      | _ -> raise (TypeError "Can only index into arrays"))
+      | TupleType element_types -> (
+          match index with
+          | Int64Expr { value } ->
+              let idx = Int64.to_int value in
+              if idx < 0 || idx >= List.length element_types then
+                raise
+                  (TypeError
+                     ("Tuple index out of bounds: " ^ string_of_int idx
+                    ^ " for tuple of size "
+                     ^ string_of_int (List.length element_types)));
+              List.nth element_types idx
+          | _ ->
+              raise
+                (TypeError
+                   "Can only use constant integer indices for tuples (e.g. \
+                    t[0])"))
+      | _ -> raise (TypeError "Can only index into arrays or tuples"))
   | IfExpr { condition; then_branch; else_branch } ->
       let ct = check_expr env func_env condition in
       if not (type_eq ct (Type.SymbolType { value = "bool" })) then

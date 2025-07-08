@@ -1,4 +1,1 @@
-let i: int = 1
-for (i; i <= 5; i++) {
-    println("Hello")
-}
+println("Hello, world")

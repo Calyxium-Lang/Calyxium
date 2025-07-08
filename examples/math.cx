@@ -1,4 +1,5 @@
 let pi: float = 3.14159265358979323846
+let e: float = 2.71828182845904523536
 
 rec fact(n: int): float {
     if n <= 1 then 1.0 else to_float(n) * fact(n - 1)
@@ -22,11 +23,9 @@ radToDeg(rad: float): float {
 
 sin(x: float, terms: int): float {
     let result: float = 0.0
-    let n: int = 0
-    for (n; n < terms; n++) {
+    for (let n: int = 0; n < terms; n++) {
         let sign: int = ((n % 2) == 0) ? 1 : -1
-        let term: float = to_float(sign) * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1)
-        result += term
+        result += to_float(sign) * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1)
     }
     return result
 }
@@ -41,25 +40,65 @@ arcsin(x: float, terms: int): float {
     }
 
     let result: float = 0.0
-    let n: int = 0
-    for (n; n < terms; n++) {
+    for (let n: int = 0; n < terms; n++) {
         let num: float = fact(2 * n)
         let denom: float = pow(4.0, to_float(n)) * pow(fact(n), 2.0) * to_float(2 * n + 1)
         result += (num / denom) * pow(x, to_float(2 * n + 1))
     }
-
     return result
 }
 
 cos(x: float, terms: int): float {
     let result: float = 0.0
-    let n: int = 0
-    for (n; n < terms; n++) {
+    for (let n: int = 0; n < terms; n++) {
         let sign: int = ((n % 2) == 0) ? 1 : -1
-        let term: float = to_float(sign) * pow(x, to_float(2 * n)) / fact(2 * n)
-        result += term
+        result += to_float(sign) * pow(x, to_float(2 * n)) / fact(2 * n)
     }
     return result
 }
 
-println(cos(0.5, 10))
+sec(x: float, terms: int): float {
+    return 1.0 / cos(x, terms)
+}
+
+arccos(x: float, terms: int): float {
+    return pi / 2.0 - arcsin(x, terms)
+}
+
+tan(x: float, terms: int): float {
+    return sin(x, terms) / cos(x, terms)
+}
+
+cot(x: float, terms: int): float {
+    return cos(x, terms) / sin(x, terms)
+}
+
+arctan(x: float, terms: int): float {
+    let result: float = 0.0
+    for (let n: int = 0; n < terms; n++) {
+        result += pow(-1.0, to_float(n)) * pow(x, to_float(2 * n + 1)) / to_float(2 * n + 1)
+    }
+    return result
+}
+
+wrapAngle(angle: float ): float {
+    return angle % (2.0 * pi)
+}
+
+sign(x: float): int {
+    return (x > 0.0) ? 1 : (x < 0.0) ? - 1 : 0
+}
+
+floor(x: float): float {
+    let i: int = to_int(x)
+    return (to_float(i) > x) ? to_float(i - 1) : to_float(i)
+}
+
+ceil(x: float): float {
+    let i: int = to_int(x)
+    return (to_float(i) < x) ? to_float(i + 1) : to_float(i)
+}
+
+round(x: float): float {
+    return floor(x + 0.5)
+}

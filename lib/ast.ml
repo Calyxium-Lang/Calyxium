@@ -25,6 +25,7 @@ module Expr = struct
     | DotExpr of { left : t; right : string }
     | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
     | TupleExpr of t list
+    | BinaryLitExpr of { value : int }
 end
 
 module Stmt = struct

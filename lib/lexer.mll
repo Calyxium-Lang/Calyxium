@@ -79,11 +79,12 @@ rule token = parse
   | digits as d              { Int64 (Int64.of_string d) }
   | identifier as id         { Ident id }
 
-  | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\'' { let c = match esc with | 'n'  -> '\n' | 't'  -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | _    -> esc in Byte c }
+  | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\'' { let c = match esc with | 'n'  -> '\n' | 't'  -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | '0' -> '\000' | _    -> esc in Byte c }
   | '\'' ([^'\n' '\\'] as c) '\'' { Byte c }
   | '\''                        { raise (LexerError "Unterminated character literal") }
   | '"'                         { read_string (Buffer.create 16) lexbuf }
   | eof                         { EOF }
+  | "0b"['0'-'1']+ as bin       { let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in let value = parse 2 0 in Binary value }
   | _                           { let c = Lexing.lexeme_char lexbuf 0 in let msg = Printf.sprintf "Unrecognized character: '%c'" c in raise (LexerError msg) }
 
 and read_string buf = parse

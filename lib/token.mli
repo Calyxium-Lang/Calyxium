@@ -63,4 +63,5 @@ type t =
   | Bool of bool
   | Unit of unit
   | Tuple of t list
+  | Binary of int
   | EOF

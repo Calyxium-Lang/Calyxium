@@ -7,11 +7,14 @@ type heap_obj =
 
 and value =
   | VFloat of float
+  | VInt of int
   | VInt64 of int64
   | VBool of bool
+  | VByte of char
   | VHeapRef of int
   | VArray of value list
   | VTuple of value list
+  | VUnit
 
 val allocation_count : int ref
 val allocation_threshold : int

@@ -1,4 +1,4 @@
 (executable
  (name calyxium)
  (public_name calyxium)
- (libraries calyxiumlib ANSITerminal))
+ (libraries calyxiumlib))

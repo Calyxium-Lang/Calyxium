@@ -2,10 +2,18 @@
   open Ast
 %}
 
-%right Pow
-%left Star Slash Mod Plus Minus Carot LogicalOr LogicalAnd Dot
 %right Assign PlusAssign MinusAssign StarAssign SlashAssign
-%nonassoc Eq Neq Geq Leq Greater Less Inc Dec UnaryMinus NotPrec LowPrec IfThenElse
+%left LogicalOr
+%left LogicalAnd
+%nonassoc Eq Neq Geq Leq Greater Less
+%left Plus Minus
+%left Star Slash Mod
+%right Pow Carot
+%nonassoc UnaryMinus NotPrec
+%left Dot
+%nonassoc Inc Dec
+%nonassoc IfThenElse
+%nonassoc LowPrec   
 
 %token Recursive If Then Else Let Match With Return For Use Module True False Int64Type FloatType StringType ByteType BoolType UnitType TupleType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
@@ -17,6 +25,7 @@
 %token <char> Byte
 %token <bool> Bool
 %token <unit> Unit
+%token <int> Binary
 %token EOF
 
 %start program
@@ -110,9 +119,10 @@ expr:
   | Bool { Expr.BoolExpr { value = $1 } }
   | Unit { Expr.UnitExpr { value = $1 } }
   | Ident { Expr.VarExpr $1 }
+  | Binary { Expr.BinaryLitExpr { value = $1 } }
   | LBrace RBrace { Expr.ArrayExpr { elements = [] } }
   | LBrace expr_list RBrace { Expr.ArrayExpr { elements = $2 } }
-  | Ident LBracket expr RBracket { Expr.IndexExpr { array = Expr.VarExpr $1; index = $3 } }
+  | expr LBracket expr RBracket { Expr.IndexExpr { array = $1; index = $3 } }
   | expr Dot Ident { Expr.DotExpr { left = $1; right = $3 } }
   | LParen expr RParen Question expr Colon expr { Expr.TernaryExpr { cond = $2; onTrue = $5; onFalse = $7; } }
   | LParen expr_list RParen { match $2 with | [single] -> single | multiple -> Expr.TupleExpr multiple }

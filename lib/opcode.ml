@@ -1,5 +1,6 @@
 type opcode =
   | LOAD_INT64 of int64
+  | LOAD_BINARY of int
   | LOAD_FLOAT of float
   | LOAD_STRING of string
   | LOAD_BYTE of char
@@ -41,6 +42,8 @@ type opcode =
   | INPUT
   | NEG
   | FLOAT
+  | INT
+  | STRING
   | PLUSASSIGN
   | MINUSASSIGN
   | STARASSIGN
