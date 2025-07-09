@@ -25,6 +25,7 @@ let stack : Gc.value Stack.t = Stack.create ()
 let global_env : (string * (Gc.value * bool)) list ref = ref []
 let bool_to_float b = if b then 1.0 else 0.0
 let bool_to_int64 b = if b then 1L else 0L
+let output_buffer : Buffer.t = Buffer.create 1024
 
 let escape_sequences =
   [
@@ -392,9 +393,8 @@ let rec execute instructions env pc =
             "LOAD_INDEX requires two values on the stack (collection, index)";
         let index =
           match Stack.pop stack with
-          | VFloat f -> int_of_float f
           | VInt64 i -> Int64.to_int i
-          | _ -> runtime_error "Expected float or int for index in LOAD_INDEX"
+          | _ -> runtime_error "Expected int for index in LOAD_INDEX"
         in
         let collection = Stack.pop stack in
         let values =
@@ -520,7 +520,7 @@ let rec execute instructions env pc =
                 "(" ^ contents ^ ")"
           in
           let value = Stack.pop stack in
-          Printf.printf "%s\n" (string_of_value value);
+          Buffer.add_string output_buffer (string_of_value value ^ "\n");
           next ()
     | INPUT -> (
         push_trace pc "INPUT";
@@ -711,6 +711,198 @@ let rec execute instructions env pc =
         let v = Gc.alloc_string_with_gc stack env name in
         Stack.push v stack;
         next ()
+    | LENGTH ->
+        push_trace pc "LENGTH";
+        if Stack.is_empty stack then
+          runtime_error "LENGTH expects a value on the stack"
+        else
+          let v = Stack.pop stack in
+          let length =
+            match v with
+            | VHeapRef id -> (
+                match Gc.get_string id with
+                | Some s -> Int64.of_int (String.length s)
+                | None ->
+                    runtime_error "LENGTH: invalid heap reference for string")
+            | VArray items -> Int64.of_int (List.length items)
+            | VTuple items -> Int64.of_int (List.length items)
+            | _ -> runtime_error "LENGTH expects a string, array, or tuple"
+          in
+          Stack.push (VInt64 length) stack;
+          next ()
+    | BITWISENOT ->
+        push_trace pc "BITWISE_NOT";
+        let v = pop1 stack in
+        (match v with
+        | VInt i -> Stack.push (VInt (Int.lognot i)) stack
+        | VInt64 i -> Stack.push (VInt64 (Int64.lognot i)) stack
+        | _ -> runtime_error "BITWISE_NOT expects an int64");
+        next ()
+    | BITWISEAND ->
+        push_trace pc "BITWISE_AND";
+        let a, b = pop2 stack in
+        (match (a, b) with
+        | VInt a, VInt b -> Stack.push (VInt (Int.logand a b)) stack
+        | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logand a b)) stack
+        | _ -> runtime_error "BITWISE_AND expects int64 operands");
+        next ()
+    | BITWISEOR ->
+        push_trace pc "BITWISE_OR";
+        let a, b = pop2 stack in
+        (match (a, b) with
+        | VInt a, VInt b -> Stack.push (VInt (Int.logor a b)) stack
+        | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logor a b)) stack
+        | _ -> runtime_error "BITWISE_OR expects int64 operands");
+        next ()
+    | BITWISEXOR ->
+        push_trace pc "BITWISE_XOR";
+        let a, b = pop2 stack in
+        (match (a, b) with
+        | VInt a, VInt b -> Stack.push (VInt (Int.logxor a b)) stack
+        | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logxor a b)) stack
+        | _ -> runtime_error "BITWISE_XOR expects int64 operands");
+        next ()
+    | LEFTSHIFT ->
+        push_trace pc "LEFT_SHIFT";
+        let a, b = pop2 stack in
+        (match (a, b) with
+        | VInt a, VInt b -> Stack.push (VInt (Int.shift_left a b)) stack
+        | VInt64 a, VInt64 b ->
+            Stack.push (VInt64 (Int64.shift_left a (Int64.to_int b))) stack
+        | _ -> runtime_error "LEFT_SHIFT expects int64 operands");
+        next ()
+    | RIGHTSHIFT ->
+        push_trace pc "RIGHT_SHIFT";
+        let a, b = pop2 stack in
+        (match (a, b) with
+        | VInt a, VInt b -> Stack.push (VInt (Int.shift_right a b)) stack
+        | VInt64 a, VInt64 b ->
+            Stack.push (VInt64 (Int64.shift_right a (Int64.to_int b))) stack
+        | _ -> runtime_error "RIGHT_SHIFT expects int64 operands");
+        next ()
+    | RIGHTSHIFTLOGICAL ->
+        push_trace pc "RIGHT_SHIFT_LOGICAL";
+        let a, b = pop2 stack in
+        (match (a, b) with
+        | VInt a, VInt b ->
+            Stack.push (VInt (Int.shift_right_logical a b)) stack
+        | VInt64 a, VInt64 b ->
+            let shifted = Int64.shift_right_logical a (Int64.to_int b) in
+            Stack.push (VInt64 shifted) stack
+        | _ -> runtime_error "RIGHT_SHIFT_LOGICAL expects int64 operands");
+        next ()
+    | BITWISEANDASSIGN ->
+        push_trace pc "BITWISE_ANDASSIGN";
+        let value = pop1 stack in
+        let var = pop1 stack in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None -> runtime_error "BITWISE_ANDASSIGN: invalid var ref")
+          | _ -> runtime_error "BITWISE_ANDASSIGN: expected var name"
+        in
+        let old_value = get_var env name in
+        let result =
+          match (old_value, value) with
+          | VInt oldi, VInt newi -> VInt (Int.logand oldi newi)
+          | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logand oldi newi)
+          | _ -> runtime_error "BITWISE_ANDASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
+    | BITWISEORASSIGN ->
+        push_trace pc "BITWISE_ORASSIGN";
+        let value = pop1 stack in
+        let var = pop1 stack in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None -> runtime_error "BITWISE_ORASSIGN: invalid var ref")
+          | _ -> runtime_error "BITWISE_ORASSIGN: expected var name"
+        in
+        let old_value = get_var env name in
+        let result =
+          match (old_value, value) with
+          | VInt oldi, VInt newi -> VInt (Int.logor oldi newi)
+          | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logor oldi newi)
+          | _ -> runtime_error "BITWISE_ORASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
+    | BITWISEXORASSIGN ->
+        push_trace pc "BITWISE_XORASSIGN";
+        let value = pop1 stack in
+        let var = pop1 stack in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None -> runtime_error "BITWISE_XORASSIGN: invalid var ref")
+          | _ -> runtime_error "BITWISE_XORASSIGN: expected var name"
+        in
+        let old_value = get_var env name in
+        let result =
+          match (old_value, value) with
+          | VInt oldi, VInt newi -> VInt (Int.logxor oldi newi)
+          | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logxor oldi newi)
+          | _ -> runtime_error "BITWISE_XORASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
+    | LEFTSHIFTASSIGN ->
+        push_trace pc "LEFT_SHIFTASSIGN";
+        let value = pop1 stack in
+        let var = pop1 stack in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None -> runtime_error "LEFT_SHIFTASSIGN: invalid var ref")
+          | _ -> runtime_error "LEFT_SHIFTASSIGN: expected var name"
+        in
+        let old_value = get_var env name in
+        let result =
+          match (old_value, value) with
+          | VInt oldi, VInt newi -> VInt (Int.shift_left oldi newi)
+          | VInt64 oldi, VInt64 newi ->
+              VInt64 (Int64.shift_left oldi (Int64.to_int newi))
+          | _ -> runtime_error "LEFT_SHIFTASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
+    | RIGHTSHIFTASSIGN ->
+        push_trace pc "RIGHT_SHIFTASSIGN";
+        let value = pop1 stack in
+        let var = pop1 stack in
+        let name =
+          match var with
+          | VHeapRef id -> (
+              match Gc.get_string id with
+              | Some name -> name
+              | None -> runtime_error "RIGHT_SHIFTASSIGN: invalid var ref")
+          | _ -> runtime_error "RIGHT_SHIFTASSIGN: expected var name"
+        in
+        let old_value = get_var env name in
+        let result =
+          match (old_value, value) with
+          | VInt oldi, VInt newi -> VInt (Int.shift_right oldi newi)
+          | VInt64 oldi, VInt64 newi ->
+              VInt64 (Int64.shift_right oldi (Int64.to_int newi))
+          | _ -> runtime_error "RIGHT_SHIFTASSIGN: type mismatch"
+        in
+        let env = update_variable name result env in
+        Stack.push result stack;
+        execute instructions env (pc + 1)
 
 and update_variable name result env =
   let updated = ref false in
@@ -739,6 +931,7 @@ and update_variable name result env =
 let run instructions =
   try
     let result = execute (Array.of_list instructions) [] 0 in
+    Printf.printf "%s" (Buffer.contents output_buffer);
     clear_trace ();
     result
   with RuntimeError msg ->

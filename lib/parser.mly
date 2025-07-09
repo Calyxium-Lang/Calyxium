@@ -5,7 +5,11 @@
 %right Assign PlusAssign MinusAssign StarAssign SlashAssign
 %left LogicalOr
 %left LogicalAnd
+%left BitWiseOR
+%left BitWiseXOR
+%left BitWiseAND
 %nonassoc Eq Neq Geq Leq Greater Less
+%left LeftShift RightShift RightShiftLogical
 %left Plus Minus
 %left Star Slash Mod
 %right Pow Carot
@@ -13,10 +17,14 @@
 %left Dot
 %nonassoc Inc Dec
 %nonassoc IfThenElse
-%nonassoc LowPrec   
+%nonassoc LowPrec
 
 %token Recursive If Then Else Let Match With Return For Use Module True False Int64Type FloatType StringType ByteType BoolType UnitType TupleType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
+%token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
+%token LeftShift RightShift RightShiftLogical
+%token BitWiseANDAssign BitWiseORAssign BitWiseXORAssign
+%token LeftShiftAssign RightShiftAssign
 %token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore Question
 %token <string> Ident
 %token <int64> Int64
@@ -127,6 +135,18 @@ expr:
   | LParen expr RParen Question expr Colon expr { Expr.TernaryExpr { cond = $2; onTrue = $5; onFalse = $7; } }
   | LParen expr_list RParen { match $2 with | [single] -> single | multiple -> Expr.TupleExpr multiple }
   | LParen expr RParen { $2 }
+  | expr BitWiseOR expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseOR; right = $3 } }
+  | expr BitWiseXOR expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseXOR; right = $3 } }
+  | expr BitWiseAND expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseAND; right = $3 } }
+  | expr LeftShift expr { Expr.BinaryExpr { left = $1; operator = Token.LeftShift; right = $3 } }
+  | expr RightShift expr { Expr.BinaryExpr { left = $1; operator = Token.RightShift; right = $3 } }
+  | expr RightShiftLogical expr { Expr.BinaryExpr { left = $1; operator = Token.RightShiftLogical; right = $3 } }
+  | expr BitWiseANDAssign expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseANDAssign; right = $3 } }
+  | expr BitWiseORAssign expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseORAssign; right = $3 } }
+  | expr BitWiseXORAssign expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseXORAssign; right = $3 } }
+  | expr LeftShiftAssign expr { Expr.BinaryExpr { left = $1; operator = Token.LeftShiftAssign; right = $3 } }
+  | expr RightShiftAssign expr { Expr.BinaryExpr { left = $1; operator = Token.RightShiftAssign; right = $3 } }
+  | BitWiseNOT expr %prec NotPrec { Expr.UnaryExpr { operator = Token.BitWiseNOT; operand = $2 } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }

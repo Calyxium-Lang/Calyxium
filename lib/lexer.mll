@@ -28,6 +28,11 @@ rule token = parse
   | "-="                     { MinusAssign }
   | "*="                     { StarAssign }
   | "/="                     { SlashAssign }
+  | "&="                     { BitWiseANDAssign }
+  | "`="                     { BitWiseORAssign }
+  | "$="                     { BitWiseXORAssign }
+  | "<<="                    { LeftShiftAssign }
+  | ">>="                    { RightShiftAssign }
 
   | "+"                      { Plus }
   | "-"                      { Minus }
@@ -52,6 +57,13 @@ rule token = parse
   | "|"                      { Pipe }
   | "_"                      { UnderScore }
   | "?"                      { Question }
+  | "`"                      { BitWiseOR }
+  | "&"                      { BitWiseAND }
+  | "~"                      { BitWiseNOT }
+  | "$"                      { BitWiseXOR }
+  | "<<"                     { LeftShift }
+  | ">>"                     { RightShift }
+  | ">>>"                    { RightShiftLogical }
 
   | "rec"                    { Recursive }
   | "if"                     { If }

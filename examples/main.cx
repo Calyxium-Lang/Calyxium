@@ -1,2 +1,4 @@
-let x, y: []tuple = {(1, "Hello", true), (2, "bye", false)}
-println(y[0])
+let arr: []int = {1, 2, 3, 4, 5}
+for (let i: int = 0; i < length(arr); i++) {
+    println(arr[i])
+}

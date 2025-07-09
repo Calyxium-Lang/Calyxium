@@ -1,5 +1,2 @@
-mod String {
-    strcmp(s1: string, s2: string): bool {
-        return s1 == s2
-    }
-}
+let x: int = 0b1010101
+println(x)

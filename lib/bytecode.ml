@@ -11,6 +11,7 @@ let builtins =
     ("to_float", fun args -> args @ [ FLOAT ]);
     ("to_int", fun args -> args @ [ INT ]);
     ("to_string", fun args -> args @ [ STRING ]);
+    ("length", fun args -> args @ [ LENGTH ]);
     ("input", fun args -> args @ [ INPUT ]);
   ]
 
@@ -34,6 +35,17 @@ let opcode_of_binop = function
   | MinusAssign -> MINUSASSIGN
   | StarAssign -> STARASSIGN
   | SlashAssign -> SLASHASSIGN
+  | BitWiseAND -> BITWISEAND
+  | BitWiseOR -> BITWISEOR
+  | BitWiseXOR -> BITWISEXOR
+  | LeftShift -> LEFTSHIFT
+  | RightShift -> RIGHTSHIFT
+  | RightShiftLogical -> RIGHTSHIFTLOGICAL
+  | BitWiseANDAssign -> BITWISEANDASSIGN
+  | BitWiseORAssign -> BITWISEORASSIGN
+  | BitWiseXORAssign -> BITWISEXORASSIGN
+  | LeftShiftAssign -> LEFTSHIFTASSIGN
+  | RightShiftAssign -> RIGHTSHIFTASSIGN
   | _ -> failwith "Unsupported operator"
 
 let rec compile_expr = function
@@ -53,7 +65,9 @@ let rec compile_expr = function
       compile_expr array @ compile_expr index @ [ LOAD_INDEX ]
   | BinaryExpr { left; operator; right } -> (
       match operator with
-      | PlusAssign | MinusAssign | StarAssign | SlashAssign -> (
+      | PlusAssign | MinusAssign | StarAssign | SlashAssign | BitWiseANDAssign
+      | BitWiseORAssign | BitWiseXORAssign | LeftShiftAssign | RightShiftAssign
+        -> (
           match left with
           | VarExpr name ->
               let load_var_ref_code = [ LOAD_VAR_REF name ] in
@@ -92,6 +106,7 @@ let rec compile_expr = function
           | [ LOAD_VAR name ] -> [ LOAD_VAR name; DEC; DUP; STORE_VAR name ]
           | _ -> failwith "DEC expects a variable")
       | Minus -> operand @ [ NEG ]
+      | BitWiseNOT -> operand @ [ BITWISENOT ]
       | _ -> failwith "Unsupported unary operator")
   | IfExpr { condition; then_branch; else_branch } ->
       let condition_code = compile_expr condition in

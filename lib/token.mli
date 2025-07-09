@@ -64,4 +64,16 @@ type t =
   | Unit of unit
   | Tuple of t list
   | Binary of int
+  | BitWiseAND
+  | BitWiseOR
+  | BitWiseXOR
+  | BitWiseNOT
+  | LeftShift
+  | RightShift
+  | RightShiftLogical
+  | BitWiseANDAssign
+  | BitWiseORAssign
+  | BitWiseXORAssign
+  | LeftShiftAssign
+  | RightShiftAssign
   | EOF

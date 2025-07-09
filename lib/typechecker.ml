@@ -22,6 +22,7 @@ let builtins : (string * (Type.t list * Type.t) list) list =
         ([ SymbolType { value = "string" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "float" } ], SymbolType { value = "int" });
       ] );
+    ("length", [ ([ Any ], SymbolType { value = "int" }) ]);
     ("to_string", [ ([ Any ], SymbolType { value = "string" }) ]);
   ]
 
@@ -70,6 +71,10 @@ let rec check_expr (env : (string * Type.t) list)
           if not (type_eq operand_type (SymbolType { value = "bool" })) then
             raise (TypeError "Unary `not` operator requires a boolean operand");
           SymbolType { value = "bool" }
+      | BitWiseNOT ->
+          if not (type_eq operand_type (SymbolType { value = "int" })) then
+            raise (TypeError "Bitwise NOT requires an int or int64 operand");
+          operand_type
       | Inc | Dec ->
           if
             not
@@ -84,9 +89,7 @@ let rec check_expr (env : (string * Type.t) list)
             not
               (type_eq operand_type (SymbolType { value = "int" })
               || type_eq operand_type (SymbolType { value = "float" }))
-          then
-            raise
-              (TypeError "Increment/Decrement requires int or float operand");
+          then raise (TypeError "Unary minus requires int or float operand");
           operand_type
       | _ -> raise (TypeError "Unsupported unary operator"))
   | BinaryExpr { left; operator; right } -> (
@@ -97,6 +100,12 @@ let rec check_expr (env : (string * Type.t) list)
       match operator with
       | Eq | Neq | Geq | Leq | LogicalAnd | LogicalOr | Less | Greater ->
           SymbolType { value = "bool" }
+      | BitWiseAND | BitWiseOR | BitWiseXOR | LeftShift | RightShift
+      | RightShiftLogical | BitWiseANDAssign | BitWiseORAssign
+      | BitWiseXORAssign | LeftShiftAssign | RightShiftAssign ->
+          if not (type_eq lt (SymbolType { value = "int" })) then
+            raise (TypeError "Bitwise operators require int operands");
+          lt
       | _ -> lt)
   | CallExpr { callee = VarExpr name; arguments } -> (
       match List.assoc_opt name func_env with
