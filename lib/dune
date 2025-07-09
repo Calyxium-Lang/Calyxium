@@ -14,7 +14,8 @@
   bytecode
   opcode
   vm
-  gc)
+  gc
+  bytecodeio)
  (libraries unix ppx_deriving.show)
  (preprocess
   (pps ppx_deriving.show)))

@@ -7,22 +7,23 @@ open Calyxiumlib.Vm
 open Calyxiumlib.Error
 open Calyxiumlib.Version
 open Calyxiumlib.Help
-open Calyxiumlib.Opcode
+open Calyxiumlib.Bytecodeio
 
-let parse_file file =
+let parse_file ~flags file =
+  let bytecode_file = Filename.remove_extension file ^ ".cxc" in
   let lexbuf = Lexing.from_channel (open_in file) in
   match program token lexbuf with
   | ast -> (
       try
         typecheck_program [ ast ];
         let bytecode = compile_stmt ast in
-        List.iter
-          (fun op ->
-            pp_opcode Format.str_formatter op;
-            let str = Format.flush_str_formatter () in
-            Printf.printf "%s\n" str)
-          bytecode;
-        ignore (run bytecode)
+
+        if List.mem "--emit-bytecode" flags then (
+          save_bytecode_to_file bytecode_file bytecode;
+          Printf.printf "Bytecode saved to %s\n" bytecode_file);
+
+        if not (List.mem "--emit-bytecode" flags || List.mem "--no-run" flags)
+        then ignore (run bytecode)
       with TypeError msg ->
         Printf.eprintf "%s%s: %s%s\n" red file msg reset;
         exit 1)
@@ -48,16 +49,18 @@ let parse_file file =
 
 let () =
   let argv = Array.to_list Sys.argv in
-  let has_flag flag = List.mem flag argv in
-  match List.tl argv with
-  | _ when has_flag "--help" -> print_endline usage
-  | _ when has_flag "--version" ->
+  let args = List.tl argv in
+  let flags, files = List.partition (String.starts_with ~prefix:"--") args in
+
+  match (flags, files) with
+  | [ "--help" ], _ -> print_endline usage
+  | [ "--version" ], _ ->
       Printf.printf "Calyxium version %s\n" (version_string ());
       exit 0
-  | files -> (
-      files |> List.filter (fun a -> not (String.starts_with ~prefix:"--" a))
-      |> function
-      | [] ->
-          prerr_endline "No input files provided.";
-          exit 1
-      | _ -> List.iter parse_file files)
+  | "--run-bytecode" :: _, bytecode_file :: _ ->
+      let bytecode = load_bytecode_from_file bytecode_file in
+      ignore (run bytecode)
+  | _, [] ->
+      prerr_endline "No input files provided.";
+      exit 1
+  | _, files -> List.iter (parse_file ~flags) files
