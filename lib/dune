@@ -3,27 +3,23 @@
  (public_name calyxium.lib)
  (modules
   ast
+  token
   lexer
   parser
-  token
-  version
   typechecker
-  error
-  help
-  color
-  bytecode
   opcode
+  bytecode
+  bytegen
   vm
   gc
-  bytecodeio)
- (libraries unix ppx_deriving.show)
- (preprocess
-  (pps ppx_deriving.show)))
+  color
+  error
+  help
+  version)
+ (libraries unix))
 
 (ocamllex lexer)
 
-(menhir
- (modules parser)
- (infer true))
+(ocamlyacc parser)
 
 (documentation)

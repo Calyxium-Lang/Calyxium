@@ -27,14 +27,14 @@ Follow these steps to install and build Calyxium:
     cd Calyxium
     ```
 
-4. Install dependencies
+3. Build the projrct
     ```bash
-    opam install menhir zarith
+    dune build --profile release
     ```
 
-4. Build the projrct
+4. Install the project
     ```bash
-    dune build
+    dune install
     ```
 
 ## Getting Started
@@ -43,7 +43,7 @@ Create a new Calyxium script with the `.cx` extension. Here's a basic example:
 println("Hello, world")
 ```
 To run your script:
-`./calyxium main.cx`
+`calyxium main.cx`
 
 For more detailed documentation, visit the [official documentation](https://calyxium.cc/docs)
 

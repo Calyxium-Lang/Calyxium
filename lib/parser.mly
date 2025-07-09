@@ -29,7 +29,7 @@
 %token EOF
 
 %start program
-%type <Stmt.t> program
+%type <Ast.Stmt.t> program
 
 %%
 

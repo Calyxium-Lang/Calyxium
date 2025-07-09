@@ -48,4 +48,3 @@ type opcode =
   | MINUSASSIGN
   | STARASSIGN
   | SLASHASSIGN
-[@@deriving show]

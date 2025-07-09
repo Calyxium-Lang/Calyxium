@@ -7,7 +7,7 @@ open Calyxiumlib.Vm
 open Calyxiumlib.Error
 open Calyxiumlib.Version
 open Calyxiumlib.Help
-open Calyxiumlib.Bytecodeio
+open Calyxiumlib.Bytegen
 
 let parse_file ~flags file =
   let bytecode_file = Filename.remove_extension file ^ ".cxc" in
@@ -33,7 +33,7 @@ let parse_file ~flags file =
         ~col:(pos.pos_cnum - pos.pos_bol)
         ~source:(get_line file pos.pos_lnum);
       exit 1
-  | exception Error ->
+  | exception Parsing.Parse_error ->
       let pos = lexbuf.lex_curr_p in
       print_error ~file ~msg:"Syntax Error" ~line:pos.pos_lnum
         ~col:(pos.pos_cnum - pos.pos_bol)
