@@ -17,9 +17,10 @@ and value =
   | VUnit
 
 val allocation_count : int ref
-val allocation_threshold : int
+val allocation_threshold : int ref
 val alloc_id : unit -> int
 val alloc_in_young : heap_obj -> value
+val find_heap_obj : int -> heap_obj
 val get_string : int -> string option
 val get_array : int -> float array option
 val mark_and_promote : value list -> (string * (value * bool)) list -> unit

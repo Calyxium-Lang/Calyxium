@@ -24,7 +24,7 @@ type generation = {
 }
 
 let allocation_count = ref 0
-let allocation_threshold = 1000
+let allocation_threshold = ref 1000
 let young_gen = { objs = Hashtbl.create 128; marked = Hashtbl.create 128 }
 let old_gen = { objs = Hashtbl.create 512; marked = Hashtbl.create 512 }
 let next_id = ref 0
@@ -39,37 +39,41 @@ let alloc_in_young obj =
   Hashtbl.add young_gen.objs id obj;
   VHeapRef id
 
+let find_heap_obj id =
+  try Hashtbl.find young_gen.objs id
+  with Not_found -> Hashtbl.find old_gen.objs id
+
 let get_string id =
-  match Hashtbl.find_opt young_gen.objs id with
+  match try Some (find_heap_obj id) with Not_found -> None with
   | Some (HString s) -> Some s
-  | _ -> (
-      match Hashtbl.find_opt old_gen.objs id with
-      | Some (HString s) -> Some s
-      | _ -> None)
+  | _ -> None
 
 let get_array id =
-  match Hashtbl.find_opt young_gen.objs id with
+  match try Some (find_heap_obj id) with Not_found -> None with
   | Some (HArray arr) -> Some arr
-  | _ -> (
-      match Hashtbl.find_opt old_gen.objs id with
-      | Some (HArray arr) -> Some arr
-      | _ -> None)
+  | _ -> None
 
 let mark id gen =
   if not (Hashtbl.mem gen.marked id) then Hashtbl.replace gen.marked id true
 
-let rec mark_value = function
-  | VFloat _ -> ()
-  | VInt _ -> ()
-  | VInt64 _ -> ()
-  | VBool _ -> ()
-  | VByte _ -> ()
-  | VHeapRef id ->
-      if Hashtbl.mem young_gen.objs id then mark id young_gen
-      else if Hashtbl.mem old_gen.objs id then mark id old_gen
-  | VArray values -> List.iter mark_value values
-  | VTuple values -> List.iter mark_value values
-  | VUnit -> ()
+let mark_value v =
+  let stack = Stack.create () in
+  Stack.push v stack;
+  while not (Stack.is_empty stack) do
+    match Stack.pop stack with
+    | VHeapRef id -> (
+        try
+          ignore (Hashtbl.find young_gen.objs id);
+          mark id young_gen
+        with Not_found -> (
+          try
+            ignore (Hashtbl.find old_gen.objs id);
+            mark id old_gen
+          with Not_found -> ()))
+    | VArray values | VTuple values ->
+        List.iter (fun v -> Stack.push v stack) values
+    | _ -> ()
+  done
 
 let mark_env env = List.iter (fun (_, (v, _)) -> mark_value v) env
 
@@ -87,25 +91,30 @@ let mark_and_promote roots env =
   List.iter mark_value roots;
   mark_env env;
 
+  let to_promote = ref [] in
   Hashtbl.iter
     (fun id obj ->
       if Hashtbl.mem young_gen.marked id then
-        Hashtbl.replace old_gen.objs id obj)
+        to_promote := (id, obj) :: !to_promote)
     young_gen.objs;
 
-  sweep young_gen;
-  sweep old_gen;
-  ()
+  List.iter
+    (fun (id, obj) ->
+      Hashtbl.replace old_gen.objs id obj;
+      Hashtbl.remove young_gen.objs id)
+    !to_promote;
 
-let maybe_collect_gc (roots : value list) (env : (string * (value * bool)) list)
-    =
+  sweep young_gen;
+  sweep old_gen
+
+let maybe_collect_gc roots env =
   incr allocation_count;
-  if !allocation_count >= allocation_threshold then (
+  if !allocation_count >= !allocation_threshold then (
     mark_and_promote roots env;
     allocation_count := 0)
 
-let get_stack_roots (stack : value Stack.t) : value list =
-  Stack.fold (fun acc v -> v :: acc) [] stack
+let get_stack_roots stack =
+  List.rev (Stack.fold (fun acc v -> v :: acc) [] stack)
 
 let alloc_string_with_gc stack env s =
   match Hashtbl.find_opt interned_strings s with
@@ -113,8 +122,7 @@ let alloc_string_with_gc stack env s =
   | None ->
       let roots = get_stack_roots stack in
       maybe_collect_gc roots env;
-      let id = !next_id in
-      incr next_id;
+      let id = alloc_id () in
       Hashtbl.add young_gen.objs id (HString s);
       Hashtbl.add interned_strings s id;
       VHeapRef id
