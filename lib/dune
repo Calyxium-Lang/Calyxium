@@ -15,8 +15,14 @@
   color
   error
   help
-  version)
- (libraries unix))
+  version
+  uint32)
+ (foreign_stubs
+  (language c)
+  (names uint32))
+ (libraries unix ppx_deriving.show)
+ (preprocess
+  (pps ppx_deriving.show)))
 
 (ocamllex lexer)
 

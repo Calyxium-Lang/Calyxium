@@ -161,6 +161,10 @@ let run (instructions : opcode list) =
             push_trace frame.pc ("LOAD_INT64 " ^ Int64.to_string v);
             Stack.push (VInt64 v) stack;
             next ()
+        | LOAD_UINT32 v ->
+            push_trace frame.pc ("LOAD_UINT32 " ^ Uint32.to_string v);
+            Stack.push (VUint32 v) stack;
+            next ()
         | LOAD_BINARY v ->
             push_trace frame.pc ("LOAD_BINARY " ^ string_of_int v);
             Stack.push (VInt v) stack;
@@ -207,6 +211,8 @@ let run (instructions : opcode list) =
             (match (a, b) with
             | VFloat a, VFloat b -> Stack.push (VFloat (a +. b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.add a b)) stack
+            | VUint32 a, VUint32 b ->
+                Stack.push (VUint32 (Uint32.add a b)) stack
             | _ -> runtime_error "PLUS expects numbers");
             next ()
         | MINUS ->
@@ -215,6 +221,8 @@ let run (instructions : opcode list) =
             (match (a, b) with
             | VFloat a, VFloat b -> Stack.push (VFloat (a -. b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.sub a b)) stack
+            | VUint32 a, VUint32 b ->
+                Stack.push (VUint32 (Uint32.sub a b)) stack
             | _ -> runtime_error "MINUS expects numbers");
             next ()
         | STAR ->
@@ -223,6 +231,8 @@ let run (instructions : opcode list) =
             (match (a, b) with
             | VFloat a, VFloat b -> Stack.push (VFloat (a *. b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.mul a b)) stack
+            | VUint32 a, VUint32 b ->
+                Stack.push (VUint32 (Uint32.mul a b)) stack
             | _ -> runtime_error "STAR expects numbers");
             next ()
         | SLASH ->
@@ -231,8 +241,11 @@ let run (instructions : opcode list) =
             (match (a, b) with
             | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
             | VInt64 _, VInt64 0L -> runtime_error "Division by zero"
+            (* | VUint32 _, VUint32 0l -> runtime_error "Division by zero" *)
             | VFloat a, VFloat b -> Stack.push (VFloat (a /. b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.div a b)) stack
+            (* | VUint32 a, VUint32 b ->
+                Stack.push (VUint32 (Uint32.div a b)) stack *)
             | _ -> runtime_error "SLASH expects numbers");
             next ()
         | MOD ->
@@ -241,8 +254,11 @@ let run (instructions : opcode list) =
             (match (a, b) with
             | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
             | VInt64 _, VInt64 0L -> runtime_error "Modulo by zero"
+            (* | VUint32 _, VUint32 0l -> runtime_error "Modulo by zero" *)
             | VFloat a, VFloat b -> Stack.push (VFloat (mod_float a b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.rem a b)) stack
+            (* | VUint32 a, VUint32 b ->
+                Stack.push (VUint32 (Uint32.rem a b)) stack *)
             | _ -> runtime_error "MOD expects numbers");
             next ()
         | POW ->
@@ -284,6 +300,9 @@ let run (instructions : opcode list) =
               | VFloat a, VFloat b -> VFloat (bool_to_float (a < b))
               | VInt64 a, VInt64 b ->
                   VInt64 (bool_to_int64 (Int64.compare a b < 0))
+              | VUint32 a, VUint32 b ->
+                  VUint32
+                    (if Uint32.compare a b < 0 then Uint32.one else Uint32.zero)
               | _ -> runtime_error "LESS expects two floats or int64"
             in
             Stack.push result stack;
@@ -296,6 +315,9 @@ let run (instructions : opcode list) =
               | VFloat a, VFloat b -> VFloat (bool_to_float (a > b))
               | VInt64 a, VInt64 b ->
                   VInt64 (bool_to_int64 (Int64.compare a b > 0))
+              | VUint32 a, VUint32 b ->
+                  VUint32
+                    (if Uint32.compare a b > 0 then Uint32.one else Uint32.zero)
               | _ -> runtime_error "GREATER expects two floats or int64"
             in
             Stack.push result stack;
@@ -308,6 +330,9 @@ let run (instructions : opcode list) =
               | VFloat a, VFloat b -> VFloat (bool_to_float (a <= b))
               | VInt64 a, VInt64 b ->
                   VInt64 (bool_to_int64 (Int64.compare a b <= 0))
+              | VUint32 a, VUint32 b ->
+                  VUint32
+                    (if Uint32.compare a b <= 0 then Uint32.one else Uint32.zero)
               | _ -> runtime_error "LESS_EQUAL expects two floats or int64"
             in
             Stack.push result stack;
@@ -320,6 +345,9 @@ let run (instructions : opcode list) =
               | VFloat a, VFloat b -> VFloat (bool_to_float (a >= b))
               | VInt64 a, VInt64 b ->
                   VInt64 (bool_to_int64 (Int64.compare a b >= 0))
+              | VUint32 a, VUint32 b ->
+                  VUint32
+                    (if Uint32.compare a b <= 0 then Uint32.one else Uint32.zero)
               | _ -> runtime_error "GREATER_EQUAL expects two floats or int64"
             in
             Stack.push result stack;
@@ -543,10 +571,13 @@ let run (instructions : opcode list) =
                 | VFloat f when Float.is_nan f -> "unit"
                 | VFloat 1.0 -> "true"
                 | VFloat 0.0 -> "false"
+                | VUint32 1l -> "true"
+                | VUint32 0l -> "false"
                 | VFloat f when Float.is_infinite f ->
                     if f > 0.0 then "inf" else "-inf"
-                | VFloat f -> Printf.sprintf "%.12f" f
+                | VFloat f -> Printf.sprintf "%.12g" f
                 | VInt64 i -> Printf.sprintf "%Ld" i
+                | VUint32 u -> Uint32.to_string u
                 | VInt i -> Printf.sprintf "%d" i
                 | VHeapRef id -> (
                     match Gc.get_string id with

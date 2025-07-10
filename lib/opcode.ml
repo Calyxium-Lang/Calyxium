@@ -1,5 +1,6 @@
 type opcode =
   | LOAD_INT64 of int64
+  | LOAD_UINT32 of Uint32.t
   | LOAD_BINARY of int
   | LOAD_FLOAT of float
   | LOAD_STRING of string
@@ -62,3 +63,4 @@ type opcode =
   | LEFTSHIFTASSIGN
   | RIGHTSHIFTASSIGN
   | ASSERT
+[@@deriving show]

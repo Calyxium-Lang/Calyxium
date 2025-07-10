@@ -51,6 +51,7 @@ let opcode_of_binop = function
 
 let rec compile_expr = function
   | Int64Expr { value } -> [ LOAD_INT64 value ]
+  | Uint32Expr { value } -> [ LOAD_UINT32 value ]
   | BinaryLitExpr { value } -> [ LOAD_BINARY value ]
   | FloatExpr { value } -> [ LOAD_FLOAT value ]
   | StringExpr { value } -> [ LOAD_STRING value ]
@@ -147,11 +148,14 @@ let rec compile_stmt = function
       in
       Hashtbl.replace function_table name full_function_bytecode;
       []
-  | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
+  | VarDeclarationStmt { identifier; assigned_value; explicit_type } ->
       let expr_bytecode =
-        match assigned_value with
-        | Some expr -> compile_expr expr
-        | None -> [ LOAD_INT64 0L ]
+        match (assigned_value, explicit_type) with
+        | Some (Int64Expr { value }), SymbolType { value = "uint?" } ->
+            compile_expr
+              (Uint32Expr { value = Int32.of_int (Int64.to_int value) })
+        | Some expr, _ -> compile_expr expr
+        | None, _ -> [ LOAD_INT64 0L ]
       in
       expr_bytecode @ [ STORE_VAR identifier ]
   | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->

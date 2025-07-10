@@ -1,6 +1,7 @@
 {
   open Parser
   exception LexerError of string
+  let at_line_start = ref true
 }
 
 let whitespace = [' ' '\t']
@@ -11,102 +12,104 @@ let floats = digits '.' digits+
 
 rule token = parse
   | whitespace               { token lexbuf }
-  | newline                  { Lexing.new_line lexbuf; token lexbuf }
+  | newline                  { at_line_start := true; Lexing.new_line lexbuf; token lexbuf }
+  | "--"                     { if !at_line_start then read_comment lexbuf else (at_line_start := false; Dec) }
   | "--"                     { read_comment lexbuf }
 
-  | "=="                     { Eq }
-  | "!="                     { Neq }
-  | ">="                     { Geq }
-  | "<="                     { Leq }
-  | "||"                     { LogicalOr }
-  | "&&"                     { LogicalAnd }
-  | "**"                     { Pow }
-  | "--"                     { Dec }
-  | "++"                     { Inc }
-  | "->"                     { MapsTo }
-  | "+="                     { PlusAssign }
-  | "-="                     { MinusAssign }
-  | "*="                     { StarAssign }
-  | "/="                     { SlashAssign }
-  | "&="                     { BitWiseANDAssign }
-  | "`="                     { BitWiseORAssign }
-  | "$="                     { BitWiseXORAssign }
-  | "<<="                    { LeftShiftAssign }
-  | ">>="                    { RightShiftAssign }
+  | "=="                     { at_line_start := false; Eq }
+  | "!="                     { at_line_start := false; Neq }
+  | ">="                     { at_line_start := false; Geq }
+  | "<="                     { at_line_start := false; Leq }
+  | "||"                     { at_line_start := false; LogicalOr }
+  | "&&"                     { at_line_start := false; LogicalAnd }
+  | "**"                     { at_line_start := false; Pow }
+  | "++"                     { at_line_start := false; Inc }
+  | "->"                     { at_line_start := false; MapsTo }
+  | "+="                     { at_line_start := false; PlusAssign }
+  | "-="                     { at_line_start := false; MinusAssign }
+  | "*="                     { at_line_start := false; StarAssign }
+  | "/="                     { at_line_start := false; SlashAssign }
+  | "&="                     { at_line_start := false; BitWiseANDAssign }
+  | "`="                     { at_line_start := false; BitWiseORAssign }
+  | "$="                     { at_line_start := false; BitWiseXORAssign }
+  | "<<="                    { at_line_start := false; LeftShiftAssign }
+  | ">>="                    { at_line_start := false; RightShiftAssign }
 
-  | "+"                      { Plus }
-  | "-"                      { Minus }
-  | "*"                      { Star }
-  | "/"                      { Slash }
-  | "%"                      { Mod }
-  | "^"                      { Carot }
-  | "="                      { Assign }
-  | ">"                      { Greater }
-  | "<"                      { Less }
-  | "("                      { LParen }
-  | ")"                      { RParen }
-  | "["                      { LBracket }
-  | "]"                      { RBracket }
-  | "{"                      { LBrace }
-  | "}"                      { RBrace }
-  | "."                      { Dot }
-  | ":"                      { Colon }
-  | ";"                      { Semi }
-  | ","                      { Comma }
-  | "!"                      { Not }
-  | "|"                      { Pipe }
-  | "_"                      { UnderScore }
-  | "?"                      { Question }
-  | "`"                      { BitWiseOR }
-  | "&"                      { BitWiseAND }
-  | "~"                      { BitWiseNOT }
-  | "$"                      { BitWiseXOR }
-  | "<<"                     { LeftShift }
-  | ">>"                     { RightShift }
-  | ">>>"                    { RightShiftLogical }
+  | "+"                      { at_line_start := false; Plus }
+  | "-"                      { at_line_start := false; Minus }
+  | "*"                      { at_line_start := false; Star }
+  | "/"                      { at_line_start := false; Slash }
+  | "%"                      { at_line_start := false; Mod }
+  | "^"                      { at_line_start := false; Carot }
+  | "="                      { at_line_start := false; Assign }
+  | ">"                      { at_line_start := false; Greater }
+  | "<"                      { at_line_start := false; Less }
+  | "("                      { at_line_start := false; LParen }
+  | ")"                      { at_line_start := false; RParen }
+  | "["                      { at_line_start := false; LBracket }
+  | "]"                      { at_line_start := false; RBracket }
+  | "{"                      { at_line_start := false; LBrace }
+  | "}"                      { at_line_start := false; RBrace }
+  | "."                      { at_line_start := false; Dot }
+  | ":"                      { at_line_start := false; Colon }
+  | ";"                      { at_line_start := false; Semi }
+  | ","                      { at_line_start := false; Comma }
+  | "!"                      { at_line_start := false; Not }
+  | "|"                      { at_line_start := false; Pipe }
+  | "_"                      { at_line_start := false; UnderScore }
+  | "?"                      { at_line_start := false; Question }
+  | "`"                      { at_line_start := false; BitWiseOR }
+  | "&"                      { at_line_start := false; BitWiseAND }
+  | "~"                      { at_line_start := false; BitWiseNOT }
+  | "$"                      { at_line_start := false; BitWiseXOR }
+  | "<<"                     { at_line_start := false; LeftShift }
+  | ">>"                     { at_line_start := false; RightShift }
+  | ">>>"                    { at_line_start := false; RightShiftLogical }
 
-  | "rec"                    { Recursive }
-  | "if"                     { If }
-  | "then"                   { Then }
-  | "else"                   { Else }
-  | "let"                    { Let }
-  | "match"                  { Match }
-  | "with"                   { With }
-  | "return"                 { Return }
-  | "for"                    { For }
-  | "use"                    { Use }
-  | "mod"                    { Module }
-  | "true"                   { True }
-  | "false"                  { False }
+  | "rec"                    { at_line_start := false; Recursive }
+  | "if"                     { at_line_start := false; If }
+  | "then"                   { at_line_start := false; Then }
+  | "else"                   { at_line_start := false; Else }
+  | "let"                    { at_line_start := false; Let }
+  | "match"                  { at_line_start := false; Match }
+  | "with"                   { at_line_start := false; With }
+  | "return"                 { at_line_start := false; Return }
+  | "for"                    { at_line_start := false; For }
+  | "use"                    { at_line_start := false; Use }
+  | "mod"                    { at_line_start := false; Module }
+  | "true"                   { at_line_start := false; True }
+  | "false"                  { at_line_start := false; False }
 
-  | "int"                    { Int64Type }
-  | "float"                  { FloatType }
-  | "string"                 { StringType }
-  | "byte"                   { ByteType }
-  | "bool"                   { BoolType }
-  | "unit"                   { UnitType }
-  | "tuple"                  { TupleType }
+  | "int"                    { at_line_start := false; Int64Type }
+  | "uint?"                  { at_line_start := false; UInt32Type }
+  | "float"                  { at_line_start := false; FloatType }
+  | "string"                 { at_line_start := false; StringType }
+  | "byte"                   { at_line_start := false; ByteType }
+  | "bool"                   { at_line_start := false; BoolType }
+  | "unit"                   { at_line_start := false; UnitType }
+  | "tuple"                  { at_line_start := false; TupleType }
 
-  | floats as f              { Float (float_of_string f) }
-  | digits as d              { Int64 (Int64.of_string d) }
-  | identifier as id         { Ident id }
+  | floats as f              { at_line_start := false; Float (float_of_string f) }
+  | digits as d              { at_line_start := false; Int64 (Int64.of_string d) }
+  | identifier as id         { at_line_start := false; Ident id }
 
-  | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\'' { let c = match esc with | 'n'  -> '\n' | 't'  -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | '0' -> '\000' | _    -> esc in Byte c }
-  | '\'' ([^'\n' '\\'] as c) '\'' { Byte c }
-  | '\''                        { raise (LexerError "Unterminated character literal") }
-  | '"'                         { read_string (Buffer.create 16) lexbuf }
-  | eof                         { EOF }
-  | "0b"['0'-'1']+ as bin       { let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in let value = parse 2 0 in Binary value }
-  | _                           { let c = Lexing.lexeme_char lexbuf 0 in let msg = Printf.sprintf "Unrecognized character: '%c'" c in raise (LexerError msg) }
+  | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\''  { at_line_start := false; let c = match esc with | 'n' -> '\n' | 't' -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | '0' -> '\000' | _ -> esc in Byte c }
+  | '\'' ([^'\n' '\\'] as c) '\''  { at_line_start := false; Byte c }
+  | '\''                    { raise (LexerError "Unterminated character literal") }
+  | '"'                     { at_line_start := false; read_string (Buffer.create 16) lexbuf }
+  | eof                     { EOF }
+  | "0b" ['0'-'1']+ as bin  { at_line_start := false; let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in Binary (parse 2 0) }
+  | _                       { let c = Lexing.lexeme_char lexbuf 0 in let msg = Printf.sprintf "Unrecognized character: '%c'" c in raise (LexerError msg) }
 
 and read_string buf = parse
-  | '"'                         { String (Buffer.contents buf) }
-  | '\n'                        { raise (LexerError "Unterminated string literal") }
-  | eof                         { raise (LexerError "Unterminated string literal") }
-  | '\\' (['\\' '"' 'n' 't'] as esc) { Buffer.add_char buf (match esc with | '\\' -> '\\' | '"'  -> '"' | 'n'  -> '\n' | 't'  -> '\t' | _    -> esc); read_string buf lexbuf }
-  | _ as c                      { Buffer.add_char buf c; read_string buf lexbuf }
+  | '"'                     { String (Buffer.contents buf) }
+  | '\n'                    { raise (LexerError "Unterminated string literal") }
+  | eof                     { raise (LexerError "Unterminated string literal") }
+  | '\\' (['\\' '"' 'n' 't'] as esc)
+                            { Buffer.add_char buf ( match esc with | '\\' -> '\\' | '"' -> '"' | 'n' -> '\n' | 't' -> '\t' | _ -> esc ); read_string buf lexbuf }
+  | _ as c                  { Buffer.add_char buf c; read_string buf lexbuf }
 
 and read_comment = parse
-  | newline                     { Lexing.new_line lexbuf; token lexbuf }
-  | _                           { read_comment lexbuf }
-  | eof                         { EOF }
+  | newline                 { Lexing.new_line lexbuf; at_line_start := true; token lexbuf }
+  | _                       { read_comment lexbuf }
+  | eof                     { EOF }

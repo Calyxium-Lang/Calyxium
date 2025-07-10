@@ -9,6 +9,7 @@ end
 module Expr : sig
   type t =
     | Int64Expr of { value : int64 }
+    | Uint32Expr of { value : Uint32.t }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
     | ByteExpr of { value : char }

@@ -19,7 +19,7 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Return For Use Module True False Int64Type FloatType StringType ByteType BoolType UnitType TupleType
+%token Recursive If Then Else Let Match With Return For Use Module True False Int64Type UInt32Type FloatType StringType ByteType BoolType UnitType TupleType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
@@ -28,6 +28,7 @@
 %token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore Question
 %token <string> Ident
 %token <int64> Int64
+%token <Uint32.t> UInt32
 %token <float> Float
 %token <string> String
 %token <char> Byte
@@ -85,6 +86,7 @@ parameter:
 
 type_expr:
   | Int64Type { Type.SymbolType { value = "int" } }
+  | UInt32Type { Type.SymbolType { value = "uint?" } }
   | FloatType { Type.SymbolType { value = "float" } }
   | StringType { Type.SymbolType { value = "string" } }
   | ByteType { Type.SymbolType { value = "byte" } }
