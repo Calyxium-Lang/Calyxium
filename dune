@@ -1,7 +1,11 @@
 (env
  (dev
   (ocamlopt_flags
-   (:standard -warn-error +a -w -32)))
+   (:standard -warn-error +a -w -32 -strict-sequence -short-paths -inline 0))
+  (flags
+   (:standard -safe-string -strict-formats)))
  (release
   (ocamlopt_flags
-   (:standard -O2 -compact))))
+   (:standard -O2 -compact -unbox-closures))
+  (flags
+   (:standard -safe-string -strict-formats))))
