@@ -348,31 +348,29 @@ let run (instructions : opcode list) =
               | VInt64 i1, VInt64 i2 -> i1 = i2
               | _ -> false
             in
-            Stack.push (VFloat (if result then 1.0 else 0.0)) stack;
+            Stack.push (VBool result) stack;
             next ()
         | AND ->
             push_trace frame.pc "AND";
             let a, b = pop2 stack in
             let bool_val = function
+              | VBool b -> b
               | VFloat f -> f <> 0.0
               | VInt64 i -> i <> 0L
-              | _ -> runtime_error "AND expects float or int64"
+              | _ -> runtime_error "AND expects bool, float, or int64"
             in
-            Stack.push
-              (VFloat (if bool_val a && bool_val b then 1.0 else 0.0))
-              stack;
+            Stack.push (VBool (bool_val a && bool_val b)) stack;
             next ()
         | OR ->
             push_trace frame.pc "OR";
             let a, b = pop2 stack in
             let bool_val = function
+              | VBool b -> b
               | VFloat f -> f <> 0.0
               | VInt64 i -> i <> 0L
-              | _ -> runtime_error "OR expects float or int64"
+              | _ -> runtime_error "OR expects bool, float, or int64"
             in
-            Stack.push
-              (VFloat (if bool_val a || bool_val b then 1.0 else 0.0))
-              stack;
+            Stack.push (VBool (bool_val a || bool_val b)) stack;
             next ()
         | NOT ->
             push_trace frame.pc "NOT";
@@ -959,6 +957,13 @@ let run (instructions : opcode list) =
             frame.env <- update_variable name result frame.env;
             Stack.push result stack;
             next ()
+        | ASSERT -> (
+            push_trace frame.pc "ASSERT";
+            let cond = pop1 stack in
+            match cond with
+            | VBool true -> next ()
+            | VBool false -> runtime_error "Assertion failed"
+            | _ -> runtime_error "ASSERT expects a boolean value")
     done;
     print_string (Buffer.contents output_buffer);
     flush stdout

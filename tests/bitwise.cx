@@ -1,0 +1,20 @@
+-- $Id: tests/bitwise.cx $
+
+println("testing bitwise operations")
+
+assert(~0 == -1)
+
+-- basic tests for bitwise operators
+let a: int = -1
+assert((a == -1) && ((a & -1) == a) && ((a & 35) == 35))
+let b: int = -1
+assert((b ` -1) == -1)
+assert(((b $ b) == 0) && ((b $ 0) == b) && ((b $ (~b)) == -1))
+assert((b >> 4) == -1)
+let c, d, e, f: int = 240, 204, 170, 253
+assert((c ` d $ e & f) == 244)
+let g, h, i, j: int = 4026531840, 3422552064, 2852126720, 4244635648
+assert((g ` (h $ (i & j))) == 4093640704)
+assert((~ (~ g)) == g && (~ g) == ((-1) $ g) && (- h) == ((~ h) + 1))
+
+println("OK")

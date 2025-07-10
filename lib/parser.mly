@@ -169,7 +169,8 @@ ModuleStmt:
 
 VarDeclStmt:
   | Let Ident Colon type_expr Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
-  | Let ident_list Colon type_expr Assign expr { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4 } }
+  | Let ident_list Colon type_expr Assign expr { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = [$6]; explicit_type = $4 } }
+  | Let ident_list  Colon type_expr Assign expr_list { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4; } }
   
 FunctionDeclStmt:
   | Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = $3; return_type = $6; body = $8 } }

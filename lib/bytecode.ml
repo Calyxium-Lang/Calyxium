@@ -13,6 +13,7 @@ let builtins =
     ("to_string", fun args -> args @ [ STRING ]);
     ("length", fun args -> args @ [ LENGTH ]);
     ("input", fun args -> args @ [ INPUT ]);
+    ("assert", fun args -> args @ [ ASSERT ]);
   ]
 
 let opcode_of_binop = function
@@ -154,15 +155,14 @@ let rec compile_stmt = function
       in
       expr_bytecode @ [ STORE_VAR identifier ]
   | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
-      let expr_code = compile_expr assigned_value in
-      let destructure_code =
-        List.mapi
-          (fun i ident ->
-            [ DUP; LOAD_INT64 (Int64.of_int i); LOAD_INDEX; STORE_VAR ident ])
-          identifier
+      let expr_codes = List.map compile_expr assigned_value in
+      let store_codes =
+        List.map2
+          (fun ident _expr_code -> [ STORE_VAR ident ])
+          (List.rev identifier) expr_codes
         |> List.concat
       in
-      expr_code @ destructure_code
+      List.concat expr_codes @ store_codes
   | IfStmt { condition; then_branch; else_branch } ->
       let condition = compile_expr condition in
       let then_branch = compile_stmt then_branch in

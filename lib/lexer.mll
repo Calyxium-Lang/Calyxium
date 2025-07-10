@@ -12,7 +12,7 @@ let floats = digits '.' digits+
 rule token = parse
   | whitespace               { token lexbuf }
   | newline                  { Lexing.new_line lexbuf; token lexbuf }
-  | "#"                      { read_comment lexbuf }
+  | "--"                     { read_comment lexbuf }
 
   | "=="                     { Eq }
   | "!="                     { Neq }

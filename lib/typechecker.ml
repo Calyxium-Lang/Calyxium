@@ -24,6 +24,8 @@ let builtins : (string * (Type.t list * Type.t) list) list =
       ] );
     ("length", [ ([ Any ], SymbolType { value = "int" }) ]);
     ("to_string", [ ([ Any ], SymbolType { value = "string" }) ]);
+    ( "assert",
+      [ ([ SymbolType { value = "bool" } ], SymbolType { value = "unit" }) ] );
   ]
 
 let rec string_of_type = function
@@ -224,11 +226,17 @@ let rec check_stmt (env : (string * Type.t) list)
           (identifier, explicit_type) :: env
       | None -> (identifier, explicit_type) :: env)
   | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } ->
-      let expr_type = check_expr env func_env assigned_value in
-      if not (type_eq expr_type explicit_type) then
+      if List.length identifier <> List.length assigned_value then
         raise
           (TypeError
-             ("Type mismatch in declaration of " ^ String.concat ", " identifier));
+             "Number of identifiers does not match number of assigned \
+              expressions");
+      List.iter2
+        (fun ident expr ->
+          let expr_type = check_expr env func_env expr in
+          if not (type_eq expr_type explicit_type) then
+            raise (TypeError ("Type mismatch in declaration of " ^ ident)))
+        identifier assigned_value;
       List.fold_left
         (fun acc_env ident -> (ident, explicit_type) :: acc_env)
         env identifier

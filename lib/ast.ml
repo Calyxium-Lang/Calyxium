@@ -40,7 +40,7 @@ module Stmt = struct
       }
     | MultiVarDeclarationStmt of {
         identifier : string list;
-        assigned_value : Expr.t;
+        assigned_value : Expr.t list;
         explicit_type : Type.t;
       }
     | FunctionDeclStmt of {
