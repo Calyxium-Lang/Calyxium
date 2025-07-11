@@ -9,7 +9,9 @@ end
 module Expr = struct
   type t =
     | Int64Expr of { value : int64 }
-    | Uint32Expr of { value : Uint32.t }
+    | Int32Expr of { value : int32 }
+    | UInt64Expr of { value : Uint64.t }
+    | UInt32Expr of { value : Uint32.t }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
     | ByteExpr of { value : char }

@@ -81,6 +81,8 @@ rule token = parse
   | "false"                  { at_line_start := false; False }
 
   | "int"                    { at_line_start := false; Int64Type }
+  | "int?"                   { at_line_start := false; Int32Type }
+  | "uint"                   { at_line_start := false; UInt64Type }
   | "uint?"                  { at_line_start := false; UInt32Type }
   | "float"                  { at_line_start := false; FloatType }
   | "string"                 { at_line_start := false; StringType }
@@ -105,8 +107,7 @@ and read_string buf = parse
   | '"'                     { String (Buffer.contents buf) }
   | '\n'                    { raise (LexerError "Unterminated string literal") }
   | eof                     { raise (LexerError "Unterminated string literal") }
-  | '\\' (['\\' '"' 'n' 't'] as esc)
-                            { Buffer.add_char buf ( match esc with | '\\' -> '\\' | '"' -> '"' | 'n' -> '\n' | 't' -> '\t' | _ -> esc ); read_string buf lexbuf }
+  | '\\' (['\\' '"' 'n' 't'] as esc) { Buffer.add_char buf ( match esc with | '\\' -> '\\' | '"' -> '"' | 'n' -> '\n' | 't' -> '\t' | _ -> esc ); read_string buf lexbuf }
   | _ as c                  { Buffer.add_char buf c; read_string buf lexbuf }
 
 and read_comment = parse

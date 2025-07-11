@@ -51,7 +51,9 @@ let opcode_of_binop = function
 
 let rec compile_expr = function
   | Int64Expr { value } -> [ LOAD_INT64 value ]
-  | Uint32Expr { value } -> [ LOAD_UINT32 value ]
+  | Int32Expr { value } -> [ LOAD_INT32 value ]
+  | UInt64Expr { value } -> [ LOAD_UINT64 value ]
+  | UInt32Expr { value } -> [ LOAD_UINT32 value ]
   | BinaryLitExpr { value } -> [ LOAD_BINARY value ]
   | FloatExpr { value } -> [ LOAD_FLOAT value ]
   | StringExpr { value } -> [ LOAD_STRING value ]
@@ -153,7 +155,12 @@ let rec compile_stmt = function
         match (assigned_value, explicit_type) with
         | Some (Int64Expr { value }), SymbolType { value = "uint?" } ->
             compile_expr
-              (Uint32Expr { value = Int32.of_int (Int64.to_int value) })
+              (UInt32Expr { value = Int32.of_int (Int64.to_int value) })
+        | Some (Int64Expr { value }), SymbolType { value = "uint" } ->
+            compile_expr (UInt64Expr { value })
+        | Some (Int64Expr { value }), SymbolType { value = "int?" } ->
+            compile_expr
+              (Int32Expr { value = Int32.of_int (Int64.to_int value) })
         | Some expr, _ -> compile_expr expr
         | None, _ -> [ LOAD_INT64 0L ]
       in

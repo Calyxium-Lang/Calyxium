@@ -16,10 +16,11 @@
   error
   help
   version
-  uint32)
+  uint32
+  uint64)
  (foreign_stubs
   (language c)
-  (names uint32))
+  (names uint32 uint64))
  (libraries unix ppx_deriving.show)
  (preprocess
   (pps ppx_deriving.show)))

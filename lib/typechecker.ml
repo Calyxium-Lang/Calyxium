@@ -41,6 +41,10 @@ let rec type_eq expected actual =
   | Any, _ | _, Any -> true
   | SymbolType { value = "uint?" }, SymbolType { value = "int" } -> true
   | SymbolType { value = "int" }, SymbolType { value = "uint?" } -> true
+  | SymbolType { value = "uint" }, SymbolType { value = "int" } -> true
+  | SymbolType { value = "int" }, SymbolType { value = "uint" } -> true
+  | SymbolType { value = "int?" }, SymbolType { value = "int" } -> true
+  | SymbolType { value = "int" }, SymbolType { value = "int?" } -> true
   | SymbolType { value = v1 }, SymbolType { value = v2 } -> v1 = v2
   | ArrayType { element_type = e1 }, ArrayType { element_type = e2 } ->
       type_eq e1 e2
@@ -56,7 +60,9 @@ let rec check_expr (env : (string * Type.t) list)
   let open Expr in
   match expr with
   | Int64Expr _ -> SymbolType { value = "int" }
-  | Uint32Expr _ -> SymbolType { value = "uint?" }
+  | Int32Expr _ -> SymbolType { value = "int?" }
+  | UInt64Expr _ -> SymbolType { value = "uint" }
+  | UInt32Expr _ -> SymbolType { value = "uint?" }
   | BinaryLitExpr _ -> SymbolType { value = "int" }
   | FloatExpr _ -> SymbolType { value = "float" }
   | StringExpr _ -> SymbolType { value = "string" }

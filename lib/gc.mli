@@ -9,7 +9,9 @@ and value =
   | VFloat of float
   | VInt of int
   | VInt64 of int64
+  | VInt32 of int32
   | VUint32 of Uint32.t
+  | VUint64 of Uint64.t
   | VBool of bool
   | VByte of char
   | VHeapRef of int
