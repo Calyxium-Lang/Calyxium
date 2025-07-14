@@ -1,0 +1,4 @@
+(library
+ (name calyxium_stdlib)
+ (public_name calyxium.stdlib)
+ (libraries))

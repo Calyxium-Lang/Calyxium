@@ -51,9 +51,6 @@ let opcode_of_binop = function
 
 let rec compile_expr = function
   | Int64Expr { value } -> [ LOAD_INT64 value ]
-  | Int32Expr { value } -> [ LOAD_INT32 value ]
-  | UInt64Expr { value } -> [ LOAD_UINT64 value ]
-  | UInt32Expr { value } -> [ LOAD_UINT32 value ]
   | BinaryLitExpr { value } -> [ LOAD_BINARY value ]
   | FloatExpr { value } -> [ LOAD_FLOAT value ]
   | StringExpr { value } -> [ LOAD_STRING value ]
@@ -150,19 +147,11 @@ let rec compile_stmt = function
       in
       Hashtbl.replace function_table name full_function_bytecode;
       []
-  | VarDeclarationStmt { identifier; assigned_value; explicit_type } ->
+  | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
       let expr_bytecode =
-        match (assigned_value, explicit_type) with
-        | Some (Int64Expr { value }), SymbolType { value = "uint?" } ->
-            compile_expr
-              (UInt32Expr { value = Int32.of_int (Int64.to_int value) })
-        | Some (Int64Expr { value }), SymbolType { value = "uint" } ->
-            compile_expr (UInt64Expr { value })
-        | Some (Int64Expr { value }), SymbolType { value = "int?" } ->
-            compile_expr
-              (Int32Expr { value = Int32.of_int (Int64.to_int value) })
-        | Some expr, _ -> compile_expr expr
-        | None, _ -> [ LOAD_INT64 0L ]
+        match assigned_value with
+        | Some expr -> compile_expr expr
+        | None -> [ LOAD_INT64 0L ]
       in
       expr_bytecode @ [ STORE_VAR identifier ]
   | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
@@ -241,5 +230,12 @@ let rec compile_stmt = function
 
       init_code @ condition_code
       @ [ JUMP_IF_FALSE jump_to_end ]
-      @ body_code @ increment_code @ [ JUMP jump_back ]
+      @ body_code @ increment_code @ [ JUMP jump_back ] @ [ POP ]
+  | ImportStmt { module_name } ->
+      let mod_name, field_name =
+        match List.rev module_name with
+        | field :: rest -> (String.concat "." (List.rev rest), field)
+        | [] -> failwith "Invalid module path"
+      in
+      [ LOAD_MODULE mod_name; LOAD_FIELD field_name; STORE_VAR field_name ]
   | _ -> failwith ""

@@ -81,9 +81,6 @@ rule token = parse
   | "false"                  { at_line_start := false; False }
 
   | "int"                    { at_line_start := false; Int64Type }
-  | "int?"                   { at_line_start := false; Int32Type }
-  | "uint"                   { at_line_start := false; UInt64Type }
-  | "uint?"                  { at_line_start := false; UInt32Type }
   | "float"                  { at_line_start := false; FloatType }
   | "string"                 { at_line_start := false; StringType }
   | "byte"                   { at_line_start := false; ByteType }

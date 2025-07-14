@@ -1,4 +1,4 @@
 (executable
  (name calyxium)
  (public_name calyxium)
- (libraries calyxiumlib))
+ (libraries calyxium_stdlib calyxiumlib))

@@ -1,2 +1,1 @@
-let x: int = 0b1010101
-println(x)
+let x: bool = 0

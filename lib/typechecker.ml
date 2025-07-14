@@ -5,6 +5,9 @@ open Token
 
 exception TypeError of string
 
+let built_in_modules : (string * (string * Type.t) list) list =
+  [ ("Math", [ ("pi", SymbolType { value = "float" }) ]) ]
+
 let builtins : (string * (Type.t list * Type.t) list) list =
   [
     ("println", [ ([ Any ], SymbolType { value = "unit" }) ]);
@@ -39,12 +42,6 @@ let rec type_eq expected actual =
   match (expected, actual) with
   | SymbolType { value = "unit" }, _ -> true
   | Any, _ | _, Any -> true
-  | SymbolType { value = "uint?" }, SymbolType { value = "int" } -> true
-  | SymbolType { value = "int" }, SymbolType { value = "uint?" } -> true
-  | SymbolType { value = "uint" }, SymbolType { value = "int" } -> true
-  | SymbolType { value = "int" }, SymbolType { value = "uint" } -> true
-  | SymbolType { value = "int?" }, SymbolType { value = "int" } -> true
-  | SymbolType { value = "int" }, SymbolType { value = "int?" } -> true
   | SymbolType { value = v1 }, SymbolType { value = v2 } -> v1 = v2
   | ArrayType { element_type = e1 }, ArrayType { element_type = e2 } ->
       type_eq e1 e2
@@ -60,9 +57,6 @@ let rec check_expr (env : (string * Type.t) list)
   let open Expr in
   match expr with
   | Int64Expr _ -> SymbolType { value = "int" }
-  | Int32Expr _ -> SymbolType { value = "int?" }
-  | UInt64Expr _ -> SymbolType { value = "uint" }
-  | UInt32Expr _ -> SymbolType { value = "uint?" }
   | BinaryLitExpr _ -> SymbolType { value = "int" }
   | FloatExpr _ -> SymbolType { value = "float" }
   | StringExpr _ -> SymbolType { value = "string" }
@@ -402,7 +396,19 @@ let rec check_stmt (env : (string * Type.t) list)
       let _ = Option.map (check_stmt env func_env) increment in
       let _ = check_stmt env func_env body in
       env
-  | ImportStmt { module_name = _ } -> env
+  | ImportStmt { module_name = mod_parts } -> (
+      match mod_parts with
+      | [ mod_name; symbol ] -> (
+          match List.assoc_opt mod_name built_in_modules with
+          | Some mod_entries -> (
+              match List.assoc_opt symbol mod_entries with
+              | Some ty -> (symbol, ty) :: env
+              | None ->
+                  raise
+                    (TypeError
+                       ("Module `" ^ mod_name ^ "` has no `" ^ symbol ^ "`")))
+          | None -> raise (TypeError ("Unknown module `" ^ mod_name ^ "`")))
+      | _ -> failwith "Invalid use syntax")
   | ModuleStmt { module_name = _; block } ->
       let _ =
         List.fold_left (fun e stmt -> check_stmt e func_env stmt) env block

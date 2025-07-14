@@ -19,7 +19,7 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Return For Use Module True False Int64Type Int32Type UInt32Type UInt64Type FloatType StringType ByteType BoolType UnitType TupleType
+%token Recursive If Then Else Let Match With Return For Use Module True False Int64Type FloatType StringType ByteType BoolType UnitType TupleType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
@@ -28,8 +28,6 @@
 %token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore Question
 %token <string> Ident
 %token <int64> Int64
-%token <Uint32.t> UInt32
-%token <Uint64.t> UInt64
 %token <float> Float
 %token <string> String
 %token <char> Byte
@@ -87,9 +85,6 @@ parameter:
 
 type_expr:
   | Int64Type { Type.SymbolType { value = "int" } }
-  | Int32Type { Type.SymbolType { value = "int?" } }
-  | UInt64Type { Type.SymbolType { value = "uint" } }
-  | UInt32Type { Type.SymbolType { value = "uint?" } }
   | FloatType { Type.SymbolType { value = "float" } }
   | StringType { Type.SymbolType { value = "string" } }
   | ByteType { Type.SymbolType { value = "byte" } }
@@ -126,8 +121,6 @@ expr:
   | Ident LParen argument_list RParen { Expr.CallExpr { callee = Expr.VarExpr $1; arguments = $3 } }
   | Minus expr %prec UnaryMinus { Expr.UnaryExpr { operator = Token.Minus; operand = $2 } }
   | Int64 { Expr.Int64Expr { value = $1 } }
-  | UInt64 { Expr.UInt64Expr { value = $1 } }
-  | UInt32 { Expr.UInt32Expr { value = $1 } }
   | Float { Expr.FloatExpr { value = $1 } }
   | String { Expr.StringExpr { value = $1 } }
   | Byte { Expr.ByteExpr { value = $1 } }
@@ -168,8 +161,12 @@ ident_list:
   | Ident Comma ident_list { $1 :: $3 }
   | Ident { [$1] }
 
+path:
+  | Ident { [$1] }
+  | path Dot Ident { $1 @ [$3] }
+
 ImportStmt:
-  | Use Ident { Stmt.ImportStmt { module_name = $2 } }
+  | Use path { Stmt.ImportStmt { module_name = $2 } }
 
 ModuleStmt:
   | Module Ident LBrace stmt_list RBrace { Stmt.ModuleStmt { module_name = $2; block = $4 } }

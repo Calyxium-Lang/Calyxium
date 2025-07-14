@@ -1,4 +1,5 @@
 val stack : Gc.value Stack.t
+val init_stdlib : unit -> unit
 val bool_to_float : bool -> float
 val bool_to_int64 : bool -> int64
 val escape_sequences : (string * char) list

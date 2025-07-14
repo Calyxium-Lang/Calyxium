@@ -1,8 +1,9 @@
-# Calyxium: **An Interpreted Multi-Paradigm Programming Language**
+# Calyxium: **An Interpreted Multi-Paradigm Programming Language that's better than C**
 
 <!-- TOC -->
 
 <p align="left"> 
+    <a href="#why">Why</a> |
     <a href="#installation">Installation</a> | 
     <a href="#getting-started">Getting Started</a> | 
     <a href="#usage">Usage</a> | 
@@ -11,6 +12,12 @@
 </p>
 
 <!-- TOC -->
+
+## Why
+C is such an old and broken language, with it's "strong" type system that we both know it's weak, but C has other issue, so does Rust like just being bad languages, and pretty slow imho yet people still use both of these **HORRIBLE** languages. 
+- Use C if you hate yourself. 
+- Use Rust if you hate others.
+- Use Calyxium if you just want to get stuff done without a PhD in pain.
 
 ## Installation
 Follow these steps to install and build Calyxium:

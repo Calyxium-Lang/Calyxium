@@ -1,3 +1,4 @@
+open Calyxium_stdlib.Math
 open Opcode
 open Gc
 
@@ -11,9 +12,15 @@ type frame = {
   mutable env : (string * (value * bool)) list;
 }
 
+let stdlib_modules : (string, value) Hashtbl.t = Hashtbl.create 10
 let trace : trace_entry list ref = ref []
 let push_trace pc instr = trace := { pc; instr } :: !trace
 let clear_trace () = trace := []
+
+let init_stdlib () =
+  let math_module = Hashtbl.create 5 in
+  Hashtbl.add math_module "pi" (VFloat Math.pi);
+  Hashtbl.add stdlib_modules "Math" (VModule math_module)
 
 let print_trace msg =
   match !trace with
@@ -29,9 +36,6 @@ let stack : Gc.value Stack.t = Stack.create ()
 let global_env : (string * (Gc.value * bool)) list ref = ref []
 let bool_to_float b = if b then 1.0 else 0.0
 let bool_to_int64 b = if b then 1L else 0L
-let bool_to_int32 b = if b then 1l else 0l
-let bool_to_uint32 b = if b then Uint32.one else Uint32.zero
-let bool_to_uint64 b = if b then Uint64.one else Uint64.zero
 let output_buffer : Buffer.t = Buffer.create 1024
 
 let escape_sequences =
@@ -67,17 +71,21 @@ let rec pop_n acc n =
     | None -> runtime_error "Stack underflow in pop_n"
 
 let rec pop_n_rev acc n =
-  if n = 0 then acc else pop_n_rev (Stack.pop stack :: acc) (n - 1)
+  if n = 0 then acc
+  else
+    match Stack.pop_opt stack with
+    | Some v -> pop_n_rev (v :: acc) (n - 1)
+    | None -> runtime_error "Stack underflow in pop_n_rev"
+
+let pop2_safe stack =
+  match (Stack.pop_opt stack, Stack.pop_opt stack) with
+  | Some b, Some a -> (a, b)
+  | _ -> runtime_error "Stack underflow"
 
 let pop1 stack =
   match Stack.pop_opt stack with
   | Some v -> v
   | None -> runtime_error "Stack underflow"
-
-let pop2 stack =
-  match (Stack.pop_opt stack, Stack.pop_opt stack) with
-  | Some b, Some a -> (a, b)
-  | _ -> runtime_error "Stack underflow"
 
 let get_var env name =
   match List.assoc_opt name env with
@@ -115,67 +123,11 @@ let extract_param_names = function
 
 let rec int64_pow base exp =
   if exp < 0L then invalid_arg "int64_pow: negative exponent"
-  else if exp = 0L then 1L
+  else if exp = 0L then Int64.one
   else if Int64.rem exp 2L = 0L then
     let half = int64_pow base (Int64.div exp 2L) in
-    let prod = Int64.mul half half in
-    if half <> 0L && Int64.div prod half <> half then
-      invalid_arg "int64_pow: overflow"
-    else prod
-  else
-    let tail = int64_pow base (Int64.sub exp 1L) in
-    let prod = Int64.mul base tail in
-    if base <> 0L && Int64.div prod base <> tail then
-      invalid_arg "int64_pow: overflow"
-    else prod
-
-let rec int32_pow base exp =
-  if exp < 0l then invalid_arg "int32_pow: negative exponent"
-  else if exp = 0l then 1l
-  else if Int32.rem exp 2l = 0l then
-    let half = int32_pow base (Int32.div exp 2l) in
-    let prod = Int32.mul half half in
-    if half <> 0l && Int32.div prod half <> half then
-      invalid_arg "int32_pow: overflow"
-    else prod
-  else
-    let tail = int32_pow base (Int32.sub exp 1l) in
-    let prod = Int32.mul base tail in
-    if base <> 0l && Int32.div prod base <> tail then
-      invalid_arg "int32_pow: overflow"
-    else prod
-
-let rec uint64_pow base exp =
-  if exp < 0L then invalid_arg "uint64_pow: negative exponent"
-  else if exp = 0L then Uint64.one
-  else if Uint64.rem exp 2L = 0L then
-    let half = uint64_pow base (Uint64.div exp 2L) in
-    let prod = Uint64.mul half half in
-    if half <> 0L && Uint64.div prod half <> half then
-      invalid_arg "uint64_pow: overflow"
-    else prod
-  else
-    let tail = uint64_pow base (Uint64.sub exp 1L) in
-    let prod = Uint64.mul base tail in
-    if base <> 0L && Uint64.div prod base <> tail then
-      invalid_arg "uint64_pow: overflow"
-    else prod
-
-let rec uint32_pow base exp =
-  if exp < 0l then invalid_arg "uint32_pow: negative exponent"
-  else if exp = 0l then Uint32.one
-  else if Uint32.rem exp 2l = 0l then
-    let half = uint32_pow base (Uint32.div exp 2l) in
-    let prod = Uint32.mul half half in
-    if half <> 0l && Uint32.div prod half <> half then
-      invalid_arg "uint32_pow: overflow"
-    else prod
-  else
-    let tail = uint32_pow base (Uint32.sub exp 1l) in
-    let prod = Uint32.mul base tail in
-    if base <> 0l && Uint32.div prod base <> tail then
-      invalid_arg "uint32_pow: overflow"
-    else prod
+    Int64.mul half half
+  else Int64.mul base (int64_pow base (Int64.sub exp 1L))
 
 let update_variable name result env =
   let updated = ref false in
@@ -210,7 +162,7 @@ let run (instructions : opcode list) =
     while not (Stack.is_empty frame_stack) do
       let frame = Stack.top frame_stack in
       if frame.pc >= Array.length frame.code then (
-        ignore (Stack.pop frame_stack);
+        ignore (pop1 frame_stack);
         ())
       else
         let instr = frame.code.(frame.pc) in
@@ -219,18 +171,6 @@ let run (instructions : opcode list) =
         | LOAD_INT64 v ->
             push_trace frame.pc ("LOAD_INT64 " ^ Int64.to_string v);
             Stack.push (VInt64 v) stack;
-            next ()
-        | LOAD_INT32 v ->
-            push_trace frame.pc ("LOAD_INT32 " ^ Int32.to_string v);
-            Stack.push (VInt32 v) stack;
-            next ()
-        | LOAD_UINT64 u ->
-            push_trace frame.pc ("LOAD_UINT64 " ^ Uint64.to_string u);
-            Stack.push (VUint64 u) stack;
-            next ()
-        | LOAD_UINT32 u ->
-            push_trace frame.pc ("LOAD_UINT32 " ^ Uint32.to_string u);
-            Stack.push (VUint32 u) stack;
             next ()
         | LOAD_BINARY v ->
             push_trace frame.pc ("LOAD_BINARY " ^ string_of_int v);
@@ -274,136 +214,51 @@ let run (instructions : opcode list) =
             next ()
         | PLUS ->
             push_trace frame.pc "PLUS";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat a, VFloat b -> Stack.push (VFloat (a +. b)) stack
-            | VInt64 a, VInt64 b ->
-                let sum = Int64.add a b in
-                if
-                  (a > 0L && b > 0L && sum < 0L)
-                  || (a < 0L && b < 0L && sum > 0L)
-                then runtime_error "int64 addition overflow"
-                else Stack.push (VInt64 sum) stack
-            | VInt32 a, VInt32 b ->
-                let sum = Int32.add a b in
-                if
-                  (a > 0l && b > 0l && sum < 0l)
-                  || (a < 0l && b < 0l && sum > 0l)
-                then runtime_error "int32 addition overflow"
-                else Stack.push (VInt32 sum) stack
-            | VUint32 a, VUint32 b ->
-                let sum = Uint32.add a b in
-                if
-                  (a > 0l && b > 0l && sum < 0l)
-                  || (a < 0l && b < 0l && sum > 0l)
-                then runtime_error "uint32 addition overflow"
-                else Stack.push (VUint32 sum) stack
-            | VUint64 a, VUint64 b ->
-                let sum = Uint64.add a b in
-                if
-                  (a > 0L && b > 0L && sum < 0L)
-                  || (a < 0L && b < 0L && sum > 0L)
-                then runtime_error "uint64 addition overflow"
-                else Stack.push (VUint64 sum) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.add a b)) stack
             | _ -> runtime_error "PLUS expects numbers");
             next ()
         | MINUS ->
             push_trace frame.pc "MINUS";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat a, VFloat b -> Stack.push (VFloat (a -. b)) stack
-            | VInt64 a, VInt64 b ->
-                let diff = Int64.sub a b in
-                if
-                  (b > 0L && a < Int64.add Int64.min_int b)
-                  || (b < 0L && a > Int64.add Int64.max_int b)
-                then runtime_error "int64 subtraction overflow"
-                else Stack.push (VInt64 diff) stack
-            | VInt32 a, VInt32 b ->
-                let diff = Int32.sub a b in
-                if
-                  (b > 0l && a < Int32.add Int32.min_int b)
-                  || (b < 0l && a > Int32.add Int32.max_int b)
-                then runtime_error "int32 subtraction overflow"
-                else Stack.push (VInt32 diff) stack
-            | VUint32 a, VUint32 b ->
-                let diff = Uint32.sub a b in
-                if
-                  (a > 0l && b > 0l && diff < 0l)
-                  || (a < 0l && b < 0l && diff > 0l)
-                then runtime_error "uint32 subtraction overflow"
-                else Stack.push (VUint32 diff) stack
-            | VUint64 a, VUint64 b ->
-                let diff = Uint64.sub a b in
-                if
-                  (a > 0L && b > 0L && diff < 0L)
-                  || (a < 0L && b < 0L && diff > 0L)
-                then runtime_error "uint64 subtraction overflow"
-                else Stack.push (VUint64 diff) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.sub a b)) stack
             | _ -> runtime_error "MINUS expects numbers");
             next ()
         | STAR ->
             push_trace frame.pc "STAR";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat a, VFloat b -> Stack.push (VFloat (a *. b)) stack
-            | VInt64 a, VInt64 b ->
-                let prod = Int64.mul a b in
-                if a <> 0L && Int64.div prod a <> b then
-                  runtime_error "int64 multiplication overflow"
-                else Stack.push (VInt64 prod) stack
-            | VInt32 a, VInt32 b ->
-                let prod = Int32.mul a b in
-                if a <> 0l && Int32.div prod a <> b then
-                  runtime_error "int32 multiplication overflow"
-                else Stack.push (VInt32 prod) stack
-            | VUint32 a, VUint32 b ->
-                let prod = Uint32.mul a b in
-                if b <> 0l && Uint32.div prod b <> a then
-                  runtime_error "uint32 multiplication overflow"
-                else Stack.push (VUint32 prod) stack
-            | VUint64 a, VUint64 b ->
-                let prod = Uint64.mul a b in
-                if b <> 0L && Uint64.div prod b <> a then
-                  runtime_error "uint64 multiplication overflow"
-                else Stack.push (VUint64 prod) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.mul a b)) stack
             | _ -> runtime_error "STAR expects numbers");
             next ()
         | SLASH ->
             push_trace frame.pc "SLASH";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
             | VInt64 _, VInt64 0L -> runtime_error "Division by zero"
-            | VInt32 _, VInt32 0l -> runtime_error "Division by zero"
             | VFloat a, VFloat b -> Stack.push (VFloat (a /. b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.div a b)) stack
-            | VInt32 a, VInt32 b -> Stack.push (VInt32 (Int32.div a b)) stack
-            | VUint32 a, VUint32 b ->
-                Stack.push (VUint32 (Uint32.div a b)) stack
-            | VUint64 a, VUint64 b ->
-                Stack.push (VUint64 (Uint64.div a b)) stack
             | _ -> runtime_error "SLASH expects numbers");
             next ()
         | MOD ->
             push_trace frame.pc "MOD";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
             | VInt64 _, VInt64 0L -> runtime_error "Modulo by zero"
-            | VInt32 _, VInt32 0l -> runtime_error "Modulo by zero"
             | VFloat a, VFloat b -> Stack.push (VFloat (mod_float a b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.rem a b)) stack
-            | VInt32 a, VInt32 b -> Stack.push (VInt32 (Int32.rem a b)) stack
-            | VUint32 a, VUint32 b ->
-                Stack.push (VUint32 (Uint32.rem a b)) stack
-            | VUint64 a, VUint64 b ->
-                Stack.push (VUint64 (Uint64.rem a b)) stack
             | _ -> runtime_error "MOD expects numbers");
             next ()
         | POW ->
             push_trace frame.pc "POW";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat a, VFloat b -> Stack.push (VFloat (a ** b)) stack
             | VInt64 a, VInt64 b -> (
@@ -411,26 +266,11 @@ let run (instructions : opcode list) =
                 else
                   try Stack.push (VInt64 (int64_pow a b)) stack
                   with _ -> runtime_error "POW overflow")
-            | VInt32 a, VInt32 b -> (
-                if b < 0l then runtime_error "POW expects non-negative exponent"
-                else
-                  try Stack.push (VInt32 (int32_pow a b)) stack
-                  with _ -> runtime_error "POW overflow")
-            | VUint32 a, VUint32 b -> (
-                if b < 0l then runtime_error "POW expects non-negative exponent"
-                else
-                  try Stack.push (VUint32 (uint32_pow a b)) stack
-                  with _ -> runtime_error "POW overflow")
-            | VUint64 a, VUint64 b -> (
-                if b < 0L then runtime_error "POW expects non-nigative exponent"
-                else
-                  try Stack.push (VUint64 (uint64_pow a b)) stack
-                  with _ -> runtime_error "POW overflow")
             | _ -> runtime_error "POW expects numbers");
             next ()
         | CONCAT ->
             push_trace frame.pc "CONCAT";
-            let b, a = pop2 stack in
+            let b, a = pop2_safe stack in
             let result =
               get_string_from_stack_value b ^ get_string_from_stack_value a
             in
@@ -449,101 +289,66 @@ let run (instructions : opcode list) =
             frame.pc <- frame.pc + n
         | LESS ->
             push_trace frame.pc "LESS";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VFloat (bool_to_float (a < b))
               | VInt64 a, VInt64 b ->
                   VInt64 (bool_to_int64 (Int64.compare a b < 0))
-              | VInt32 a, VInt32 b ->
-                  VInt32 (bool_to_int32 (Int32.compare a b < 0))
-              | VUint32 a, VUint32 b ->
-                  VUint32
-                    (if Uint32.compare a b < 0 then Uint32.one else Uint32.zero)
-              | VUint64 a, VUint64 b ->
-                  VUint64
-                    (if Uint64.compare a b < 0 then Uint64.one else Uint64.zero)
               | _ -> runtime_error "LESS expects two floats or int64"
             in
             Stack.push result stack;
             next ()
         | GREATER ->
             push_trace frame.pc "GREATER";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VFloat (bool_to_float (a > b))
               | VInt64 a, VInt64 b ->
                   VInt64 (bool_to_int64 (Int64.compare a b > 0))
-              | VInt32 a, VInt32 b ->
-                  VInt32 (bool_to_int32 (Int32.compare a b > 0))
-              | VUint32 a, VUint32 b ->
-                  VUint32
-                    (if Uint32.compare a b > 0 then Uint32.one else Uint32.zero)
-              | VUint64 a, VUint64 b ->
-                  VUint64
-                    (if Uint64.compare a b > 0 then Uint64.one else Uint64.zero)
               | _ -> runtime_error "GREATER expects two floats or int64"
             in
             Stack.push result stack;
             next ()
         | LESS_EQUAL ->
             push_trace frame.pc "LESS_EQUAL";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VFloat (bool_to_float (a <= b))
               | VInt64 a, VInt64 b ->
                   VInt64 (bool_to_int64 (Int64.compare a b <= 0))
-              | VInt32 a, VInt32 b ->
-                  VInt32 (bool_to_int32 (Int32.compare a b <= 0))
-              | VUint32 a, VUint32 b ->
-                  VUint32
-                    (if Uint32.compare a b <= 0 then Uint32.one else Uint32.zero)
-              | VUint64 a, VUint64 b ->
-                  VUint64
-                    (if Uint64.compare a b <= 0 then Uint64.one else Uint64.zero)
               | _ -> runtime_error "LESS_EQUAL expects two floats or int64"
             in
             Stack.push result stack;
             next ()
         | GREATER_EQUAL ->
             push_trace frame.pc "GREATER_EQUAL";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VFloat (bool_to_float (a >= b))
               | VInt64 a, VInt64 b ->
                   VInt64 (bool_to_int64 (Int64.compare a b >= 0))
-              | VInt32 a, VInt32 b ->
-                  VInt32 (bool_to_int32 (Int32.compare a b >= 0))
-              | VUint32 a, VUint32 b ->
-                  VUint32
-                    (if Uint32.compare a b >= 0 then Uint32.one else Uint32.zero)
-              | VUint64 a, VUint64 b ->
-                  VUint64
-                    (if Uint64.compare a b >= 0 then Uint64.one else Uint64.zero)
               | _ -> runtime_error "GREATER_EQUAL expects two floats or int64"
             in
             Stack.push result stack;
             next ()
         | NOT_EQUAL ->
             push_trace frame.pc "NOT_EQUAL";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VFloat (bool_to_float (a <> b))
               | VInt64 a, VInt64 b -> VInt64 (bool_to_int64 (a <> b))
-              | VUint32 a, VUint32 b -> VUint32 (bool_to_uint32 (a <> b))
-              | VUint64 a, VUint64 b -> VUint64 (bool_to_uint64 (a <> b))
-              | VInt32 a, VInt32 b -> VInt32 (bool_to_int32 (a <> b))
               | _ -> runtime_error "NOT_EQUAL expects two floats or int64"
             in
             Stack.push result stack;
             next ()
         | EQUAL ->
             push_trace frame.pc "EQUAL";
-            let b, a = pop2 stack in
+            let b, a = pop2_safe stack in
             let result =
               match (a, b) with
               | VHeapRef id1, VHeapRef id2 -> (
@@ -552,37 +357,28 @@ let run (instructions : opcode list) =
                   | _ -> id1 = id2)
               | VFloat f1, VFloat f2 -> f1 = f2
               | VInt64 i1, VInt64 i2 -> i1 = i2
-              | VUint32 u1, VUint32 u2 -> u1 = u2
-              | VUint64 u1, VUint64 u2 -> u1 = u2
-              | VInt32 i1, VInt32 i2 -> i1 = i2
               | _ -> false
             in
             Stack.push (VBool result) stack;
             next ()
         | AND ->
             push_trace frame.pc "AND";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
               | VInt64 i -> i <> 0L
-              | VInt32 i -> i <> 0l
-              | VUint32 u -> u <> Uint32.zero
-              | VUint64 u -> u <> Uint64.zero
               | _ -> runtime_error "AND expects bool, float, or int64"
             in
             Stack.push (VBool (bool_val a && bool_val b)) stack;
             next ()
         | OR ->
             push_trace frame.pc "OR";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
               | VInt64 i -> i <> 0L
-              | VInt32 i -> i <> 0l
-              | VUint32 u -> u <> Uint32.zero
-              | VUint64 u -> u <> Uint64.zero
               | _ -> runtime_error "OR expects bool, float, or int64"
             in
             Stack.push (VBool (bool_val a || bool_val b)) stack;
@@ -594,9 +390,6 @@ let run (instructions : opcode list) =
               match v with
               | VFloat f -> f <> 0.0
               | VInt64 i -> i <> 0L
-              | VInt32 i -> i <> 0l
-              | VUint32 u -> u <> Uint32.zero
-              | VUint64 u -> u <> Uint64.zero
               | _ -> runtime_error "NOT expects float or int64"
             in
             Stack.push (VFloat (if not bool_val then 1.0 else 0.0)) stack;
@@ -608,9 +401,6 @@ let run (instructions : opcode list) =
               match v with
               | VFloat f -> VFloat (f +. 1.0)
               | VInt64 i -> VInt64 Int64.(add i 1L)
-              | VInt32 i -> VInt32 Int32.(add i 1l)
-              | VUint32 u -> VUint32 Uint32.(add u Uint32.one)
-              | VUint64 u -> VUint64 Uint64.(add u Uint64.one)
               | _ -> runtime_error "INC expects float or int64"
             in
             Stack.push result stack;
@@ -622,9 +412,6 @@ let run (instructions : opcode list) =
               match v with
               | VFloat f -> VFloat (f -. 1.0)
               | VInt64 i -> VInt64 Int64.(sub i 1L)
-              | VInt32 i -> VInt32 Int32.(sub i 1l)
-              | VUint32 u -> VUint32 Uint32.(sub u Uint32.one)
-              | VUint64 u -> VUint64 Uint64.(sub u Uint64.one)
               | _ -> runtime_error "DEC expects float or int64"
             in
             Stack.push result stack;
@@ -657,11 +444,11 @@ let run (instructions : opcode list) =
                 "LOAD_INDEX requires two values on the stack (collection, \
                  index)";
             let index =
-              match Stack.pop stack with
+              match pop1 stack with
               | VInt64 i -> Int64.to_int i
               | _ -> runtime_error "Expected int for index in LOAD_INDEX"
             in
-            let collection = Stack.pop stack in
+            let collection = pop1 stack in
             let values =
               match collection with
               | VArray items -> items
@@ -731,21 +518,21 @@ let run (instructions : opcode list) =
             let skip_header = 1 + arg_count in
             let body = List.drop skip_header function_body in
             let code = Array.of_list body in
-            ignore (Stack.pop frame_stack);
+            ignore (pop1 frame_stack);
             Stack.push { code; pc = 0; env = local_env } frame_stack
         | RETURN ->
             push_trace frame.pc "RETURN";
             let return_value =
               match Stack.pop_opt stack with Some v -> v | None -> VFloat nan
             in
-            ignore (Stack.pop frame_stack);
+            ignore (pop1 frame_stack);
             Stack.push return_value stack
         | STORE_VAR name ->
             push_trace frame.pc ("STORE_VAR " ^ name);
             if Stack.is_empty stack then
               runtime_error ("STORE_VAR '" ^ name ^ "' failed: stack is empty")
             else
-              let value = Stack.pop stack in
+              let value = pop1 stack in
               if List.mem_assoc name frame.env then (
                 frame.env <-
                   (name, (value, true)) :: List.remove_assoc name frame.env;
@@ -767,19 +554,10 @@ let run (instructions : opcode list) =
                 | VFloat f when Float.is_nan f -> "unit"
                 | VFloat 1.0 -> "true"
                 | VFloat 0.0 -> "false"
-                | VInt32 1l -> "true"
-                | VInt32 0l -> "false"
-                | VUint32 1l -> "true"
-                | VUint32 0l -> "false"
-                | VUint64 1L -> "true"
-                | VUint64 0L -> "false"
                 | VFloat f when Float.is_infinite f ->
                     if f > 0.0 then "inf" else "-inf"
-                | VFloat f -> Printf.sprintf "%.12g" f
+                | VFloat f -> Printf.sprintf "%.12f" f
                 | VInt64 i -> Printf.sprintf "%Ld" i
-                | VInt32 i -> Printf.sprintf "%ld" i
-                | VUint32 u -> Uint32.to_string u
-                | VUint64 u -> Uint64.to_string u
                 | VInt i -> Printf.sprintf "%d" i
                 | VHeapRef id -> (
                     match Gc.get_string id with
@@ -795,8 +573,9 @@ let run (instructions : opcode list) =
                       items |> List.map string_of_value |> String.concat ", "
                     in
                     "(" ^ contents ^ ")"
+                | VModule _ -> "<module>"
               in
-              let value = Stack.pop stack in
+              let value = pop1 stack in
               Buffer.add_string output_buffer (string_of_value value ^ "\n");
               next ()
         | INPUT -> (
@@ -804,7 +583,7 @@ let run (instructions : opcode list) =
             if Stack.is_empty stack then
               runtime_error "Stack underflow during INPUT"
             else
-              let value = Stack.pop stack in
+              let value = pop1 stack in
               let id =
                 match value with
                 | VHeapRef id -> id
@@ -824,7 +603,7 @@ let run (instructions : opcode list) =
               | None -> runtime_error "Invalid prompt ID for INPUT")
         | NEG ->
             push_trace frame.pc "NEG";
-            let v = Stack.pop stack in
+            let v = pop1 stack in
             (match v with
             | VFloat f -> Stack.push (VFloat (-.f)) stack
             | VInt64 i -> Stack.push (VInt64 (Int64.neg i)) stack
@@ -832,7 +611,7 @@ let run (instructions : opcode list) =
             next ()
         | FLOAT ->
             push_trace frame.pc "FLOAT";
-            let v = Stack.pop stack in
+            let v = pop1 stack in
             let float_val =
               match v with
               | VFloat f -> f
@@ -852,7 +631,7 @@ let run (instructions : opcode list) =
             next ()
         | INT ->
             push_trace frame.pc "INT";
-            let v = Stack.pop stack in
+            let v = pop1 stack in
             let int_val =
               match v with
               | VInt64 i -> i
@@ -871,7 +650,7 @@ let run (instructions : opcode list) =
             next ()
         | STRING ->
             push_trace frame.pc "STRING";
-            let v = Stack.pop stack in
+            let v = pop1 stack in
             let str_val =
               match v with
               | VHeapRef id -> (
@@ -909,9 +688,6 @@ let run (instructions : opcode list) =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf +. newf)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.add oldi newi)
-              | VInt32 oldi, VInt32 newi -> VInt32 (Int32.add oldi newi)
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.add oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.add oldu newu)
               | _ -> runtime_error "PLUSASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -936,13 +712,9 @@ let run (instructions : opcode list) =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf -. newf)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.sub oldi newi)
-              | VInt32 oldi, VInt32 newi -> VInt32 (Int32.sub oldi newi)
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.sub oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.sub oldu newu)
               | _ -> runtime_error "MINUSASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
-            Stack.push result stack;
             next ()
         | STARASSIGN ->
             push_trace frame.pc "STARASSIGN";
@@ -963,13 +735,9 @@ let run (instructions : opcode list) =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf *. newf)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.mul oldi newi)
-              | VInt32 oldi, VInt32 newi -> VInt32 (Int32.mul oldi newi)
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.mul oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.mul oldu newu)
               | _ -> runtime_error "STARASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
-            Stack.push result stack;
             next ()
         | SLASHASSIGN ->
             push_trace frame.pc "SLASHASSIGN";
@@ -996,16 +764,9 @@ let run (instructions : opcode list) =
                   if newi = 0L then
                     runtime_error "SLASHASSIGN: division by zero";
                   VInt64 (Int64.div oldi newi)
-              | VInt32 oldi, VInt32 newi ->
-                  if newi = 0l then
-                    runtime_error "SLASHASSIGN: division by zero";
-                  VInt32 (Int32.div oldi newi)
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.div oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.div oldu newu)
               | _ -> runtime_error "SLASHASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
-            Stack.push result stack;
             next ()
         | LOAD_VAR_REF name ->
             push_trace frame.pc ("LOAD_VAR_REF " ^ name);
@@ -1017,7 +778,7 @@ let run (instructions : opcode list) =
             if Stack.is_empty stack then
               runtime_error "LENGTH expects a value on the stack"
             else
-              let v = Stack.pop stack in
+              let v = pop1 stack in
               let length =
                 match v with
                 | VHeapRef id -> (
@@ -1038,93 +799,59 @@ let run (instructions : opcode list) =
             (match v with
             | VInt i -> Stack.push (VInt (Int.lognot i)) stack
             | VInt64 i -> Stack.push (VInt64 (Int64.lognot i)) stack
-            | VInt32 i -> Stack.push (VInt32 (Int32.lognot i)) stack
-            | VUint32 u -> Stack.push (VUint32 (Uint32.not u)) stack
-            | VUint64 u -> Stack.push (VUint64 (Uint64.not u)) stack
             | _ -> runtime_error "BITWISE_NOT expects an int64");
             next ()
         | BITWISEAND ->
             push_trace frame.pc "BITWISE_AND";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt a, VInt b -> Stack.push (VInt (Int.logand a b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logand a b)) stack
-            | VInt32 a, VInt32 b -> Stack.push (VInt32 (Int32.logand a b)) stack
-            | VUint32 a, VUint32 b ->
-                Stack.push (VUint32 (Uint32.and_ a b)) stack
-            | VUint64 a, VUint64 b ->
-                Stack.push (VUint64 (Uint64.and_ a b)) stack
             | _ -> runtime_error "BITWISE_AND expects int64 operands");
             next ()
         | BITWISEOR ->
             push_trace frame.pc "BITWISE_OR";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt a, VInt b -> Stack.push (VInt (Int.logor a b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logor a b)) stack
-            | VInt32 a, VInt32 b -> Stack.push (VInt32 (Int32.logor a b)) stack
-            | VUint32 a, VUint32 b ->
-                Stack.push (VUint32 (Uint32.or_ a b)) stack
-            | VUint64 a, VUint64 b ->
-                Stack.push (VUint64 (Uint64.or_ a b)) stack
             | _ -> runtime_error "BITWISE_OR expects int64 operands");
             next ()
         | BITWISEXOR ->
             push_trace frame.pc "BITWISE_XOR";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt a, VInt b -> Stack.push (VInt (Int.logxor a b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logxor a b)) stack
-            | VInt32 a, VInt32 b -> Stack.push (VInt32 (Int32.logxor a b)) stack
-            | VUint32 a, VUint32 b ->
-                Stack.push (VUint32 (Uint32.xor a b)) stack
-            | VUint64 a, VUint64 b ->
-                Stack.push (VUint64 (Uint64.xor a b)) stack
             | _ -> runtime_error "BITWISE_XOR expects int64 operands");
             next ()
         | LEFTSHIFT ->
             push_trace frame.pc "LEFT_SHIFT";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt a, VInt b -> Stack.push (VInt (Int.shift_left a b)) stack
             | VInt64 a, VInt64 b ->
                 Stack.push (VInt64 (Int64.shift_left a (Int64.to_int b))) stack
-            | VInt32 a, VInt32 b ->
-                Stack.push (VInt32 (Int32.shift_left a (Int32.to_int b))) stack
-            | VUint32 a, VUint32 b ->
-                Stack.push (VUint32 (Uint32.shl a b)) stack
-            | VUint64 a, VUint64 b ->
-                Stack.push (VUint64 (Uint64.shl a b)) stack
             | _ -> runtime_error "LEFT_SHIFT expects int64 operands");
             next ()
         | RIGHTSHIFT ->
             push_trace frame.pc "RIGHT_SHIFT";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt a, VInt b -> Stack.push (VInt (Int.shift_right a b)) stack
             | VInt64 a, VInt64 b ->
                 Stack.push (VInt64 (Int64.shift_right a (Int64.to_int b))) stack
-            | VInt32 a, VInt32 b ->
-                Stack.push (VInt32 (Int32.shift_right a (Int32.to_int b))) stack
-            | VUint32 a, VUint32 b ->
-                Stack.push (VUint32 (Uint32.shr a b)) stack
-            | VUint64 a, VUint64 b ->
-                Stack.push (VUint64 (Uint64.shr a b)) stack
             | _ -> runtime_error "RIGHT_SHIFT expects int64 operands");
             next ()
         | RIGHTSHIFTLOGICAL ->
             push_trace frame.pc "RIGHT_SHIFT_LOGICAL";
-            let a, b = pop2 stack in
+            let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt a, VInt b ->
                 Stack.push (VInt (Int.shift_right_logical a b)) stack
             | VInt64 a, VInt64 b ->
                 let shifted = Int64.shift_right_logical a (Int64.to_int b) in
                 Stack.push (VInt64 shifted) stack
-            | VInt32 a, VInt32 b ->
-                Stack.push
-                  (VInt32 (Int32.shift_right_logical a (Int32.to_int b)))
-                  stack
             | _ -> runtime_error "RIGHT_SHIFT_LOGICAL expects int64 operands");
             next ()
         | BITWISEANDASSIGN ->
@@ -1144,13 +871,9 @@ let run (instructions : opcode list) =
               match (old_value, value) with
               | VInt oldi, VInt newi -> VInt (Int.logand oldi newi)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logand oldi newi)
-              | VInt32 oldi, VInt32 newi -> VInt32 (Int32.logand oldi newi)
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.and_ oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.and_ oldu newu)
               | _ -> runtime_error "BITWISE_ANDASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
-            Stack.push result stack;
             next ()
         | BITWISEORASSIGN ->
             push_trace frame.pc "BITWISE_ORASSIGN";
@@ -1169,13 +892,9 @@ let run (instructions : opcode list) =
               match (old_value, value) with
               | VInt oldi, VInt newi -> VInt (Int.logor oldi newi)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logor oldi newi)
-              | VInt32 oldi, VInt32 newi -> VInt32 (Int32.logor oldi newi)
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.or_ oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.or_ oldu newu)
               | _ -> runtime_error "BITWISE_ORASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
-            Stack.push result stack;
             next ()
         | BITWISEXORASSIGN ->
             push_trace frame.pc "BITWISE_XORASSIGN";
@@ -1194,13 +913,9 @@ let run (instructions : opcode list) =
               match (old_value, value) with
               | VInt oldi, VInt newi -> VInt (Int.logxor oldi newi)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logxor oldi newi)
-              | VInt32 oldi, VInt32 newi -> VInt32 (Int32.logxor oldi newi)
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.xor oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.xor oldu newu)
               | _ -> runtime_error "BITWISE_XORASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
-            Stack.push result stack;
             next ()
         | LEFTSHIFTASSIGN ->
             push_trace frame.pc "LEFT_SHIFTASSIGN";
@@ -1220,14 +935,9 @@ let run (instructions : opcode list) =
               | VInt oldi, VInt newi -> VInt (Int.shift_left oldi newi)
               | VInt64 oldi, VInt64 newi ->
                   VInt64 (Int64.shift_left oldi (Int64.to_int newi))
-              | VInt32 oldi, VInt32 newi ->
-                  VInt32 (Int32.shift_left oldi (Int32.to_int newi))
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.shl oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.shl oldu newu)
               | _ -> runtime_error "LEFT_SHIFTASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
-            Stack.push result stack;
             next ()
         | RIGHTSHIFTASSIGN ->
             push_trace frame.pc "RIGHT_SHIFTASSIGN";
@@ -1247,14 +957,9 @@ let run (instructions : opcode list) =
               | VInt oldi, VInt newi -> VInt (Int.shift_right oldi newi)
               | VInt64 oldi, VInt64 newi ->
                   VInt64 (Int64.shift_right oldi (Int64.to_int newi))
-              | VInt32 oldi, VInt32 newi ->
-                  VInt32 (Int32.shift_right oldi (Int32.to_int newi))
-              | VUint32 oldu, VUint32 newu -> VUint32 (Uint32.shr oldu newu)
-              | VUint64 oldu, VUint64 newu -> VUint64 (Uint64.shr oldu newu)
               | _ -> runtime_error "RIGHT_SHIFTASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
-            Stack.push result stack;
             next ()
         | ASSERT -> (
             push_trace frame.pc "ASSERT";
@@ -1263,6 +968,24 @@ let run (instructions : opcode list) =
             | VBool true -> next ()
             | VBool false -> runtime_error "Assertion failed"
             | _ -> runtime_error "ASSERT expects a boolean value")
+        | LOAD_MODULE name ->
+            let m =
+              match Hashtbl.find_opt stdlib_modules name with
+              | Some modval -> modval
+              | None -> failwith ("Unknown module: " ^ name)
+            in
+            Stack.push m stack;
+            next ()
+        | LOAD_FIELD name -> (
+            let module_or_obj = pop1 stack in
+            match module_or_obj with
+            | VModule table -> (
+                match Hashtbl.find_opt table name with
+                | Some v ->
+                    Stack.push v stack;
+                    next ()
+                | None -> failwith ("Unknown field " ^ name))
+            | _ -> failwith "LOAD_FIELD expects a module or object")
     done;
     print_string (Buffer.contents output_buffer);
     flush stdout

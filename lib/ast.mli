@@ -9,9 +9,6 @@ end
 module Expr : sig
   type t =
     | Int64Expr of { value : int64 }
-    | Int32Expr of { value : int32 }
-    | UInt64Expr of { value : Uint64.t }
-    | UInt32Expr of { value : Uint32.t }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
     | ByteExpr of { value : char }
@@ -60,7 +57,7 @@ module Stmt : sig
         increment : t option;
         body : t;
       }
-    | ImportStmt of { module_name : string }
+    | ImportStmt of { module_name : string list }
     | ModuleStmt of { module_name : string; block : t list }
     | MatchStmt of { expr : Expr.t; cases : (Expr.t option * t list) list }
     | ExprStmt of Expr.t

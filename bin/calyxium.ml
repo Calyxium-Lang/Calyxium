@@ -25,13 +25,13 @@ let parse_file ~flags file =
             let str = Format.flush_str_formatter () in
             Printf.printf "%s\n" str)
           bytecode;
-
         if List.mem "--emit-bytecode" flags then (
           save_bytecode_to_file bytecode_file bytecode;
           Printf.printf "Bytecode saved to %s\n" bytecode_file);
 
         if not (List.mem "--emit-bytecode" flags || List.mem "--no-run" flags)
-        then ignore (run bytecode)
+        then init_stdlib ();
+        ignore (run bytecode)
       with TypeError msg ->
         Printf.eprintf "%s%s: %s%s\n" red file msg reset;
         exit 1)
