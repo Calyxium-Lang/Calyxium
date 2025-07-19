@@ -16,7 +16,7 @@ let parse_file ~flags file =
   match program token lexbuf with
   | ast -> (
       try
-        typecheck_program [ ast ];
+        ignore (typecheck_program [ ast ]);
         let bytecode = compile_stmt ast in
 
         List.iter

@@ -1,4 +1,9 @@
 (library
  (name calyxium_stdlib)
  (public_name calyxium.stdlib)
- (libraries))
+ (foreign_stubs
+  (language c)
+  (names cmathlib cthreadlib coslib ccoroutineslib cnetworklib)
+  (flags
+   (-lm -Wall -Wextra -Werror -pedantic -pthread)))
+ (libraries unix))

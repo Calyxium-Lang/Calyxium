@@ -5,8 +5,31 @@ open Token
 
 exception TypeError of string
 
+let float_type = SymbolType { value = "float" }
+
+let rec string_of_type = function
+  | Any -> "any"
+  | SymbolType { value } -> value
+  | ArrayType { element_type } -> "[" ^ string_of_type element_type ^ "]"
+  | TupleType types ->
+      "(" ^ String.concat ", " (List.map string_of_type types) ^ ")"
+  | FunctionType (params, ret) ->
+      let params_str = String.concat " * " (List.map string_of_type params) in
+      Printf.sprintf "(%s -> %s)" params_str (string_of_type ret)
+
 let built_in_modules : (string * (string * Type.t) list) list =
-  [ ("Math", [ ("pi", SymbolType { value = "float" }) ]) ]
+  [
+    ( "Math",
+      [
+        ("pi", SymbolType { value = "float" });
+        ("e", SymbolType { value = "float" });
+        ("tau", SymbolType { value = "float" });
+        ("nan", SymbolType { value = "float" });
+        ("inf", SymbolType { value = "float" });
+        ("neg_inf", SymbolType { value = "float" });
+        ("sin", FunctionType ([ float_type ], float_type));
+      ] );
+  ]
 
 let builtins : (string * (Type.t list * Type.t) list) list =
   [
@@ -30,13 +53,6 @@ let builtins : (string * (Type.t list * Type.t) list) list =
     ( "assert",
       [ ([ SymbolType { value = "bool" } ], SymbolType { value = "unit" }) ] );
   ]
-
-let rec string_of_type = function
-  | Any -> "any"
-  | SymbolType { value } -> value
-  | ArrayType { element_type } -> "[" ^ string_of_type element_type ^ "]"
-  | TupleType types ->
-      "(" ^ String.concat ", " (List.map string_of_type types) ^ ")"
 
 let rec type_eq expected actual =
   match (expected, actual) with
@@ -129,7 +145,19 @@ let rec check_expr (env : (string * Type.t) list)
               raise
                 (TypeError ("Function argument type mismatch for `" ^ name ^ "`"))
           )
-      | None -> raise (TypeError ("Unknown function: " ^ name)))
+      | None -> (
+          match List.assoc_opt name env with
+          | Some (FunctionType (param_types, ret_type)) ->
+              let arg_types = List.map (check_expr env func_env) arguments in
+              if
+                List.length param_types = List.length arg_types
+                && List.for_all2 type_eq param_types arg_types
+              then ret_type
+              else
+                raise
+                  (TypeError
+                     ("Function argument type mismatch for `" ^ name ^ "`"))
+          | _ -> raise (TypeError ("Unknown function: " ^ name))))
   | CallExpr _ ->
       raise (TypeError "Only simple function calls supported for now")
   | ArrayExpr { elements } -> (
@@ -469,4 +497,7 @@ let typecheck_program (stmts : Stmt.t list) =
     ]
   in
   let func_env = collect_functions stmts in
-  ignore (List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts)
+  let final_env =
+    List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts
+  in
+  final_env

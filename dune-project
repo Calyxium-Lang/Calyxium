@@ -14,8 +14,8 @@
 
 (package
  (name calyxium)
- (synopsis "An interpretered Language")
- (description "Calyxium is an interpretered programming language written in OCaml.")
+ (synopsis "An interpreted language")
+ (description "Calyxium is an interpreted programming language written in OCaml.")
  (depends ocaml dune)
  (tags
   ("functional" "imperative" "object-oriented" "multi-paradigm" "interpreter" "language" "typed")))

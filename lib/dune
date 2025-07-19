@@ -17,7 +17,8 @@
   help
   version
   uint32
-  uint64)
+  uint64
+  init)
  (foreign_stubs
   (language c)
   (names uint32 uint64))
@@ -28,5 +29,3 @@
 (ocamllex lexer)
 
 (ocamlyacc parser)
-
-(documentation)

@@ -1,4 +1,4 @@
-open Calyxium_stdlib.Math
+open Init
 open Opcode
 open Gc
 
@@ -12,15 +12,18 @@ type frame = {
   mutable env : (string * (value * bool)) list;
 }
 
-let stdlib_modules : (string, value) Hashtbl.t = Hashtbl.create 10
+let stdlib_modules : (string, value) Hashtbl.t = Hashtbl.create 16
 let trace : trace_entry list ref = ref []
 let push_trace pc instr = trace := { pc; instr } :: !trace
 let clear_trace () = trace := []
 
 let init_stdlib () =
-  let math_module = Hashtbl.create 5 in
-  Hashtbl.add math_module "pi" (VFloat Math.pi);
-  Hashtbl.add stdlib_modules "Math" (VModule math_module)
+  List.iter
+    (fun (name, entries) ->
+      let tbl = Hashtbl.create (List.length entries) in
+      List.iter (fun (k, v) -> Hashtbl.add tbl k v) entries;
+      Hashtbl.add stdlib_modules name (VModule tbl))
+    stdlib_definitions
 
 let print_trace msg =
   match !trace with
@@ -574,6 +577,7 @@ let run (instructions : opcode list) =
                     in
                     "(" ^ contents ^ ")"
                 | VModule _ -> "<module>"
+                | VNative _ -> "<native>"
               in
               let value = pop1 stack in
               Buffer.add_string output_buffer (string_of_value value ^ "\n");

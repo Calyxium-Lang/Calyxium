@@ -16,6 +16,7 @@ and value =
   | VTuple of value list
   | VUnit
   | VModule of (string, value) Hashtbl.t
+  | VNative of (value list -> value)
 
 val allocation_count : int ref
 val allocation_threshold : int ref

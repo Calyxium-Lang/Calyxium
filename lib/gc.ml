@@ -18,6 +18,7 @@ and value =
   | VTuple of value list
   | VUnit
   | VModule of (string, value) Hashtbl.t
+  | VNative of (value list -> value)
 
 type generation = {
   objs : (int, heap_obj) Hashtbl.t;

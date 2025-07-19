@@ -3,6 +3,7 @@ module Type = struct
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
     | TupleType of t list
+    | FunctionType of t list * t
     | Any
 end
 
