@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: "3.x"
 
-      - run: opam install . --deps-only --with-test
+      - run: opam install dune
 
       - run: opam exec -- dune build
 
