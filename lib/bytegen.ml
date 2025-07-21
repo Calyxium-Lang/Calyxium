@@ -6,7 +6,7 @@ type program_image = {
   functions : (string * opcode list) list;
 }
 
-let save_bytecode_to_file (filename : string) (entry : opcode list) : unit =
+let save_bytecode_to_file filename entry =
   let functions =
     Hashtbl.fold (fun name code acc -> (name, code) :: acc) function_table []
   in
@@ -15,7 +15,7 @@ let save_bytecode_to_file (filename : string) (entry : opcode list) : unit =
   Marshal.to_channel oc prog [];
   close_out oc
 
-let load_bytecode_from_file (filename : string) : opcode list =
+let load_bytecode_from_file filename =
   let ic = open_in_bin filename in
   let { entry; functions } : program_image = Marshal.from_channel ic in
   close_in ic;

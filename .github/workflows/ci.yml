@@ -1,0 +1,40 @@
+name: Builds, tests & co
+
+on:
+  - push
+  - pull_request
+
+permissions: read-all
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout tree
+        uses: actions/checkout@v4
+
+      - name: Set-up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5
+
+      - name: Set-up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - run: opam install dune
+
+      - run: opam exec -- dune build
+
+      - name: Run Python tests
+        run: python run_tests.py

@@ -1,6 +1,7 @@
 open Ast
 open Ast.Type
 open Ast.Stmt
+open Ast.Expr
 open Token
 
 exception TypeError of string
@@ -75,10 +76,7 @@ let rec type_eq expected actual =
       List.length xs = List.length ys && List.for_all2 type_eq xs ys
   | _ -> false
 
-let rec check_expr (env : (string * Type.t) list)
-    (func_env : (string * (Type.t list * Type.t) list) list) (expr : Expr.t) :
-    Type.t =
-  let open Expr in
+let rec check_expr env func_env expr =
   match expr with
   | Int64Expr _ -> SymbolType { value = "int" }
   | FloatExpr _ -> SymbolType { value = "float" }
@@ -297,10 +295,7 @@ let rec find_return_exprs env func_env expr =
       @ find_return_exprs env func_env index
   | _ -> []
 
-let rec check_stmt (env : (string * Type.t) list)
-    (func_env : (string * (Type.t list * Type.t) list) list) (stmt : Stmt.t) :
-    (string * Type.t) list =
-  let open Stmt in
+let rec check_stmt env func_env stmt =
   match stmt with
   | ExprStmt expr ->
       let _ = check_expr env func_env expr in
@@ -556,7 +551,7 @@ and collect_functions stmts =
   in
   List.fold_right collect_from_stmt stmts builtins
 
-let typecheck_program (stmts : Stmt.t list) =
+let typecheck_program stmts =
   let env =
     [
       ("true", Type.SymbolType { value = "bool" });
