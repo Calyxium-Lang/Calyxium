@@ -35,11 +35,11 @@ let print_trace msg =
   | [] -> prerr_endline ("Fatal error: " ^ msg)
 
 let runtime_error msg = raise (RuntimeError msg)
-let stack : Gc.value Stack.t = Stack.create ()
-let global_env : (string * (Gc.value * bool)) list ref = ref []
+let stack = Stack.create ()
+let global_env = ref []
 let bool_to_float b = if b then 1.0 else 0.0
 let bool_to_int64 b = if b then 1L else 0L
-let output_buffer : Buffer.t = Buffer.create 1024
+let output_buffer = Buffer.create 1024
 
 let escape_sequences =
   [
@@ -171,8 +171,7 @@ let rec equal_value a b =
       List.length l1 = List.length l2 && List.for_all2 equal_value l1 l2
   | _ -> false
 
-let string_to_bytes (s : string) : char array =
-  Array.init (String.length s) (String.get s)
+let string_to_bytes s = Array.init (String.length s) (String.get s)
 
 let reset_vm_state () =
   Stack.clear stack;
@@ -180,7 +179,7 @@ let reset_vm_state () =
   clear_trace ();
   Buffer.clear output_buffer
 
-let run (instructions : opcode list) =
+let run instructions =
   clear_trace ();
   let frame_stack = Stack.create () in
   let push_frame code env = Stack.push { code; pc = 0; env } frame_stack in

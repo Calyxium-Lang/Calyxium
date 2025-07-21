@@ -57,7 +57,7 @@ We welcome contributions! Whether it's a bug report, feature suggestion, or code
 - File issues via the [issue tracker](http://github.com/Calyxium-Lang/Calyxium/issues)
 - For the repo and open a pull request
 
-Please follow conventional commit and PR practices where possible.
+Please follow [conventional commit and PR practices where possible](CONTRIBUTING.md).
 
 ## License
 

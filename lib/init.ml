@@ -3,9 +3,7 @@ open Gc
 
 type stdlib_module = string * (string * value) list
 
-let define_module (name : string) (entries : (string * value) list) :
-    stdlib_module =
-  (name, entries)
+let define_module name entries = (name, entries)
 
 let native1 f =
   VNative (fun args -> match args with [ a ] -> f a | _ -> failwith "artiy")
