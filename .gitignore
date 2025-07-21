@@ -2,6 +2,7 @@
 Thumbs.db
 .DS_Store
 .ocamlformat
+*.opam
 
 # === Editor & IDE files ===
 *~
@@ -14,6 +15,7 @@ Thumbs.db
 !*.mli
 !*.md
 !*/
+bin/calyxium_js.ml
 
 # === Build system caches ===
 .cache/

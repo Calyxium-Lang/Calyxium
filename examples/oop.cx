@@ -1,0 +1,5 @@
+enum Week {
+    Monday, Tuesday, wednesday, thursday, Friday, Saturday, Sunday
+}
+
+println(Week.Monday)

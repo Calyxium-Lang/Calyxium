@@ -13,3 +13,8 @@ let detect_system () =
            r
          with _ -> "unknown")
   | _ -> "Uknown"
+
+let version_string () =
+  let major, minor, patch = version in
+  Printf.sprintf "%d.%d.%d (%s) on %s" major minor patch codename
+    (detect_system ())

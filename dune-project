@@ -1,7 +1,6 @@
 (lang dune 3.14)
-(using menhir 3.0)
 
-(name Calyxium)
+(name calyxium)
 
 (generate_opam_files true)
 
@@ -9,14 +8,14 @@
  (github Calyxium-Lang/Calyxium))
 
 (authors "Calyxium Foundation")
-(maintainers "Codezz-ops TheDevConnor Zombii Iris")
+(maintainers "Codezz-ops")
 
 (license MIT)
 
 (package
- (name Calyxium)
- (synopsis "An split Language")
- (description "Calyxium is a split programming language written in OCaml.")
- (depends ocaml dune menhir zarith)
+ (name calyxium)
+ (synopsis "An interpreted language")
+ (description "Calyxium is an interpreted programming language written in OCaml.")
+ (depends ocaml dune)
  (tags
-  ("compiler" "functional" "interpreter" "language")))
+  ("functional" "imperative" "object-oriented" "multi-paradigm" "interpreter" "language" "typed")))

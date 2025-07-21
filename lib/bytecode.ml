@@ -1,220 +1,266 @@
-type opcode =
-  | LOAD_INT of int64
-  | LOAD_FLOAT of float
-  | LOAD_VAR of string
-  | STORE_VAR of string
-  | LOAD_STRING of string
-  | LOAD_BYTE of char
-  | LOAD_BOOL of bool
-  | LOAD_UNIT of unit
-  | LOAD_ARRAY of int
-  | LOAD_INDEX
-  | FUNC of string
-  | POW
-  | MOD
-  | CONCAT
-  | FADD
-  | FSUB
-  | FMUL
-  | FDIV
-  | POP
-  | HALT
-  | RETURN
-  | AND
-  | OR
-  | NOT
-  | EQUAL
-  | NOT_EQUAL
-  | GREATER_EQUAL
-  | LESS_EQUAL
-  | GREATER
-  | LESS
-  | INC
-  | DEC
-  | JUMP of int
-  | JUMP_IF_FALSE of int
-  | PRINT
-  | PRINTLN
-  | LEN
-  | TOSTRING
-  | TOINT
-  | TOFLOAT
-  | CALL of string
-  | PUSH_ARGS
-  | SWITCH
-  | CASE of float
-  | DEFAULT
-  | BREAK
-  | DUP
-  | INPUT
-[@@deriving show]
+open Opcode
+open Token
+open Ast.Expr
+open Ast.Stmt
 
 let function_table : (string, opcode list) Hashtbl.t = Hashtbl.create 10
+let enum_tbl : (string, (string * int) list) Hashtbl.t = Hashtbl.create 10
+
+let builtins =
+  [
+    ("println", fun args -> args @ [ PRINTLN ]);
+    ("to_float", fun args -> args @ [ FLOAT ]);
+    ("to_int", fun args -> args @ [ INT ]);
+    ("to_string", fun args -> args @ [ STRING ]);
+    ("to_bytes", fun args -> args @ [ BYTE ]);
+    ("length", fun args -> args @ [ LENGTH ]);
+    ("input", fun args -> args @ [ INPUT ]);
+    ("assert", fun args -> args @ [ ASSERT ]);
+  ]
+
+let opcode_of_binop = function
+  | Plus -> PLUS
+  | Minus -> MINUS
+  | Star -> STAR
+  | Slash -> SLASH
+  | Mod -> MOD
+  | Pow -> POW
+  | Carot -> CONCAT
+  | LogicalAnd -> AND
+  | LogicalOr -> OR
+  | Greater -> GREATER
+  | Less -> LESS
+  | Eq -> EQUAL
+  | Geq -> GREATER_EQUAL
+  | Leq -> LESS_EQUAL
+  | Neq -> NOT_EQUAL
+  | PlusAssign -> PLUSASSIGN
+  | MinusAssign -> MINUSASSIGN
+  | StarAssign -> STARASSIGN
+  | SlashAssign -> SLASHASSIGN
+  | BitWiseAND -> BITWISEAND
+  | BitWiseOR -> BITWISEOR
+  | BitWiseXOR -> BITWISEXOR
+  | LeftShift -> LEFTSHIFT
+  | RightShift -> RIGHTSHIFT
+  | RightShiftLogical -> RIGHTSHIFTLOGICAL
+  | BitWiseANDAssign -> BITWISEANDASSIGN
+  | BitWiseORAssign -> BITWISEORASSIGN
+  | BitWiseXORAssign -> BITWISEXORASSIGN
+  | LeftShiftAssign -> LEFTSHIFTASSIGN
+  | RightShiftAssign -> RIGHTSHIFTASSIGN
+  | _ -> failwith "Unsupported operator"
 
 let rec compile_expr = function
-  | Ast.Expr.IntExpr { value } -> [ LOAD_INT value ]
-  | Ast.Expr.FloatExpr { value } -> [ LOAD_FLOAT value ]
-  | Ast.Expr.StringExpr { value } -> [ LOAD_STRING value ]
-  | Ast.Expr.ByteExpr { value } -> [ LOAD_BYTE value ]
-  | Ast.Expr.UnitExpr { value } -> [ LOAD_UNIT value ]
-  | Ast.Expr.BoolExpr { value } ->
+  | Int64Expr { value } -> [ LOAD_INT64 value ]
+  | FloatExpr { value } -> [ LOAD_FLOAT value ]
+  | StringExpr { value } -> [ LOAD_STRING value ]
+  | ByteExpr { value } -> [ LOAD_BYTE value ]
+  | UnitExpr { value } -> [ LOAD_UNIT value ]
+  | BoolExpr { value } ->
       if value then [ LOAD_BOOL true ] else [ LOAD_BOOL false ]
-  | Ast.Expr.VarExpr name -> [ LOAD_VAR name ]
-  | Ast.Expr.IndexExpr { array; index } ->
+  | TupleExpr elements ->
+      let compiled_elements = List.concat_map compile_expr elements in
+      compiled_elements @ [ LOAD_TUPLE (List.length elements) ]
+  | VarExpr name -> [ LOAD_VAR name ]
+  | IndexExpr { array; index } ->
       compile_expr array @ compile_expr index @ [ LOAD_INDEX ]
-  | Ast.Expr.BinaryExpr { left; operator; right } -> (
-      let left_bytecode = compile_expr left in
-      let right_bytecode = compile_expr right in
+  | BinaryExpr { left; operator; right } -> (
       match operator with
-      | Token.Plus -> left_bytecode @ right_bytecode @ [ FADD ]
-      | Token.Minus -> left_bytecode @ right_bytecode @ [ FSUB ]
-      | Token.Star -> left_bytecode @ right_bytecode @ [ FMUL ]
-      | Token.Slash -> left_bytecode @ right_bytecode @ [ FDIV ]
-      | Token.Mod -> left_bytecode @ right_bytecode @ [ MOD ]
-      | Token.Pow -> left_bytecode @ right_bytecode @ [ POW ]
-      | Token.Carot -> left_bytecode @ right_bytecode @ [ CONCAT ]
-      | Token.LogicalAnd -> left_bytecode @ right_bytecode @ [ AND ]
-      | Token.LogicalOr -> left_bytecode @ right_bytecode @ [ OR ]
-      | Token.Greater -> left_bytecode @ right_bytecode @ [ GREATER ]
-      | Token.Less -> left_bytecode @ right_bytecode @ [ LESS ]
-      | Token.Eq -> left_bytecode @ right_bytecode @ [ EQUAL ]
-      | Token.Geq -> left_bytecode @ right_bytecode @ [ GREATER_EQUAL ]
-      | Token.Leq -> left_bytecode @ right_bytecode @ [ LESS_EQUAL ]
-      | Token.Neq -> left_bytecode @ right_bytecode @ [ NOT_EQUAL ]
-      | _ -> failwith "ByteCode: Unsupported operator")
-  | Ast.Expr.CallExpr { callee; arguments } -> (
+      | PlusAssign | MinusAssign | StarAssign | SlashAssign | BitWiseANDAssign
+      | BitWiseORAssign | BitWiseXORAssign | LeftShiftAssign | RightShiftAssign
+        -> (
+          match left with
+          | VarExpr name ->
+              let load_var_ref_code = [ LOAD_VAR_REF name ] in
+              let rhs_code = compile_expr right in
+              load_var_ref_code @ rhs_code @ [ opcode_of_binop operator ]
+          | _ -> failwith "Assignment target must be a variable")
+      | _ ->
+          let left_code = compile_expr left in
+          let right_code = compile_expr right in
+          left_code @ right_code @ [ opcode_of_binop operator ])
+  | ReturnExpr (CallExpr { callee = VarExpr name; arguments }) ->
+      let args_bytecode = List.concat (List.map compile_expr arguments) in
+      args_bytecode @ [ TAIL_CALL name ]
+  | ReturnExpr expr -> compile_expr expr @ [ RETURN ]
+  | CallExpr { callee; arguments } -> (
+      let args_bytecode = List.concat (List.map compile_expr arguments) in
       match callee with
-      | Ast.Expr.VarExpr "print" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ PRINT ]
-      | Ast.Expr.VarExpr "println" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ PRINTLN ]
-      | Ast.Expr.VarExpr "len" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ LEN ]
-      | Ast.Expr.VarExpr "ToString" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ TOSTRING ]
-      | Ast.Expr.VarExpr "ToInt" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ TOINT ]
-      | Ast.Expr.VarExpr "ToFloat" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ TOFLOAT ]
-      | Ast.Expr.VarExpr "input" ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ INPUT ]
-      | Ast.Expr.VarExpr function_name ->
-          let args_bytecode =
-            List.fold_left (fun acc arg -> acc @ compile_expr arg) [] arguments
-          in
-          args_bytecode @ [ CALL function_name ]
-      | _ -> failwith "ByteCode: Unsupported function call")
-  | Ast.Expr.UnaryExpr { operator; operand } -> (
-      let operand_bytecode = compile_expr operand in
-      match operator with
-      | Token.Not -> operand_bytecode @ [ NOT ]
-      | Token.Inc -> operand_bytecode @ [ INC ]
-      | Token.Dec -> operand_bytecode @ [ DEC ]
-      | _ -> failwith "Unsupported unary operator")
-  | Ast.Expr.NewExpr _ -> failwith "NewExpr not supported"
-  | Ast.Expr.PropertyAccessExpr _ -> failwith "PropertyAccessExpr"
-  | Ast.Expr.ArrayExpr { elements } ->
+      | VarExpr name -> (
+          match List.assoc_opt name builtins with
+          | Some handler -> handler args_bytecode
+          | None -> args_bytecode @ [ CALL name ])
+      | _ -> failwith "Unsupported call expression")
+  | ArrayExpr { elements } ->
       let elements_bytecode = List.concat (List.map compile_expr elements) in
       elements_bytecode @ [ LOAD_ARRAY (List.length elements) ]
+  | UnaryExpr { operator; operand } -> (
+      let operand = compile_expr operand in
+      match operator with
+      | Not -> operand @ [ NOT ]
+      | Inc -> (
+          match operand with
+          | [ LOAD_VAR name ] -> [ LOAD_VAR name; INC; DUP; STORE_VAR name ]
+          | _ -> failwith "INC expects a variable")
+      | Dec -> (
+          match operand with
+          | [ LOAD_VAR name ] -> [ LOAD_VAR name; DEC; DUP; STORE_VAR name ]
+          | _ -> failwith "DEC expects a variable")
+      | Minus -> operand @ [ NEG ]
+      | BitWiseNOT -> operand @ [ BITWISENOT ]
+      | _ -> failwith "Unsupported unary operator")
+  | IfExpr { condition; then_branch; else_branch } ->
+      let condition_code = compile_expr condition in
+      let then_code = compile_expr then_branch in
+      let else_code = compile_expr else_branch in
+      let then_jump = List.length then_code + 2 in
+      let else_jump = List.length else_code + 1 in
+      condition_code
+      @ [ JUMP_IF_FALSE then_jump ]
+      @ then_code @ [ JUMP else_jump ] @ else_code
+  | TernaryExpr { cond; onTrue; onFalse } ->
+      let cond_code = compile_expr cond in
+      let true_code = compile_expr onTrue in
+      let false_code = compile_expr onFalse in
+      let true_jump = List.length true_code + 2 in
+      let false_jump = List.length false_code + 1 in
+      cond_code
+      @ [ JUMP_IF_FALSE true_jump ]
+      @ true_code @ [ JUMP false_jump ] @ false_code
+  | PipelineExpr { left; right } -> (
+      let left_code = compile_expr left in
+      match right with
+      | VarExpr name -> (
+          match List.assoc_opt name builtins with
+          | Some handler -> handler left_code
+          | None -> left_code @ [ CALL name ])
+      | _ -> failwith "Right-hand side of pipeline must be a function name")
+  | DotExpr { left; right } -> (
+      match left with
+      | VarExpr enum_name -> (
+          match Hashtbl.find_opt enum_tbl enum_name with
+          | Some members -> (
+              match List.assoc_opt right members with
+              | Some value -> [ LOAD_INT64 (Int64.of_int value) ]
+              | None ->
+                  failwith
+                    ("Unknown enum member `" ^ right ^ "` for enum `"
+                   ^ enum_name ^ "`"))
+          | None -> failwith ("Unknown enum type `" ^ enum_name ^ "`"))
+      | _ -> failwith "DotExpr left must be enum name")
 
 let rec compile_stmt = function
-  | Ast.Stmt.ExprStmt expr -> compile_expr expr
-  | Ast.Stmt.BlockStmt { body } ->
-      let rec compile_body = function
-        | [] -> []
-        | [ stmt ] -> compile_stmt stmt
-        | stmt :: rest -> compile_stmt stmt @ compile_body rest
+  | ExprStmt expr -> compile_expr expr
+  | BlockStmt { body } -> List.flatten (List.map compile_stmt body)
+  | FunctionDeclStmt { name; is_rec = _; parameters; body; _ } ->
+      let start_bytecode = [ FUNCTION name ] in
+      let param_bytecodes =
+        List.map
+          (fun (param : parameter) -> [ STORE_VAR param.name ])
+          parameters
       in
-      compile_body body
-  | Ast.Stmt.ReturnStmt expr -> compile_expr expr @ [ RETURN ]
-  | Ast.Stmt.IfStmt { condition; then_branch; else_branch } ->
-      let condition_bytecode = compile_expr condition in
-      let then_bytecode = compile_stmt then_branch in
-      let else_bytecode =
-        match else_branch with Some branch -> compile_stmt branch | None -> []
+      let function_body = compile_stmt (BlockStmt { body }) in
+      let full_function_bytecode =
+        start_bytecode
+        @ List.concat param_bytecodes
+        @ function_body @ [ RETURN ]
       in
-      let then_jump_label = List.length then_bytecode + 1 in
-      let else_jump_label = List.length else_bytecode + 1 in
-      condition_bytecode
-      @ [ JUMP_IF_FALSE (then_jump_label + 1) ]
-      @ then_bytecode @ [ JUMP else_jump_label ] @ else_bytecode
-  | Ast.Stmt.VarDeclarationStmt
-      { identifier; constant = _; assigned_value; explicit_type = _ } ->
+      Hashtbl.replace function_table name full_function_bytecode;
+      []
+  | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
       let expr_bytecode =
         match assigned_value with
         | Some expr -> compile_expr expr
-        | None -> [ LOAD_INT 0L ]
+        | None -> [ LOAD_INT64 0L ]
       in
       expr_bytecode @ [ STORE_VAR identifier ]
-  | Ast.Stmt.NewVarDeclarationStmt _ ->
-      failwith "NewVarDeclarationStmt not supported"
-  | Ast.Stmt.FunctionDeclStmt { name; parameters; body; _ } ->
-      let function_body = compile_stmt (Ast.Stmt.BlockStmt { body }) in
-      let param_bytecodes =
-        List.map
-          (fun (param : Ast.Stmt.parameter) -> [ STORE_VAR param.name ])
-          parameters
+  | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
+      let expr_codes = List.map compile_expr assigned_value in
+      let store_codes =
+        List.map2
+          (fun ident _expr_code -> [ STORE_VAR ident ])
+          (List.rev identifier) expr_codes
+        |> List.concat
       in
-      let func_code = List.concat param_bytecodes @ function_body in
-      Hashtbl.replace function_table name func_code;
-      []
-  | Ast.Stmt.ForStmt _ -> failwith "ForStmt not implemented"
-  | Ast.Stmt.ClassDeclStmt _ -> failwith "ClassStmt not implemented"
-  | Ast.Stmt.SwitchStmt { expr; cases; default_case } ->
+      List.concat expr_codes @ store_codes
+  | IfStmt { condition; then_branch; else_branch } ->
+      let condition = compile_expr condition in
+      let then_branch = compile_stmt then_branch in
+      let else_branch =
+        match else_branch with Some branch -> compile_stmt branch | None -> []
+      in
+      let then_jump_label = List.length then_branch + 1 in
+      let else_jump_label = List.length else_branch + 1 in
+      condition
+      @ [ JUMP_IF_FALSE (then_jump_label + 1) ]
+      @ then_branch @ [ JUMP else_jump_label ] @ else_branch
+  | MatchStmt { expr; cases } ->
       let expr_bytecode = compile_expr expr in
-      let switch_bytecode = ref expr_bytecode in
-      let compiled_cases =
-        List.mapi
-          (fun _i (case_expr, case_body) ->
-            let case_bytecode = compile_expr case_expr in
-            let case_compare_bytecode = [ DUP ] @ case_bytecode @ [ EQUAL ] in
-            let case_body_bytecode =
-              List.flatten (List.map compile_stmt case_body)
-            in
-            let jump_to_next_case = List.length case_body_bytecode + 2 in
-            let jump_if_false = [ JUMP_IF_FALSE jump_to_next_case ] in
-            let jump_to_end = [ JUMP (-1) ] in
-            case_compare_bytecode @ jump_if_false @ case_body_bytecode
-            @ jump_to_end)
-          cases
+      let compiled_cases = ref [] in
+      let jump_placeholders = ref [] in
+      let match_code = expr_bytecode @ [ DUP ] in
+      List.iter
+        (fun (case_expr_opt, case_body) ->
+          let body_code = List.flatten (List.map compile_stmt case_body) in
+          let body_len = List.length body_code in
+          let jump_to_next_case = body_len + 2 in
+          match case_expr_opt with
+          | Some case_expr ->
+              let cmp_code =
+                [ DUP ] @ compile_expr case_expr
+                @ [ EQUAL; JUMP_IF_FALSE jump_to_next_case ]
+              in
+              compiled_cases :=
+                !compiled_cases @ cmp_code @ body_code @ [ JUMP (-1) ];
+              jump_placeholders :=
+                !jump_placeholders @ [ ref (List.length !compiled_cases - 1) ]
+          | None ->
+              compiled_cases := !compiled_cases @ body_code @ [ JUMP (-1) ];
+              jump_placeholders :=
+                !jump_placeholders @ [ ref (List.length !compiled_cases - 1) ])
+        cases;
+      let full_code = match_code @ !compiled_cases @ [ POP ] in
+      let final_len = List.length full_code in
+      let rec patch_jumps idx code =
+        match code with
+        | [] -> []
+        | JUMP -1 :: rest ->
+            let jump_len = final_len - idx in
+            JUMP jump_len :: patch_jumps (idx + 1) rest
+        | instr :: rest -> instr :: patch_jumps (idx + 1) rest
       in
-      let default_bytecode =
-        match default_case with
-        | Some body -> List.flatten (List.map compile_stmt body)
-        | None -> []
+      patch_jumps 0 full_code
+  | ForStmt { init; condition; increment; body } ->
+      let init_code =
+        match init with Some stmt -> compile_stmt stmt | None -> []
       in
-      switch_bytecode :=
-        !switch_bytecode @ List.flatten compiled_cases @ default_bytecode;
-      let end_of_switch = List.length !switch_bytecode in
-      let patched_bytecode =
-        List.mapi
-          (fun i instr ->
-            if instr = JUMP (-1) then
-              let jump_distance = end_of_switch - i in
-              JUMP jump_distance
-            else instr)
-          !switch_bytecode
+      let condition_code = compile_expr condition in
+      let body_code = compile_stmt body in
+      let increment_code =
+        match increment with Some stmt -> compile_stmt stmt | None -> []
       in
-      patched_bytecode
-  | Ast.Stmt.ImportStmt _ -> failwith "ImportStmt not implemented"
+
+      let init_len = List.length init_code in
+      let cond_len = List.length condition_code in
+      let body_len = List.length body_code in
+      let incr_len = List.length increment_code in
+
+      let jump_to_end = init_len + body_len + incr_len + 1 in
+      let jump_back = -(cond_len + body_len + incr_len + 1) in
+
+      init_code @ condition_code
+      @ [ JUMP_IF_FALSE jump_to_end ]
+      @ body_code @ increment_code @ [ JUMP jump_back ] @ [ POP ]
+  | ImportStmt { module_name } ->
+      let mod_name, field_name =
+        match List.rev module_name with
+        | field :: rest -> (String.concat "." (List.rev rest), field)
+        | [] -> failwith "Invalid module path"
+      in
+      [ LOAD_MODULE mod_name; LOAD_FIELD field_name; STORE_VAR field_name ]
+  | EnumStmt { name; members } ->
+      let numbered_members = List.mapi (fun i m -> (m, i)) members in
+      Hashtbl.replace enum_tbl name numbered_members;
+      []
+  | _ -> failwith ""

@@ -1,0 +1,60 @@
+-- tests/pipeline.cx
+
+-- basic tests for pipeline operators
+double(x: int): int {
+    return x * 2
+}
+
+sqr(x: int): int {
+    return x * x
+}
+
+assert(3 |> double |> sqr == 36)
+
+assert(123 |> to_string == "123")
+
+assert((2 + 3) |> sqr == 25)
+
+let y: int = 7 |> double
+assert(y == 14) 
+
+id(x: int): int {
+    return x
+}
+
+assert(42 |> id == 42)
+
+float_double(x: float): float {
+    return x * 2.0
+}
+
+assert(3.5 |> float_double == 7.0)
+
+make_point(x: int, y: int): tuple {
+    return (x, y)
+}
+
+assert(make_point(1, 2) == (1, 2))
+
+is_even(x: int): bool {
+    return (x % 2) == 0
+}
+
+assert(4 |> is_even == true)
+assert(5 |> is_even == false)
+
+triple_then_double(x: int): int {
+    return (x * 3) |> double
+}
+
+assert(3 |> triple_then_double == 18)
+
+greet(name: string): string {
+    return "Hello, " ^ name
+}
+
+assert("World" |> greet == "Hello, World")
+
+assert(true |> to_string == "true")
+
+assert(3.14 |> to_string == "3.14")

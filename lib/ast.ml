@@ -2,14 +2,14 @@ module Type = struct
   type t =
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
-    | ClassType of { name : string; properties : (string * t) list }
+    | TupleType of t list
+    | FunctionType of t list * t
     | Any
-  [@@deriving show]
 end
 
 module Expr = struct
   type t =
-    | IntExpr of { value : int64 }
+    | Int64Expr of { value : int64 }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
     | ByteExpr of { value : char }
@@ -19,38 +19,38 @@ module Expr = struct
     | BinaryExpr of { left : t; operator : Token.t; right : t }
     | CallExpr of { callee : t; arguments : t list }
     | UnaryExpr of { operator : Token.t; operand : t }
-    | NewExpr of { class_name : string; arguments : t list }
-    | PropertyAccessExpr of { object_name : t; property_name : string }
     | ArrayExpr of { elements : t list }
     | IndexExpr of { array : t; index : t }
-  [@@deriving show]
+    | IfExpr of { condition : t; then_branch : t; else_branch : t }
+    | ReturnExpr of t
+    | DotExpr of { left : t; right : string }
+    | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
+    | TupleExpr of t list
+    | PipelineExpr of { left : t; right : t }
 end
 
 module Stmt = struct
-  type parameter = { name : string; param_type : Type.t } [@@deriving show]
+  type parameter = { name : string; param_type : Type.t }
 
   type t =
     | BlockStmt of { body : t list }
     | VarDeclarationStmt of {
         identifier : string;
-        constant : bool;
         assigned_value : Expr.t option;
         explicit_type : Type.t;
       }
-    | NewVarDeclarationStmt of {
-        identifier : string;
-        constant : bool;
-        assigned_value : Expr.t option;
-        arguments : Expr.t list;
+    | MultiVarDeclarationStmt of {
+        identifier : string list;
+        assigned_value : Expr.t list;
+        explicit_type : Type.t;
       }
     | FunctionDeclStmt of {
         name : string;
+        is_rec : bool;
         parameters : parameter list;
-        return_type : Type.t option;
+        return_type : Type.t;
         body : t list;
       }
-    | ReturnStmt of Expr.t
-    | ExprStmt of Expr.t
     | IfStmt of { condition : Expr.t; then_branch : t; else_branch : t option }
     | ForStmt of {
         init : t option;
@@ -58,16 +58,9 @@ module Stmt = struct
         increment : t option;
         body : t;
       }
-    | ClassDeclStmt of {
-        name : string;
-        properties : parameter list;
-        methods : t list;
-      }
-    | ImportStmt of { module_name : string }
-    | SwitchStmt of {
-        expr : Expr.t;
-        cases : (Expr.t * t list) list;
-        default_case : t list option;
-      }
-  [@@deriving show]
+    | ImportStmt of { module_name : string list }
+    | ModuleStmt of { module_name : string; block : t list }
+    | MatchStmt of { expr : Expr.t; cases : (Expr.t option * t list) list }
+    | ExprStmt of Expr.t
+    | EnumStmt of { name : string; members : string list }
 end

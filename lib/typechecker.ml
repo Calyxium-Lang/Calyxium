@@ -1,461 +1,570 @@
-module TypeChecker = struct
-  module Env = Map.Make (String)
+open Ast
+open Ast.Type
+open Ast.Stmt
+open Token
 
-  type func_sig = { param_types : Ast.Type.t list; return_type : Ast.Type.t }
+exception TypeError of string
 
-  let print_func_sig =
-    {
-      param_types = [ Ast.Type.Any ];
-      return_type = Ast.Type.SymbolType { value = "void" };
-    }
+let float_type = SymbolType { value = "float" }
 
-  let input_func_sig =
-    { param_types = [ Ast.Type.Any ]; return_type = Ast.Type.Any }
+let rec string_of_type = function
+  | Any -> "any"
+  | SymbolType { value } -> value
+  | ArrayType { element_type } -> "[" ^ string_of_type element_type ^ "]"
+  | TupleType types ->
+      "(" ^ String.concat ", " (List.map string_of_type types) ^ ")"
+  | FunctionType (params, ret) ->
+      let params_str = String.concat " * " (List.map string_of_type params) in
+      Printf.sprintf "(%s -> %s)" params_str (string_of_type ret)
 
-  let println_func_sig =
-    {
-      param_types = [ Ast.Type.Any ];
-      return_type = Ast.Type.SymbolType { value = "void" };
-    }
-
-  type class_info = {
-    class_type : Ast.Type.t;
-    properties : (string * Ast.Type.t) list;
-  }
-
-  type env = {
-    var_type : Ast.Type.t Env.t;
-    func_env : func_sig Env.t;
-    class_env : class_info Env.t;
-    modules : string list;
-  }
-
-  let len_func_sig =
-    {
-      param_types = [ Ast.Type.SymbolType { value = "string" } ];
-      return_type = Ast.Type.SymbolType { value = "int" };
-    }
-
-  let to_string_func_sig =
-    {
-      param_types = [ Ast.Type.Any ];
-      return_type = Ast.Type.SymbolType { value = "string" };
-    }
-
-  let to_int_func_sig =
-    {
-      param_types = [ Ast.Type.SymbolType { value = "float" } ];
-      return_type = Ast.Type.SymbolType { value = "int" };
-    }
-
-  let to_float_func_sig =
-    {
-      param_types = [ Ast.Type.SymbolType { value = "int" } ];
-      return_type = Ast.Type.SymbolType { value = "float" };
-    }
-
-  let register_builtin_functions env =
-    let builtin_functions =
+let built_in_modules : (string * (string * Type.t) list) list =
+  [
+    ( "Math",
       [
-        ("print", print_func_sig);
-        ("println", println_func_sig);
-        ("input", input_func_sig);
-        ("len", len_func_sig);
-        ("ToString", to_string_func_sig);
-        ("ToInt", to_int_func_sig);
-        ("ToFloat", to_float_func_sig);
-      ]
-    in
-    {
-      env with
-      func_env =
-        List.fold_left
-          (fun acc (name, f_sig) -> Env.add name f_sig acc)
-          env.func_env builtin_functions;
-    }
+        ("pi", SymbolType { value = "float" });
+        ("e", SymbolType { value = "float" });
+        ("tau", SymbolType { value = "float" });
+        ("nan", SymbolType { value = "float" });
+        ("inf", SymbolType { value = "float" });
+        ("neg_inf", SymbolType { value = "float" });
+        ("sin", FunctionType ([ float_type ], float_type));
+      ] );
+  ]
 
-  let empty_env =
-    let base_env =
-      {
-        var_type = Env.empty;
-        func_env = Env.empty;
-        class_env = Env.empty;
-        modules = [];
-      }
-    in
-    register_builtin_functions base_env
+let builtins : (string * (Type.t list * Type.t) list) list =
+  [
+    ("println", [ ([ Any ], SymbolType { value = "unit" }) ]);
+    ( "input",
+      [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]
+    );
+    ( "to_bytes",
+      [
+        ( [ SymbolType { value = "string" } ],
+          ArrayType { element_type = SymbolType { value = "byte" } } );
+      ] );
+    ( "to_float",
+      [
+        ([ SymbolType { value = "*" } ], SymbolType { value = "float" });
+        ([ SymbolType { value = "string" } ], SymbolType { value = "float" });
+        ([ SymbolType { value = "int" } ], SymbolType { value = "float" });
+      ] );
+    ( "to_int",
+      [
+        ([ SymbolType { value = "*" } ], SymbolType { value = "int" });
+        ([ SymbolType { value = "byte" } ], SymbolType { value = "int" });
+        ([ SymbolType { value = "string" } ], SymbolType { value = "int" });
+        ([ SymbolType { value = "float" } ], SymbolType { value = "int" });
+      ] );
+    ("length", [ ([ Any ], SymbolType { value = "int" }) ]);
+    ("to_string", [ ([ Any ], SymbolType { value = "string" }) ]);
+    ( "assert",
+      [ ([ SymbolType { value = "bool" } ], SymbolType { value = "unit" }) ] );
+  ]
 
-  let register_module_functions env module_name =
-    match module_name with
-    | "Time" ->
-        let time_functions =
-          [
-            ( "current",
-              {
-                param_types = [];
-                return_type = Ast.Type.SymbolType { value = "float" };
-              } );
-          ]
-        in
-        List.fold_left
-          (fun acc (fname, f_sig) -> Env.add fname f_sig acc)
-          env.func_env time_functions
-    | _ -> env.func_env
+let rec type_eq expected actual =
+  match (expected, actual) with
+  | SymbolType { value = "*" }, SymbolType _ -> true
+  | SymbolType { value = "unit" }, _ -> true
+  | Any, _ | _, Any -> true
+  | SymbolType { value = v1 }, SymbolType { value = v2 } -> v1 = v2
+  | ArrayType { element_type = e1 }, ArrayType { element_type = e2 } ->
+      type_eq e1 e2
+  | SymbolType { value = "tuple" }, TupleType _ -> true
+  | TupleType _, SymbolType { value = "tuple" } -> true
+  | TupleType xs, TupleType ys ->
+      List.length xs = List.length ys && List.for_all2 type_eq xs ys
+  | _ -> false
 
-  let load_module env module_name =
-    let updated_func_env = register_module_functions env module_name in
-    {
-      env with
-      func_env = updated_func_env;
-      modules = module_name :: env.modules;
-    }
-
-  let check_function_call env function_name =
-    try Env.find function_name env.func_env
-    with Not_found ->
-      let module_name, func_name =
-        match String.split_on_char '.' function_name with
-        | [ mod_name; fun_name ] -> (mod_name, fun_name)
-        | _ -> failwith ("Unsupported function call: " ^ function_name)
-      in
-      if List.mem module_name env.modules then
-        let updated_env = load_module env module_name in
-        try Env.find func_name updated_env.func_env
-        with Not_found ->
-          failwith
-            ("Function '" ^ func_name ^ "' not found in module '" ^ module_name
-           ^ "'")
-      else failwith ("Module '" ^ module_name ^ "' not imported")
-
-  let lookup_var env name =
-    try Env.find name env.var_type
-    with Not_found -> failwith ("TypeChecker: Unbound variable " ^ name)
-
-  let lookup_func env name =
-    try Env.find name env.func_env
-    with Not_found -> failwith ("TypeChecker: Unbound function " ^ name)
-
-  let lookup_class env name =
-    try Env.find name env.class_env
-    with Not_found -> failwith ("TypeChecker: Unbound class " ^ name)
-
-  let check_import env module_name =
-    if List.mem module_name env.modules then
-      failwith ("Module " ^ module_name ^ " already imported")
-    else { env with modules = module_name :: env.modules }
-
-  let rec check_expr env = function
-    | Ast.Expr.IntExpr _ -> Ast.Type.SymbolType { value = "int" }
-    | Ast.Expr.FloatExpr _ -> Ast.Type.SymbolType { value = "float" }
-    | Ast.Expr.StringExpr _ -> Ast.Type.SymbolType { value = "string" }
-    | Ast.Expr.ByteExpr _ -> Ast.Type.SymbolType { value = "byte" }
-    | Ast.Expr.BoolExpr _ -> Ast.Type.SymbolType { value = "bool" }
-    | Ast.Expr.VarExpr "true" | Ast.Expr.VarExpr "false" ->
-        Ast.Type.SymbolType { value = "bool" }
-    | Ast.Expr.VarExpr name -> lookup_var env name
-    | Ast.Expr.ArrayExpr { elements } -> (
-        match elements with
-        | [] -> failwith "TypeChecker: Cannot infer type of an empty array"
-        | first_elem :: _ ->
-            let elem_type = check_expr env first_elem in
-            List.iter
-              (fun elem ->
-                let t = check_expr env elem in
-                if t <> elem_type then
-                  failwith "TypeChecker: Type mismatch in array elements")
-              elements;
-            Ast.Type.ArrayType { element_type = elem_type })
-    | Ast.Expr.IndexExpr { array; index } -> (
-        let array_type = check_expr env array in
-        let index_type = check_expr env index in
-        if index_type <> Ast.Type.SymbolType { value = "int" } then
-          failwith "TypeChecker: Array index must be an integer";
-        match array_type with
-        | Ast.Type.ArrayType { element_type } -> element_type
-        | _ -> failwith "TypeChecker: Cannot index non-array type")
-    | Ast.Expr.CallExpr { callee; arguments } ->
-        let func_name =
-          match callee with
-          | Ast.Expr.VarExpr name -> name
-          | _ -> failwith "TypeChecker: Unsupported function call"
-        in
-        let { param_types; return_type } = check_function_call env func_name in
-        if List.length arguments <> List.length param_types then
-          failwith
-            ("TypeChecker: Incorrect number of arguments for function "
-           ^ func_name);
-        List.iter2
-          (fun arg param_type ->
-            let arg_type = check_expr env arg in
-            if param_type <> Ast.Type.Any && param_type <> arg_type then
-              failwith
-                ("TypeChecker: Argument type mismatch in function call "
-               ^ func_name))
-          arguments param_types;
-        return_type
-    | Ast.Expr.BinaryExpr { left; operator; right } -> (
-        let left_type = check_expr env left in
-        let right_type = check_expr env right in
-        match operator with
-        | Token.Assign -> (
-            match left with
-            | Ast.Expr.PropertyAccessExpr { object_name; property_name } -> (
-                let obj_type = check_expr env object_name in
-                match obj_type with
-                | Ast.Type.ClassType { properties; _ } -> (
-                    try
-                      let expected_type = List.assoc property_name properties in
-                      if expected_type <> right_type then
-                        failwith
-                          ("TypeChecker: Type mismatch in assignment to \
-                            property " ^ property_name)
-                      else left_type
-                    with Not_found ->
-                      failwith
-                        ("TypeChecker: Undefined property: " ^ property_name))
-                | _ -> failwith "TypeChecker: Assignment to non-object property"
-                )
-            | Ast.Expr.VarExpr name ->
-                let var_type = lookup_var env name in
-                if var_type <> right_type then
-                  failwith
-                    ("TypeChecker: Type mismatch in assignment to variable "
-                   ^ name)
-                else var_type
-            | _ -> failwith "TypeChecker: Invalid left-hand side in assignment")
-        | Token.Eq | Token.Neq | Token.Less | Token.Greater | Token.Leq
-        | Token.Geq ->
-            if left_type = right_type then
-              Ast.Type.SymbolType { value = "bool" }
-            else failwith "TypeChecker: Type mismatch in comparison expression"
-        | Token.Plus | Token.Minus | Token.Star | Token.Slash | Token.Mod
-        | Token.Pow ->
-            if left_type = right_type then left_type
-            else failwith "TypeChecker: Type mismatch in arithmetic expression"
-        | Token.Carot ->
-            if
-              left_type = Ast.Type.SymbolType { value = "string" }
-              && right_type = Ast.Type.SymbolType { value = "string" }
-            then Ast.Type.SymbolType { value = "string" }
-            else
-              failwith
-                "TypeChecker: Type mismatch in string concatenation, both \
-                 operands must be strings"
-        | Token.PlusAssign | Token.MinusAssign | Token.StarAssign
-        | Token.SlashAssign ->
-            failwith
-              "TypeChecker: Assignment operation cannot be used as a condition \
-               in an if statement"
-        | Token.LogicalAnd | Token.LogicalOr ->
-            if
-              (left_type = Ast.Type.SymbolType { value = "bool" }
-              || left_type = Ast.Type.SymbolType { value = "int" })
-              && (right_type = Ast.Type.SymbolType { value = "bool" }
-                 || right_type = Ast.Type.SymbolType { value = "int" })
-            then Ast.Type.SymbolType { value = "bool" }
-            else failwith "TypeChecker: Type mismatch in logical expression"
-        | _ -> failwith "TypeChecker: Unsupported operator in binary expression"
-        )
-    | Ast.Expr.PropertyAccessExpr { object_name; property_name } -> (
-        let obj_type = check_expr env object_name in
-        match obj_type with
-        | Ast.Type.ClassType { properties; _ } -> (
-            try List.assoc property_name properties
-            with Not_found ->
-              failwith ("TypeChecker: Undefined property: " ^ property_name))
-        | _ -> failwith "TypeChecker: Property access on non-object type")
-    | Ast.Expr.UnaryExpr { operator; operand } -> (
-        let operand_type = check_expr env operand in
-        match operator with
-        | Token.Not ->
-            if operand_type = Ast.Type.SymbolType { value = "bool" } then
-              Ast.Type.SymbolType { value = "bool" }
-            else
-              failwith "TypeChecker: Operand of NOT operator must be a boolean"
-        | Token.Inc ->
-            if
-              operand_type = Ast.Type.SymbolType { value = "int" }
-              || operand_type = Ast.Type.SymbolType { value = "float" }
-            then operand_type
-            else
-              failwith
-                "TypeChecker: Operand of unary minus must be an integer or \
-                 float"
-        | Token.Dec ->
-            if
-              operand_type = Ast.Type.SymbolType { value = "int" }
-              || operand_type = Ast.Type.SymbolType { value = "float" }
-            then operand_type
-            else
-              failwith
-                "TypeChecker: Operand of unary plus must be an integer or float"
-        | _ -> failwith "TypeChecker: Unsupported unary operator")
-    | expr ->
-        failwith ("TypeChecker: Unsupported expression: " ^ Ast.Expr.show expr)
-
-  let check_var_decl env identifier explicit_type assigned_value =
-    match assigned_value with
-    | Some expr ->
-        let value_type = check_expr env expr in
-        if
-          value_type = Ast.Type.Any
-          || explicit_type = Ast.Type.Any
-          || explicit_type = value_type
-        then
-          { env with var_type = Env.add identifier explicit_type env.var_type }
-        else
-          failwith
-            ("TypeChecker: Type mismatch in variable declaration: " ^ identifier)
-    | None -> failwith ("Variable " ^ identifier ^ " has no value assigned")
-
-  let rec check_func_decl env name parameters return_type body =
-    let param_types =
-      List.map (fun param -> param.Ast.Stmt.param_type) parameters
-    in
-    let var_env =
-      List.fold_left
-        (fun var_env param ->
-          Env.add param.Ast.Stmt.name param.Ast.Stmt.param_type var_env)
-        env.var_type parameters
-    in
-    let func_sig = { param_types; return_type } in
-    let func_env = Env.add name func_sig env.func_env in
-    let new_env =
-      {
-        var_type = var_env;
-        func_env;
-        class_env = env.class_env;
-        modules = env.modules;
-      }
-    in
-    let _ = check_block new_env body ~expected_return_type:(Some return_type) in
-    { env with func_env }
-
-  and check_stmt env ~expected_return_type = function
-    | Ast.Stmt.VarDeclarationStmt
-        { identifier; constant = _; assigned_value; explicit_type } ->
-        check_var_decl env identifier explicit_type assigned_value
-    | Ast.Stmt.NewVarDeclarationStmt
-        { identifier; constant = _; assigned_value; arguments } ->
-        let class_name =
-          match assigned_value with
-          | Some (Ast.Expr.NewExpr { class_name; _ }) -> class_name
-          | _ ->
-              failwith
-                ("TypeChecker: Expected a class instantiation for variable: "
-               ^ identifier)
-        in
-        let class_info = lookup_class env class_name in
-
-        if
-          List.length arguments > 0
-          && List.length arguments <> List.length class_info.properties
-        then
-          failwith
-            ("TypeChecker: Incorrect number of arguments for class \
-              instantiation: " ^ identifier);
-
-        if List.length arguments > 0 then
-          List.iter2
-            (fun arg (prop_name, prop_type) ->
-              let arg_type = check_expr env arg in
-              if arg_type <> prop_type then
-                failwith
-                  ("TypeChecker: Type mismatch for property " ^ prop_name
-                 ^ " in class " ^ class_name))
-            arguments class_info.properties;
-
-        {
-          env with
-          var_type = Env.add identifier class_info.class_type env.var_type;
-        }
-    | Ast.Stmt.FunctionDeclStmt { name; parameters; return_type; body } ->
-        let return_type =
-          match return_type with
-          | Some t -> t
-          | None ->
-              failwith
-                ("TypeChecker: Function " ^ name ^ " must have a return type")
-        in
-        check_func_decl env name parameters return_type body
-    | Ast.Stmt.ClassDeclStmt { name; properties; methods = _ } ->
-        let prop_list =
-          List.map
-            (fun param -> (param.Ast.Stmt.name, param.Ast.Stmt.param_type))
-            properties
-        in
-        let class_info =
-          {
-            class_type = Ast.Type.ClassType { name; properties = prop_list };
-            properties = prop_list;
-          }
-        in
-        let class_env = Env.add name class_info env.class_env in
-        { env with class_env }
-    | Ast.Stmt.BlockStmt { body } -> check_block env body ~expected_return_type
-    | Ast.Stmt.ReturnStmt expr -> (
-        let return_type = check_expr env expr in
-        match expected_return_type with
-        | Some expected_type ->
-            if return_type <> expected_type then
-              failwith
-                ("TypeChecker: Return type mismatch: expected "
-                ^ Ast.Type.show expected_type
-                ^ ", got " ^ Ast.Type.show return_type)
-            else env
-        | None -> env)
-    | Ast.Stmt.ExprStmt expr ->
-        let _ = check_expr env expr in
-        env
-    | Ast.Stmt.IfStmt { condition; then_branch; else_branch } ->
-        let cond_type = check_expr env condition in
-        if cond_type <> Ast.Type.SymbolType { value = "bool" } then
-          failwith "TypeChecker: Condition in if statement must be a boolean"
-        else
-          let env_then = check_stmt env ~expected_return_type then_branch in
-          let env_final =
-            match else_branch with
-            | Some else_branch ->
-                check_stmt env_then ~expected_return_type else_branch
-            | None -> env_then
+let rec check_expr (env : (string * Type.t) list)
+    (func_env : (string * (Type.t list * Type.t) list) list) (expr : Expr.t) :
+    Type.t =
+  let open Expr in
+  match expr with
+  | Int64Expr _ -> SymbolType { value = "int" }
+  | FloatExpr _ -> SymbolType { value = "float" }
+  | StringExpr _ -> SymbolType { value = "string" }
+  | BoolExpr _ -> SymbolType { value = "bool" }
+  | ByteExpr _ -> SymbolType { value = "byte" }
+  | UnitExpr _ -> SymbolType { value = "unit" }
+  | TupleExpr elements ->
+      let element_types = List.map (check_expr env func_env) elements in
+      TupleType element_types
+  | VarExpr name -> (
+      try List.assoc name env
+      with Not_found -> raise (TypeError ("Unbound variable: " ^ name)))
+  | UnaryExpr { operator; operand } -> (
+      let operand_type = check_expr env func_env operand in
+      match operator with
+      | Not ->
+          if not (type_eq operand_type (SymbolType { value = "bool" })) then
+            raise (TypeError "Unary `not` operator requires a boolean operand");
+          SymbolType { value = "bool" }
+      | BitWiseNOT ->
+          if not (type_eq operand_type (SymbolType { value = "int" })) then
+            raise (TypeError "Bitwise NOT requires an int or int64 operand");
+          operand_type
+      | Inc | Dec ->
+          if
+            not
+              (type_eq operand_type (SymbolType { value = "int" })
+              || type_eq operand_type (SymbolType { value = "float" }))
+          then
+            raise
+              (TypeError "Increment/Decrement requires int or float operand");
+          operand_type
+      | Minus ->
+          if
+            not
+              (type_eq operand_type (SymbolType { value = "int" })
+              || type_eq operand_type (SymbolType { value = "float" }))
+          then raise (TypeError "Unary minus requires int or float operand");
+          operand_type
+      | _ -> raise (TypeError "Unsupported unary operator"))
+  | BinaryExpr { left; operator; right } -> (
+      let lt = check_expr env func_env left in
+      let rt = check_expr env func_env right in
+      if not (type_eq lt rt) then
+        raise (TypeError "Binary operands must have the same type");
+      match operator with
+      | Eq | Neq | Geq | Leq | LogicalAnd | LogicalOr | Less | Greater ->
+          SymbolType { value = "bool" }
+      | BitWiseAND | BitWiseOR | BitWiseXOR | LeftShift | RightShift
+      | RightShiftLogical | BitWiseANDAssign | BitWiseORAssign
+      | BitWiseXORAssign | LeftShiftAssign | RightShiftAssign ->
+          if not (type_eq lt (SymbolType { value = "int" })) then
+            raise (TypeError "Bitwise operators require int operands");
+          lt
+      | _ -> lt)
+  | CallExpr { callee = VarExpr name; arguments } -> (
+      match List.assoc_opt name func_env with
+      | Some overloads -> (
+          let arg_types = List.map (check_expr env func_env) arguments in
+          let matching =
+            List.find_opt
+              (fun (params, _) ->
+                List.length params = List.length arg_types
+                && List.for_all2 type_eq params arg_types)
+              overloads
           in
-          env_final
-    | Ast.Stmt.ForStmt { init; condition; increment; body } ->
-        let env =
-          match init with
-          | Some stmt -> check_stmt env ~expected_return_type:None stmt
-          | None -> env
-        in
-        let _ =
-          let cond_type = check_expr env condition in
-          if cond_type <> Ast.Type.SymbolType { value = "bool" } then
-            failwith "TypeChecker: Condition in for statement must be a boolean"
-        in
-        let env =
-          match increment with
-          | Some stmt -> check_stmt env ~expected_return_type:None stmt
-          | None -> env
-        in
-        check_block env [ body ] ~expected_return_type
-    | Ast.Stmt.SwitchStmt { expr; cases; default_case } ->
-        let switch_type = check_expr env expr in
-        List.iter
-          (fun (case_expr, case_body) ->
-            let case_type = check_expr env case_expr in
-            if case_type <> switch_type then
-              failwith
-                "TypeChecker: Case expression type does not match switch \
-                 expression";
-            ignore (check_block env case_body ~expected_return_type))
-          cases;
-        (match default_case with
-        | Some body -> ignore (check_block env body ~expected_return_type)
-        | None -> ());
-        env
-    | Ast.Stmt.ImportStmt { module_name } -> check_import env module_name
+          match matching with
+          | Some (_, return_type) -> return_type
+          | None ->
+              raise
+                (TypeError ("Function argument type mismatch for `" ^ name ^ "`"))
+          )
+      | None -> (
+          match List.assoc_opt name env with
+          | Some (FunctionType (param_types, ret_type)) ->
+              let arg_types = List.map (check_expr env func_env) arguments in
+              if
+                List.length param_types = List.length arg_types
+                && List.for_all2 type_eq param_types arg_types
+              then ret_type
+              else
+                raise
+                  (TypeError
+                     ("Function argument type mismatch for `" ^ name ^ "`"))
+          | _ -> raise (TypeError ("Unknown function: " ^ name))))
+  | CallExpr _ ->
+      raise (TypeError "Only simple function calls supported for now")
+  | ArrayExpr { elements } -> (
+      let types = List.map (check_expr env func_env) elements in
+      match types with
+      | [] -> ArrayType { element_type = Any }
+      | hd :: tl ->
+          List.iter
+            (fun t ->
+              if not (type_eq t hd) then
+                raise (TypeError "Array element type mismatch"))
+            tl;
+          ArrayType { element_type = hd })
+  | IndexExpr { array; index } -> (
+      let at = check_expr env func_env array in
+      let index_type = check_expr env func_env index in
+      if not (type_eq index_type (SymbolType { value = "int" })) then
+        raise (TypeError "Index must be an integer");
+      match at with
+      | ArrayType { element_type } -> element_type
+      | TupleType element_types -> (
+          match index with
+          | Int64Expr { value } ->
+              let idx = Int64.to_int value in
+              if idx < 0 || idx >= List.length element_types then
+                raise
+                  (TypeError
+                     ("Tuple index out of bounds: " ^ string_of_int idx
+                    ^ " for tuple of size "
+                     ^ string_of_int (List.length element_types)));
+              List.nth element_types idx
+          | _ ->
+              raise
+                (TypeError
+                   "Can only use constant integer indices for tuples (e.g. \
+                    t[0])"))
+      | _ -> raise (TypeError "Can only index into arrays or tuples"))
+  | IfExpr { condition; then_branch; else_branch } ->
+      let ct = check_expr env func_env condition in
+      if not (type_eq ct (Type.SymbolType { value = "bool" })) then
+        raise (TypeError "If condition must be boolean");
+      let t_then = check_expr env func_env then_branch in
+      let t_else = check_expr env func_env else_branch in
+      if not (type_eq t_then t_else) then
+        raise (TypeError "Branches of if must return same type");
+      t_then
+  | ReturnExpr expr -> check_expr env func_env expr
+  | DotExpr { left; right } -> (
+      let _ = check_expr env func_env left in
+      match left with
+      | VarExpr enum_name -> (
+          match List.assoc_opt (enum_name ^ "." ^ right) env with
+          | Some member_type -> member_type
+          | None ->
+              raise
+                (TypeError
+                   ("Unknown member `" ^ right ^ "` for enum `" ^ enum_name
+                  ^ "`")))
+      | _ -> raise (TypeError "Dot access only supported for enums for now"))
+  | TernaryExpr { cond; onTrue; onFalse } ->
+      let ct = check_expr env func_env cond in
+      if not (type_eq ct (SymbolType { value = "bool" })) then
+        raise (TypeError "Ternary condition must be boolean");
+      let t_true = check_expr env func_env onTrue in
+      let t_false = check_expr env func_env onFalse in
+      if type_eq t_true t_false then t_true
+      else
+        raise
+          (TypeError
+             ("Ternary branches must return same type, but got "
+            ^ string_of_type t_true ^ " and " ^ string_of_type t_false))
+  | PipelineExpr { left; right } -> (
+      let arg_type = check_expr env func_env left in
+      match right with
+      | VarExpr name -> (
+          match List.assoc_opt name func_env with
+          | Some overloads -> (
+              let matching =
+                List.find_opt
+                  (fun (params, _) ->
+                    match params with
+                    | [ param_type ] -> type_eq param_type arg_type
+                    | _ -> false)
+                  overloads
+              in
+              match matching with
+              | Some (_, return_type) -> return_type
+              | None ->
+                  raise
+                    (TypeError
+                       ("No matching overload for `" ^ name
+                      ^ "` accepting argument of type "
+                      ^ string_of_type arg_type)))
+          | None -> (
+              match List.assoc_opt name env with
+              | Some (FunctionType ([ param_type ], return_type)) ->
+                  if type_eq param_type arg_type then return_type
+                  else
+                    raise
+                      (TypeError
+                         ("Function `" ^ name ^ "` expected "
+                        ^ string_of_type param_type ^ " but got "
+                        ^ string_of_type arg_type))
+              | Some _ ->
+                  raise (TypeError ("`" ^ name ^ "` is not a unary function"))
+              | None -> raise (TypeError ("Unknown function: " ^ name))))
+      | _ ->
+          raise
+            (TypeError
+               "Right-hand side of pipeline must be a function identifier"))
 
-  and check_block env stmts ~expected_return_type =
-    List.fold_left
-      (fun env stmt -> check_stmt env stmt ~expected_return_type)
-      env stmts
-end
+let rec find_return_exprs env func_env expr =
+  let open Expr in
+  match expr with
+  | ReturnExpr e -> [ check_expr env func_env e ]
+  | IfExpr { condition; then_branch; else_branch } ->
+      let _ = check_expr env func_env condition in
+      find_return_exprs env func_env then_branch
+      @ find_return_exprs env func_env else_branch
+  | BinaryExpr { left; operator = _; right } ->
+      find_return_exprs env func_env left @ find_return_exprs env func_env right
+  | CallExpr { callee; arguments } ->
+      find_return_exprs env func_env callee
+      @ List.concat_map (find_return_exprs env func_env) arguments
+  | ArrayExpr { elements } ->
+      List.flatten (List.map (find_return_exprs env func_env) elements)
+  | UnaryExpr { operand; _ } -> find_return_exprs env func_env operand
+  | IndexExpr { array; index } ->
+      find_return_exprs env func_env array
+      @ find_return_exprs env func_env index
+  | _ -> []
+
+let rec check_stmt (env : (string * Type.t) list)
+    (func_env : (string * (Type.t list * Type.t) list) list) (stmt : Stmt.t) :
+    (string * Type.t) list =
+  let open Stmt in
+  match stmt with
+  | ExprStmt expr ->
+      let _ = check_expr env func_env expr in
+      env
+  | VarDeclarationStmt { identifier; assigned_value; explicit_type } -> (
+      match assigned_value with
+      | Some expr ->
+          let expr_type = check_expr env func_env expr in
+          if not (type_eq expr_type explicit_type) then
+            raise (TypeError ("Type mismatch in declaration of " ^ identifier));
+          (identifier, explicit_type) :: env
+      | None -> (identifier, explicit_type) :: env)
+  | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } ->
+      if List.length identifier <> List.length assigned_value then
+        raise
+          (TypeError
+             "Number of identifiers does not match number of assigned \
+              expressions");
+      List.iter2
+        (fun ident expr ->
+          let expr_type = check_expr env func_env expr in
+          if not (type_eq expr_type explicit_type) then
+            raise (TypeError ("Type mismatch in declaration of " ^ ident)))
+        identifier assigned_value;
+      List.fold_left
+        (fun acc_env ident -> (ident, explicit_type) :: acc_env)
+        env identifier
+  | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
+      let local_funcs = collect_functions body in
+      let param_types = List.map (fun p -> p.param_type) parameters in
+      let this_func = (name, [ (param_types, return_type) ]) in
+      let func_env =
+        let base_env = local_funcs @ func_env in
+        match List.assoc_opt name base_env with
+        | Some overloads ->
+            (name, (param_types, return_type) :: overloads)
+            :: List.remove_assoc name base_env
+        | None -> this_func :: base_env
+      in
+      let rec contains_recursive_call fname expr =
+        let open Expr in
+        match expr with
+        | CallExpr { callee = VarExpr callee_name; _ } -> callee_name = fname
+        | CallExpr { callee; arguments } ->
+            contains_recursive_call fname callee
+            || List.exists (contains_recursive_call fname) arguments
+        | UnaryExpr { operand; _ } -> contains_recursive_call fname operand
+        | BinaryExpr { left; right; _ } ->
+            contains_recursive_call fname left
+            || contains_recursive_call fname right
+        | IfExpr { condition; then_branch; else_branch } ->
+            contains_recursive_call fname condition
+            || contains_recursive_call fname then_branch
+            || contains_recursive_call fname else_branch
+        | ArrayExpr { elements } ->
+            List.exists (contains_recursive_call fname) elements
+        | IndexExpr { array; index } ->
+            contains_recursive_call fname array
+            || contains_recursive_call fname index
+        | ReturnExpr e -> contains_recursive_call fname e
+        | _ -> false
+      in
+
+      let rec contains_recursive_call_stmt fname stmt =
+        let open Stmt in
+        match stmt with
+        | ExprStmt e -> contains_recursive_call fname e
+        | BlockStmt { body } ->
+            List.exists (contains_recursive_call_stmt fname) body
+        | IfStmt { condition; then_branch; else_branch } -> (
+            contains_recursive_call fname condition
+            || contains_recursive_call_stmt fname then_branch
+            ||
+            match else_branch with
+            | Some b -> contains_recursive_call_stmt fname b
+            | None -> false)
+        | ForStmt { init; condition; increment; body } ->
+            (match init with
+            | Some s -> contains_recursive_call_stmt fname s
+            | None -> false)
+            || contains_recursive_call fname condition
+            || (match increment with
+               | Some s -> contains_recursive_call_stmt fname s
+               | None -> false)
+            || contains_recursive_call_stmt fname body
+        | _ -> false
+      in
+
+      let has_recursive_call =
+        List.exists (contains_recursive_call_stmt name) body
+      in
+
+      if has_recursive_call && not is_rec then
+        raise
+          (TypeError
+             ("Function `" ^ name
+            ^ "` calls itself recursively but is not marked `rec`. Please add \
+               `rec`."));
+
+      let param_env = List.map (fun p -> (p.name, p.param_type)) parameters in
+      let env_with_params = param_env @ env in
+      let _final_env =
+        List.fold_left
+          (fun e stmt -> check_stmt e func_env stmt)
+          env_with_params body
+      in
+      let rec gather_return_types env func_env stmts =
+        List.concat_map
+          (function
+            | ExprStmt e -> find_return_exprs env func_env e
+            | BlockStmt { body } -> gather_return_types env func_env body
+            | IfStmt { condition = _; then_branch; else_branch } ->
+                let then_returns =
+                  gather_return_types env func_env [ then_branch ]
+                in
+                let else_returns =
+                  match else_branch with
+                  | Some b -> gather_return_types env func_env [ b ]
+                  | None -> []
+                in
+                then_returns @ else_returns
+            | _ -> [])
+          stmts
+      in
+      let return_expr_types = gather_return_types _final_env func_env body in
+
+      let last_expr_type =
+        match
+          List.rev body
+          |> List.find_opt (function ExprStmt _ -> true | _ -> false)
+        with
+        | Some (ExprStmt expr) -> Some (check_expr _final_env func_env expr)
+        | _ -> None
+      in
+
+      let all_return_types =
+        match last_expr_type with
+        | Some t -> if return_expr_types = [] then [ t ] else return_expr_types
+        | None -> return_expr_types
+      in
+
+      List.iter
+        (fun actual_type ->
+          if not (type_eq return_type actual_type) then
+            raise
+              (TypeError
+                 ("Function `" ^ name
+                ^ "` has mismatched return type: expected "
+                ^ string_of_type return_type ^ ", got "
+                ^ string_of_type actual_type)))
+        all_return_types;
+      env
+  | BlockStmt { body } ->
+      let _final_env =
+        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
+      in
+      _final_env
+  | IfStmt { condition; then_branch; else_branch } ->
+      let ct = check_expr env func_env condition in
+      if not (type_eq ct (SymbolType { value = "bool" })) then
+        raise (TypeError "If condition must be boolean");
+      let _ = check_stmt env func_env then_branch in
+      let _ =
+        match else_branch with
+        | Some b -> check_stmt env func_env b
+        | None -> env
+      in
+      env
+  | ForStmt { init; condition; increment; body } ->
+      let env =
+        match init with
+        | Some stmt -> check_stmt env func_env stmt
+        | None -> env
+      in
+      let ct = check_expr env func_env condition in
+      if not (type_eq ct (SymbolType { value = "bool" })) then
+        raise (TypeError "For loop condition must be boolean");
+      let _ = Option.map (check_stmt env func_env) increment in
+      let _ = check_stmt env func_env body in
+      env
+  | ImportStmt { module_name = mod_parts } -> (
+      match mod_parts with
+      | [ mod_name; symbol ] -> (
+          match List.assoc_opt mod_name built_in_modules with
+          | Some mod_entries -> (
+              match List.assoc_opt symbol mod_entries with
+              | Some ty -> (symbol, ty) :: env
+              | None ->
+                  raise
+                    (TypeError
+                       ("Module `" ^ mod_name ^ "` has no `" ^ symbol ^ "`")))
+          | None -> raise (TypeError ("Unknown module `" ^ mod_name ^ "`")))
+      | _ -> failwith "Invalid use syntax")
+  | ModuleStmt { module_name = _; block } ->
+      let _ =
+        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env block
+      in
+      env
+  | MatchStmt { expr; cases } ->
+      let et = check_expr env func_env expr in
+      List.iter
+        (fun (pat_opt, case_stmts) ->
+          (match pat_opt with
+          | Some pat_expr ->
+              let pt = check_expr env func_env pat_expr in
+              if not (type_eq et pt) then
+                raise (TypeError "Pattern type does not match match expression")
+          | None -> ());
+          ignore
+            (List.fold_left
+               (fun e stmt -> check_stmt e func_env stmt)
+               env case_stmts))
+        cases;
+      env
+  | EnumStmt { name; members } ->
+      let enum_type = SymbolType { value = name } in
+      let new_env =
+        List.fold_left
+          (fun acc_env (_, member) ->
+            (name ^ "." ^ member, enum_type) :: acc_env)
+          env
+          (List.mapi (fun i m -> (i, m)) members)
+      in
+      (name, enum_type) :: new_env
+
+and collect_functions stmts =
+  let rec collect_from_stmt stmt acc =
+    match stmt with
+    | FunctionDeclStmt { name; parameters; return_type; _ } ->
+        let param_types = List.map (fun p -> p.param_type) parameters in
+        let overload =
+          match List.assoc_opt name acc with
+          | Some overloads -> (name, (param_types, return_type) :: overloads)
+          | None -> (name, [ (param_types, return_type) ])
+        in
+        overload :: List.remove_assoc name acc
+    | BlockStmt { body } -> List.fold_right collect_from_stmt body acc
+    | IfStmt { then_branch; else_branch; _ } -> (
+        let acc = collect_from_stmt then_branch acc in
+        match else_branch with
+        | Some else_stmt -> collect_from_stmt else_stmt acc
+        | None -> acc)
+    | ForStmt { init; body; increment; _ } ->
+        let acc =
+          match init with Some s -> collect_from_stmt s acc | None -> acc
+        in
+        let acc =
+          match increment with Some s -> collect_from_stmt s acc | None -> acc
+        in
+        collect_from_stmt body acc
+    | ModuleStmt { block; _ } -> List.fold_right collect_from_stmt block acc
+    | _ -> acc
+  in
+  List.fold_right collect_from_stmt stmts builtins
+
+let typecheck_program (stmts : Stmt.t list) =
+  let env =
+    [
+      ("true", Type.SymbolType { value = "bool" });
+      ("false", Type.SymbolType { value = "bool" });
+    ]
+  in
+  let func_env = collect_functions stmts in
+  let final_env =
+    List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts
+  in
+  final_env

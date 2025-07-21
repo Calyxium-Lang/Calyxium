@@ -1,450 +1,1052 @@
-let stack : float Stack.t = Stack.create ()
-let string_table = Hashtbl.create 10
-let gc_threshold = ref 256
+open Init
+open Opcode
+open Gc
 
-let big_int_pow base exp =
-  let rec aux acc base exp =
-    if Z.equal exp Z.zero then acc
-    else if Z.equal (Z.rem exp (Z.of_int 2)) Z.zero then
-      aux acc (Z.mul base base) (Z.div exp (Z.of_int 2))
-    else aux (Z.mul acc base) base (Z.sub exp (Z.of_int 1))
-  in
-  aux Z.one base exp
+exception RuntimeError of string
 
-let safe_pow base exponent =
-  if floor base = base && floor exponent = exponent then
-    let base_int = Z.of_int (int_of_float base) in
-    let exponent_int = Z.of_int (int_of_float exponent) in
-    Z.to_float (big_int_pow base_int exponent_int)
-  else base ** exponent
+type trace_entry = { pc : int; instr : string }
 
-let inf_check value =
-  if value > Int64.to_float Int64.max_int then Float.infinity else value
+type frame = {
+  code : opcode array;
+  mutable pc : int;
+  mutable env : (string * (value * bool)) list;
+}
 
-let add_string str =
-  let id = Hashtbl.hash str in
-  Hashtbl.add string_table id str;
-  id
+let stdlib_modules : (string, value) Hashtbl.t = Hashtbl.create 16
+let trace : trace_entry list ref = ref []
+let push_trace pc instr = trace := { pc; instr } :: !trace
+let clear_trace () = trace := []
+
+let init_stdlib () =
+  List.iter
+    (fun (name, entries) ->
+      let tbl = Hashtbl.create (List.length entries) in
+      List.iter (fun (k, v) -> Hashtbl.add tbl k v) entries;
+      Hashtbl.add stdlib_modules name (VModule tbl))
+    stdlib_definitions
+
+let print_trace msg =
+  match !trace with
+  | { pc; instr } :: _ ->
+      prerr_endline "Stack Trace (most recent call last):";
+      prerr_endline
+        ("  at instruction '" ^ instr ^ "' (pc=" ^ string_of_int pc ^ ")");
+      prerr_endline ("Fatal error: " ^ msg)
+  | [] -> prerr_endline ("Fatal error: " ^ msg)
+
+let runtime_error msg = raise (RuntimeError msg)
+let stack : Gc.value Stack.t = Stack.create ()
+let global_env : (string * (Gc.value * bool)) list ref = ref []
+let bool_to_float b = if b then 1.0 else 0.0
+let bool_to_int64 b = if b then 1L else 0L
+let output_buffer : Buffer.t = Buffer.create 1024
 
 let escape_sequences =
-  [ ("\\n", '\n'); ("\\t", '\t'); ("\\r", '\r'); ("\\\\", '\\') ]
+  [
+    ("\\n", '\n'); ("\\t", '\t'); ("\\r", '\r'); ("\\\\", '\\'); ("\\0", '\000');
+  ]
 
 let replace_escape_sequences str =
   let buffer = Buffer.create (String.length str) in
-  let rec process_chars i =
-    if i >= String.length str then Buffer.contents buffer
-    else
-      let found_escape =
-        List.find_opt
-          (fun (esc, _) ->
-            String.starts_with ~prefix:esc
-              (String.sub str i (String.length str - i)))
-          escape_sequences
-      in
-      match found_escape with
-      | Some (esc, char) ->
-          Buffer.add_char buffer char;
-          process_chars (i + String.length esc)
+  let len = String.length str in
+  let rec aux i =
+    if i >= len then Buffer.contents buffer
+    else if i + 1 < len && str.[i] = '\\' then (
+      let esc_seq = "\\" ^ String.make 1 str.[i + 1] in
+      match List.assoc_opt esc_seq escape_sequences with
+      | Some ch ->
+          Buffer.add_char buffer ch;
+          aux (i + 2)
       | None ->
           Buffer.add_char buffer str.[i];
-          process_chars (i + 1)
+          aux (i + 1))
+    else (
+      Buffer.add_char buffer str.[i];
+      aux (i + 1))
   in
-  process_chars 0
+  aux 0
 
-let update_gc_threshold stats =
-  let heap_size_kb = stats.Gc.heap_words * 8 / 1024 in
-  if heap_size_kb > !gc_threshold then gc_threshold := heap_size_kb * 2
-
-let trigger_gc instruction_count =
-  let stats = Gc.stat () in
-  if instruction_count > !gc_threshold || stats.Gc.heap_words > 1_000_000 then (
-    Gc.full_major ();
-    update_gc_threshold stats)
-
-let rec execute_bytecode instructions env pc =
-  if pc >= Array.length instructions then
-    match Stack.top_opt stack with None -> 0.0 | Some hd -> hd
+let rec pop_n acc n =
+  if n <= 0 then acc
   else
-    let instruction_count = pc + 1 in
-    trigger_gc instruction_count;
-    match instructions.(pc) with
-    | Bytecode.LOAD_INT value ->
-        Stack.push (inf_check (Int64.to_float value)) stack;
-        execute_bytecode instructions env (pc + 1)
-    | Bytecode.LOAD_FLOAT value ->
-        Stack.push (inf_check value) stack;
-        execute_bytecode instructions env (pc + 1)
-    | Bytecode.LOAD_STRING value ->
-        let id = Hashtbl.hash value in
-        Hashtbl.add string_table id value;
-        Stack.push (float_of_int id) stack;
-        execute_bytecode instructions env (pc + 1)
-    | Bytecode.LOAD_BYTE value ->
-        let id = Hashtbl.hash (String.make 1 value) in
-        Hashtbl.add string_table id (String.make 1 value);
-        Stack.push (float_of_int id) stack;
-        execute_bytecode instructions env (pc + 1)
-    | Bytecode.LOAD_BOOL value ->
-        Stack.push (if value then 1.0 else 0.0) stack;
-        execute_bytecode instructions env (pc + 1)
-    | Bytecode.LOAD_VAR name -> (
-        match List.assoc_opt name env with
-        | Some (value, _) ->
-            Stack.push value stack;
-            execute_bytecode instructions env (pc + 1)
-        | None -> failwith ("Runtime Error: Variable " ^ name ^ " not found"))
-    | Bytecode.STORE_VAR name ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack is empty when trying to store variable"
-        else if List.mem_assoc name env then
-          failwith ("Runtime Error: Variable " ^ name ^ " is already declared")
-        else
-          let value = Stack.pop stack in
-          let env = (name, (value, true)) :: env in
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.FADD ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during FADD"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          Stack.push (inf_check (b +. a)) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.FSUB ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during FSUB"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          Stack.push (inf_check (b -. a)) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.FMUL ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during FMUL"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          Stack.push (inf_check (b *. a)) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.FDIV ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during FDIV"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if a = 0.0 then failwith "Runtime Error: Division by zero"
-          else Stack.push (inf_check (b /. a)) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.MOD ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during MOD"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          Stack.push (mod_float b a) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.POW ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during POW"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          let result = safe_pow b a in
-          Stack.push (inf_check result) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.RETURN ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during RETURN"
-        else
-          let return_value = Stack.pop stack in
-          return_value
-    | Bytecode.CALL function_name -> (
-        try
-          let function_body =
-            Hashtbl.find Bytecode.function_table function_name
-          in
-          let return_value =
-            execute_bytecode (Array.of_list function_body) env 0
-          in
-          Stack.push return_value stack;
-          execute_bytecode instructions env (pc + 1)
-        with Not_found ->
-          failwith ("Function '" ^ function_name ^ "' not found"))
-    | Bytecode.PRINT ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during PRINT"
-        else
-          let value = Stack.pop stack in
-          if value = Float.infinity then (
-            Printf.printf "inf";
-            execute_bytecode instructions env (pc + 1))
-          else if value = Float.neg_infinity then (
-            Printf.printf "-inf";
-            execute_bytecode instructions env (pc + 1))
-          else
-            let int_value = int_of_float value in
-            if Hashtbl.mem string_table int_value then
-              let str = Hashtbl.find string_table int_value in
-              let proc_str = replace_escape_sequences str in
-              Printf.printf "%s" proc_str
-            else if floor value = value then
-              Printf.printf "%Ld" (Int64.of_float value)
-            else Printf.printf "%.10f" value;
-            execute_bytecode instructions env (pc + 1)
-    | Bytecode.INPUT ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during INPUT"
-        else
-          let value = Stack.pop stack in
-          let int_value = int_of_float value in
-          if Hashtbl.mem string_table int_value then (
-            let prompt = Hashtbl.find string_table int_value in
-            Printf.printf "%s" prompt;
-            let input_value = read_line () in
-            let processed_value =
-              try float_of_string input_value
-              with Failure _ ->
-                let id = add_string input_value in
-                float_of_int id
-            in
-            Stack.push processed_value stack;
-            execute_bytecode instructions env (pc + 1))
-          else failwith "Runtime Error: Invalid prompt ID for INPUT"
-    | Bytecode.PRINTLN ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during PRINTLN"
-        else
-          let value = Stack.pop stack in
-          if value = Float.infinity then (
-            Printf.printf "inf\n";
-            execute_bytecode instructions env (pc + 1))
-          else if value = Float.neg_infinity then (
-            Printf.printf "-inf\n";
-            execute_bytecode instructions env (pc + 1))
-          else
-            let int_value = int_of_float value in
-            if Hashtbl.mem string_table int_value then
-              let str = Hashtbl.find string_table int_value in
-              let processed_str = replace_escape_sequences str in
-              Printf.printf "%s\n" processed_str
-            else if floor value = value then
-              Printf.printf "%Ld\n" (Int64.of_float value)
-            else Printf.printf "%.10f\n" value;
-            execute_bytecode instructions env (pc + 1)
-    | Bytecode.LEN ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during LEN"
-        else
-          let value = Stack.pop stack in
-          let int_value = int_of_float value in
-          if Hashtbl.mem string_table int_value then (
-            let str = Hashtbl.find string_table int_value in
-            let length = float_of_int (String.length str) in
-            Stack.push length stack;
-            execute_bytecode instructions env (pc + 1))
-          else failwith "Runtime Error: LEN expects a string"
-    | Bytecode.TOSTRING ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during TOSTRING"
-        else
-          let value = Stack.pop stack in
-          let str_value =
-            if Hashtbl.mem string_table (int_of_float value) then
-              Hashtbl.find string_table (int_of_float value)
-            else if floor value = value then string_of_int (int_of_float value)
-            else string_of_float value
-          in
-          let new_id = add_string str_value in
-          Stack.push (float_of_int new_id) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.TOINT ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during TOINT"
-        else
-          let value = Stack.pop stack in
-          let int_value =
-            if Hashtbl.mem string_table (int_of_float value) then
-              let str = Hashtbl.find string_table (int_of_float value) in
-              try int_of_string str
-              with Failure _ ->
-                failwith "Runtime Error: Invalid integer string"
-            else int_of_float value
-          in
-          Stack.push (float_of_int int_value) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.TOFLOAT ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during TOFLOAT"
-        else
-          let value = Stack.pop stack in
-          let float_value =
-            if Hashtbl.mem string_table (int_of_float value) then
-              let str = Hashtbl.find string_table (int_of_float value) in
-              try float_of_string str
-              with Failure _ -> failwith "Runtime Error: Invalid float string"
-            else if snd (modf value) = 0.0 then
-              float_of_int (int_of_float value)
-            else value
-          in
-          Stack.push float_value stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.CONCAT ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during CONCAT"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          let str_a =
-            if Hashtbl.mem string_table (int_of_float a) then
-              Hashtbl.find string_table (int_of_float a)
-            else
-              failwith "Runtime Error: First operand for CONCAT is not a string"
-          in
-          let str_b =
-            if Hashtbl.mem string_table (int_of_float b) then
-              Hashtbl.find string_table (int_of_float b)
-            else
-              failwith
-                "Runtime Error: Second operand for CONCAT is not a string"
-          in
-          let concatenated_str = str_b ^ str_a in
-          let new_id = add_string concatenated_str in
-          Stack.push (float_of_int new_id) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.PUSH_ARGS -> execute_bytecode instructions env (pc + 1)
-    | Bytecode.FUNC _ ->
-        let rec skip_function pc =
-          match instructions.(pc) with
-          | Bytecode.RETURN -> pc + 1
-          | _ -> skip_function (pc + 1)
-        in
-        execute_bytecode instructions env (skip_function (pc + 1))
-    | Bytecode.JUMP_IF_FALSE label ->
-        let condition = Stack.pop stack in
-        if condition = 0.0 then execute_bytecode instructions env (pc + label)
-        else execute_bytecode instructions env (pc + 1)
-    | Bytecode.JUMP label -> execute_bytecode instructions env (pc + label)
-    | Bytecode.LESS ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during LESS"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if b < a then Stack.push 1.0 stack else Stack.push 0.0 stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.GREATER ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack under during GREATER"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if b > a then Stack.push 1.0 stack else Stack.push 0.0 stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.GREATER_EQUAL ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack under during GREATER"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if b >= a then Stack.push 1.0 stack else Stack.push 0.0 stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.LESS_EQUAL ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack under during GREATER"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if b <= a then Stack.push 1.0 stack else Stack.push 0.0 stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.NOT_EQUAL ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack under during GREATER"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if b <> a then Stack.push 1.0 stack else Stack.push 0.0 stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.EQUAL ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack under during GREATER"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if b = a then Stack.push 1.0 stack else Stack.push 0.0 stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.AND ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during AND"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if b <> 0.0 && a <> 0.0 then Stack.push 1.0 stack
-          else Stack.push 0.0 stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.OR ->
-        if Stack.length stack < 2 then
-          failwith "Runtime Error: Stack underflow during OR"
-        else
-          let a = Stack.pop stack in
-          let b = Stack.pop stack in
-          if b <> 0.0 || a <> 0.0 then Stack.push 1.0 stack
-          else Stack.push 0.0 stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.INC ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during INC"
-        else
-          let value = Stack.pop stack in
-          Stack.push (value +. 1.0) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.DEC ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during DEC"
-        else
-          let value = Stack.pop stack in
-          Stack.push (value -. 1.0) stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.LOAD_ARRAY length ->
-        let array = Stack.create () in
-        for _ = 1 to length do
-          let element = Stack.pop stack in
-          Stack.push element array
-        done;
-        Stack.push (Obj.magic array : float) stack;
-        execute_bytecode instructions env (pc + 1)
-    | Bytecode.LOAD_INDEX ->
-        let index = int_of_float (Stack.pop stack) in
-        let array_stack = (Obj.magic (Stack.pop stack) : float Stack.t) in
-        let array_list =
-          Stack.fold (fun acc x -> x :: acc) [] array_stack |> List.rev
-        in
-        if index < 0 || index >= List.length array_list then
-          failwith "Runtime Error: index out of bounds"
-        else
-          let element = List.nth array_list index in
-          Stack.push element stack;
-          execute_bytecode instructions env (pc + 1)
-    | Bytecode.SWITCH ->
-        let switch_value = Stack.pop stack in
-        let rec execute_cases pc =
-          match instructions.(pc) with
-          | Bytecode.CASE value ->
-              if switch_value = value then
-                execute_bytecode instructions env (pc + 1)
-              else execute_cases (pc + 1)
-          | Bytecode.DEFAULT -> execute_bytecode instructions env (pc + 1)
-          | _ -> failwith "Runtime Error: Unexpected bytecode in SWITCH"
-        in
-        execute_cases (pc + 1)
-    | Bytecode.DUP ->
-        if Stack.is_empty stack then
-          failwith "Runtime Error: Stack underflow during DUP"
-        else
-          let top_value = Stack.top stack in
-          Stack.push top_value stack;
-          execute_bytecode instructions env (pc + 1)
-    | _ -> failwith "Runtime Error: Unsupported opcode"
+    match Stack.pop_opt stack with
+    | Some v -> pop_n (v :: acc) (n - 1)
+    | None -> runtime_error "Stack underflow in pop_n"
 
-let run instructions =
-  try execute_bytecode (Array.of_list instructions) [] 0
-  with Failure msg -> failwith msg
+let rec pop_n_rev acc n =
+  if n = 0 then acc
+  else
+    match Stack.pop_opt stack with
+    | Some v -> pop_n_rev (v :: acc) (n - 1)
+    | None -> runtime_error "Stack underflow in pop_n_rev"
+
+let pop2_safe stack =
+  match (Stack.pop_opt stack, Stack.pop_opt stack) with
+  | Some b, Some a -> (a, b)
+  | _ -> runtime_error "Stack underflow"
+
+let pop1 stack =
+  match Stack.pop_opt stack with
+  | Some v -> v
+  | None -> runtime_error "Stack underflow"
+
+let get_var env name =
+  match List.assoc_opt name env with
+  | Some (v, _) -> v
+  | None -> (
+      match List.assoc_opt name !global_env with
+      | Some (v, _) -> v
+      | None ->
+          runtime_error ("Variable '" ^ name ^ "' not found in environment"))
+
+let get_string_from_stack_value = function
+  | VHeapRef id -> (
+      match Gc.get_string id with
+      | Some s -> s
+      | None ->
+          runtime_error
+            ("Expected string on stack, but no string with ID "
+           ^ string_of_int id))
+  | _ -> runtime_error "Expected a string heap reference on stack"
+
+let resolve_function_body function_name =
+  try Hashtbl.find Bytecode.function_table function_name
+  with Not_found ->
+    runtime_error
+      ("Function '" ^ function_name ^ "' not found in function table")
+
+let extract_param_names = function
+  | FUNCTION _ :: rest ->
+      let rec collect acc = function
+        | STORE_VAR name :: tl -> collect (name :: acc) tl
+        | _ -> List.rev acc
+      in
+      collect [] rest
+  | _ -> runtime_error "Malformed function body during parameter extraction"
+
+let rec int64_pow base exp =
+  if exp < 0L then invalid_arg "int64_pow: negative exponent"
+  else if exp = 0L then Int64.one
+  else if Int64.rem exp 2L = 0L then
+    let half = int64_pow base (Int64.div exp 2L) in
+    Int64.mul half half
+  else Int64.mul base (int64_pow base (Int64.sub exp 1L))
+
+let update_variable name result env =
+  let updated = ref false in
+  let new_env =
+    List.map
+      (fun (k, (v, mutable_)) ->
+        if k = name then (
+          updated := true;
+          (k, (result, mutable_)))
+        else (k, (v, mutable_)))
+      env
+  in
+  if !updated then new_env
+  else
+    let updated_globals =
+      List.map
+        (fun (k, (v, mutable_)) ->
+          if k = name then (k, (result, mutable_)) else (k, (v, mutable_)))
+        !global_env
+    in
+    if List.exists (fun (k, _) -> k = name) !global_env then
+      global_env := updated_globals
+    else global_env := (name, (result, true)) :: !global_env;
+    env
+
+let rec equal_value a b =
+  match (a, b) with
+  | VHeapRef id1, VHeapRef id2 -> (
+      match (Gc.get_string id1, Gc.get_string id2) with
+      | Some sa, Some sb -> sa = sb
+      | _ -> id1 = id2)
+  | VFloat f1, VFloat f2 -> f1 = f2
+  | VInt64 i1, VInt64 i2 -> i1 = i2
+  | VBool b1, VBool b2 -> b1 = b2
+  | VByte c1, VByte c2 -> c1 = c2
+  | VUnit, VUnit -> true
+  | VTuple l1, VTuple l2 ->
+      List.length l1 = List.length l2 && List.for_all2 equal_value l1 l2
+  | _ -> false
+
+let string_to_bytes (s : string) : char array =
+  Array.init (String.length s) (String.get s)
+
+let reset_vm_state () =
+  Stack.clear stack;
+  global_env := [];
+  clear_trace ();
+  Buffer.clear output_buffer
+
+let run (instructions : opcode list) =
+  clear_trace ();
+  let frame_stack = Stack.create () in
+  let push_frame code env = Stack.push { code; pc = 0; env } frame_stack in
+  push_frame (Array.of_list instructions) [];
+  try
+    while not (Stack.is_empty frame_stack) do
+      let frame = Stack.top frame_stack in
+      if frame.pc >= Array.length frame.code then (
+        ignore (pop1 frame_stack);
+        ())
+      else
+        let instr = frame.code.(frame.pc) in
+        let next () = frame.pc <- frame.pc + 1 in
+        match instr with
+        | LOAD_INT64 v ->
+            push_trace frame.pc ("LOAD_INT64 " ^ Int64.to_string v);
+            Stack.push (VInt64 v) stack;
+            next ()
+        | LOAD_FLOAT v ->
+            push_trace frame.pc ("LOAD_FLOAT " ^ string_of_float v);
+            Stack.push (VFloat v) stack;
+            next ()
+        | LOAD_STRING s ->
+            push_trace frame.pc ("LOAD_STRING " ^ s);
+            let v = Gc.alloc_string_with_gc stack frame.env s in
+            Stack.push v stack;
+            next ()
+        | LOAD_BYTE c ->
+            push_trace frame.pc ("LOAD_BYTE " ^ String.make 1 c);
+            let v = Gc.alloc_string_with_gc stack frame.env (String.make 1 c) in
+            Stack.push v stack;
+            next ()
+        | LOAD_BOOL b ->
+            push_trace frame.pc ("LOAD_BOOL " ^ string_of_bool b);
+            Stack.push (VBool b) stack;
+            next ()
+        | LOAD_UNIT _ ->
+            push_trace frame.pc "LOAD_UNIT";
+            Stack.push (VFloat nan) stack;
+            next ()
+        | LOAD_TUPLE n ->
+            push_trace frame.pc ("LOAD_TUPLE " ^ string_of_int n);
+            if Stack.length stack < n then
+              runtime_error
+                ("LOAD_TUPLE expects " ^ string_of_int n
+               ^ " values on the stack")
+            else
+              let items = pop_n_rev [] n in
+              Stack.push (VTuple items) stack;
+              next ()
+        | LOAD_VAR name ->
+            push_trace frame.pc ("LOAD_VAR " ^ name);
+            Stack.push (get_var frame.env name) stack;
+            next ()
+        | PLUS ->
+            push_trace frame.pc "PLUS";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VFloat a, VFloat b -> Stack.push (VFloat (a +. b)) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.add a b)) stack
+            | _ -> runtime_error "PLUS expects numbers");
+            next ()
+        | MINUS ->
+            push_trace frame.pc "MINUS";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VFloat a, VFloat b -> Stack.push (VFloat (a -. b)) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.sub a b)) stack
+            | _ -> runtime_error "MINUS expects numbers");
+            next ()
+        | STAR ->
+            push_trace frame.pc "STAR";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VFloat a, VFloat b -> Stack.push (VFloat (a *. b)) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.mul a b)) stack
+            | _ -> runtime_error "STAR expects numbers");
+            next ()
+        | SLASH ->
+            push_trace frame.pc "SLASH";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
+            | VInt64 _, VInt64 0L -> runtime_error "Division by zero"
+            | VFloat a, VFloat b -> Stack.push (VFloat (a /. b)) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.div a b)) stack
+            | _ -> runtime_error "SLASH expects numbers");
+            next ()
+        | MOD ->
+            push_trace frame.pc "MOD";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
+            | VInt64 _, VInt64 0L -> runtime_error "Modulo by zero"
+            | VFloat a, VFloat b -> Stack.push (VFloat (mod_float a b)) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.rem a b)) stack
+            | _ -> runtime_error "MOD expects numbers");
+            next ()
+        | POW ->
+            push_trace frame.pc "POW";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VFloat a, VFloat b -> Stack.push (VFloat (a ** b)) stack
+            | VInt64 a, VInt64 b -> (
+                if b < 0L then runtime_error "POW expects non-negative exponent"
+                else
+                  try Stack.push (VInt64 (int64_pow a b)) stack
+                  with _ -> runtime_error "POW overflow")
+            | _ -> runtime_error "POW expects numbers");
+            next ()
+        | CONCAT ->
+            push_trace frame.pc "CONCAT";
+            let b, a = pop2_safe stack in
+            let result =
+              get_string_from_stack_value b ^ get_string_from_stack_value a
+            in
+            let v = Gc.alloc_string_with_gc stack frame.env result in
+            Stack.push v stack;
+            next ()
+        | JUMP_IF_FALSE offset -> (
+            push_trace frame.pc ("JUMP_IF_FALSE " ^ string_of_int offset);
+            match Stack.pop_opt stack with
+            | Some (VFloat 0.0) | Some (VInt64 0L) | Some (VBool false) ->
+                frame.pc <- frame.pc + offset
+            | Some _ -> next ()
+            | None -> runtime_error "JUMP_IF_FALSE with empty stack")
+        | JUMP n ->
+            push_trace frame.pc ("JUMP " ^ string_of_int n);
+            frame.pc <- frame.pc + n
+        | LESS ->
+            push_trace frame.pc "LESS";
+            let a, b = pop2_safe stack in
+            let result =
+              match (a, b) with
+              | VFloat a, VFloat b -> VFloat (bool_to_float (a < b))
+              | VInt64 a, VInt64 b ->
+                  VInt64 (bool_to_int64 (Int64.compare a b < 0))
+              | _ -> runtime_error "LESS expects two floats or int64"
+            in
+            Stack.push result stack;
+            next ()
+        | GREATER ->
+            push_trace frame.pc "GREATER";
+            let a, b = pop2_safe stack in
+            let result =
+              match (a, b) with
+              | VFloat a, VFloat b -> VFloat (bool_to_float (a > b))
+              | VInt64 a, VInt64 b ->
+                  VInt64 (bool_to_int64 (Int64.compare a b > 0))
+              | _ -> runtime_error "GREATER expects two floats or int64"
+            in
+            Stack.push result stack;
+            next ()
+        | LESS_EQUAL ->
+            push_trace frame.pc "LESS_EQUAL";
+            let a, b = pop2_safe stack in
+            let result =
+              match (a, b) with
+              | VFloat a, VFloat b -> VFloat (bool_to_float (a <= b))
+              | VInt64 a, VInt64 b ->
+                  VInt64 (bool_to_int64 (Int64.compare a b <= 0))
+              | _ -> runtime_error "LESS_EQUAL expects two floats or int64"
+            in
+            Stack.push result stack;
+            next ()
+        | GREATER_EQUAL ->
+            push_trace frame.pc "GREATER_EQUAL";
+            let a, b = pop2_safe stack in
+            let result =
+              match (a, b) with
+              | VFloat a, VFloat b -> VFloat (bool_to_float (a >= b))
+              | VInt64 a, VInt64 b ->
+                  VInt64 (bool_to_int64 (Int64.compare a b >= 0))
+              | _ -> runtime_error "GREATER_EQUAL expects two floats or int64"
+            in
+            Stack.push result stack;
+            next ()
+        | NOT_EQUAL ->
+            push_trace frame.pc "NOT_EQUAL";
+            let a, b = pop2_safe stack in
+            let result =
+              match (a, b) with
+              | VFloat a, VFloat b -> VFloat (bool_to_float (a <> b))
+              | VInt64 a, VInt64 b -> VInt64 (bool_to_int64 (a <> b))
+              | _ -> runtime_error "NOT_EQUAL expects two floats or int64"
+            in
+            Stack.push result stack;
+            next ()
+        | EQUAL ->
+            push_trace frame.pc "EQUAL";
+            let b, a = pop2_safe stack in
+            let result = equal_value a b in
+            Stack.push (VBool result) stack;
+            next ()
+        | AND ->
+            push_trace frame.pc "AND";
+            let a, b = pop2_safe stack in
+            let bool_val = function
+              | VBool b -> b
+              | VFloat f -> f <> 0.0
+              | VInt64 i -> i <> 0L
+              | _ -> runtime_error "AND expects bool, float, or int64"
+            in
+            Stack.push (VBool (bool_val a && bool_val b)) stack;
+            next ()
+        | OR ->
+            push_trace frame.pc "OR";
+            let a, b = pop2_safe stack in
+            let bool_val = function
+              | VBool b -> b
+              | VFloat f -> f <> 0.0
+              | VInt64 i -> i <> 0L
+              | _ -> runtime_error "OR expects bool, float, or int64"
+            in
+            Stack.push (VBool (bool_val a || bool_val b)) stack;
+            next ()
+        | NOT ->
+            push_trace frame.pc "NOT";
+            let v = pop1 stack in
+            let bool_val =
+              match v with
+              | VFloat f -> f <> 0.0
+              | VInt64 i -> i <> 0L
+              | _ -> runtime_error "NOT expects float or int64"
+            in
+            Stack.push (VFloat (if not bool_val then 1.0 else 0.0)) stack;
+            next ()
+        | INC ->
+            push_trace frame.pc "INC";
+            let v = pop1 stack in
+            let result =
+              match v with
+              | VFloat f -> VFloat (f +. 1.0)
+              | VInt64 i -> VInt64 Int64.(add i 1L)
+              | _ -> runtime_error "INC expects float or int64"
+            in
+            Stack.push result stack;
+            next ()
+        | DEC ->
+            push_trace frame.pc "DEC";
+            let v = pop1 stack in
+            let result =
+              match v with
+              | VFloat f -> VFloat (f -. 1.0)
+              | VInt64 i -> VInt64 Int64.(sub i 1L)
+              | _ -> runtime_error "DEC expects float or int64"
+            in
+            Stack.push result stack;
+            next ()
+        | DUP ->
+            push_trace frame.pc "DUP";
+            Stack.top_opt stack |> Option.iter (fun v -> Stack.push v stack);
+            if Stack.is_empty stack then
+              runtime_error "Stack underflow during DUP";
+            next ()
+        | POP ->
+            push_trace frame.pc "POP";
+            if Stack.pop_opt stack = None then
+              runtime_error "POP attempted on empty stack"
+            else next ()
+        | LOAD_ARRAY length ->
+            push_trace frame.pc ("LOAD_ARRAY " ^ string_of_int length);
+            if Stack.length stack < length then
+              runtime_error
+                ("LOAD_ARRAY expects " ^ string_of_int length
+               ^ " elements on stack")
+            else
+              let items = pop_n_rev [] length in
+              Stack.push (VArray items) stack;
+              next ()
+        | LOAD_INDEX ->
+            push_trace frame.pc "LOAD_INDEX";
+            if Stack.length stack < 2 then
+              runtime_error
+                "LOAD_INDEX requires two values on the stack (collection, \
+                 index)";
+            let index =
+              match pop1 stack with
+              | VInt64 i -> Int64.to_int i
+              | _ -> runtime_error "Expected int for index in LOAD_INDEX"
+            in
+            let collection = pop1 stack in
+            let item =
+              match collection with
+              | VArray items ->
+                  if index < 0 || index >= List.length items then
+                    runtime_error
+                      ("Index out of bounds in LOAD_INDEX: "
+                     ^ string_of_int index)
+                  else List.nth items index
+              | VTuple items ->
+                  if index < 0 || index >= List.length items then
+                    runtime_error
+                      ("Index out of bounds in LOAD_INDEX: "
+                     ^ string_of_int index)
+                  else List.nth items index
+              | VHeapRef id -> (
+                  match Gc.find_heap_obj id with
+                  | Gc.HString s ->
+                      if index < 0 || index >= String.length s then
+                        runtime_error
+                          ("Index out of bounds in LOAD_INDEX (string): "
+                         ^ string_of_int index)
+                      else VByte s.[index]
+                  | Gc.HBytes arr ->
+                      if index < 0 || index >= Array.length arr then
+                        runtime_error
+                          ("Index out of bounds in LOAD_INDEX (bytes): "
+                         ^ string_of_int index)
+                      else VByte arr.(index)
+                  | _ ->
+                      runtime_error
+                        "Expected array, tuple, string, or bytes for LOAD_INDEX"
+                  )
+              | _ ->
+                  runtime_error
+                    "Expected array, tuple, string, or bytes for LOAD_INDEX"
+            in
+            Stack.push item stack;
+            next ()
+        | FUNCTION _ ->
+            let rec skip_function pc =
+              if pc >= Array.length frame.code then
+                runtime_error "Unterminated FUNCTION block"
+              else
+                match frame.code.(pc) with
+                | RETURN -> pc + 1
+                | _ -> skip_function (pc + 1)
+            in
+            frame.pc <- skip_function (frame.pc + 1)
+        | CALL function_name ->
+            push_trace frame.pc ("CALL " ^ function_name);
+            let function_body = resolve_function_body function_name in
+            let param_names = extract_param_names function_body in
+            let arg_count = List.length param_names in
+
+            if Stack.length stack < arg_count then
+              runtime_error
+                ("CALL to '" ^ function_name ^ "' requires "
+               ^ string_of_int arg_count ^ " arguments, but stack has only "
+                ^ string_of_int (Stack.length stack));
+
+            let args = pop_n [] arg_count in
+            let local_env =
+              List.combine param_names (List.map (fun v -> (v, true)) args)
+            in
+
+            let roots = Gc.get_stack_roots stack in
+            Gc.maybe_collect_gc roots local_env;
+
+            let skip_header = 1 + arg_count in
+            let body = List.drop skip_header function_body in
+            let code = Array.of_list body in
+
+            frame.pc <- frame.pc + 1;
+            push_frame code local_env
+        | TAIL_CALL function_name ->
+            push_trace frame.pc ("TAIL_CALL " ^ function_name);
+            let function_body = resolve_function_body function_name in
+            let param_names = extract_param_names function_body in
+            let arg_count = List.length param_names in
+
+            if Stack.length stack < arg_count then
+              runtime_error
+                ("TAIL_CALL to '" ^ function_name ^ "' requires "
+               ^ string_of_int arg_count ^ " arguments, but stack has only "
+                ^ string_of_int (Stack.length stack));
+
+            let args = pop_n [] arg_count in
+            let local_env =
+              List.combine param_names (List.map (fun v -> (v, true)) args)
+            in
+
+            let skip_header = 1 + arg_count in
+            let body = List.drop skip_header function_body in
+            let code = Array.of_list body in
+            ignore (pop1 frame_stack);
+            Stack.push { code; pc = 0; env = local_env } frame_stack
+        | RETURN ->
+            push_trace frame.pc "RETURN";
+            let return_value =
+              match Stack.pop_opt stack with Some v -> v | None -> VFloat nan
+            in
+            ignore (pop1 frame_stack);
+            Stack.push return_value stack
+        | STORE_VAR name ->
+            push_trace frame.pc ("STORE_VAR " ^ name);
+            if Stack.is_empty stack then
+              runtime_error ("STORE_VAR '" ^ name ^ "' failed: stack is empty")
+            else
+              let value = pop1 stack in
+              if List.mem_assoc name frame.env then (
+                frame.env <-
+                  (name, (value, true)) :: List.remove_assoc name frame.env;
+                next ())
+              else (
+                global_env :=
+                  (name, (value, true)) :: List.remove_assoc name !global_env;
+                next ())
+        | PRINTLN ->
+            push_trace frame.pc "PRINTLN";
+            if Stack.is_empty stack then
+              runtime_error "PRINTLN attempted with empty stack"
+            else
+              let rec string_of_value = function
+                | VUnit -> "unit"
+                | VByte c -> Printf.sprintf "'%c'" c
+                | VBool true -> "true"
+                | VBool false -> "false"
+                | VFloat f when Float.is_nan f -> "unit"
+                | VFloat 1.0 -> "true"
+                | VFloat 0.0 -> "false"
+                | VFloat f when Float.is_infinite f ->
+                    if f > 0.0 then "inf" else "-inf"
+                | VFloat f -> Printf.sprintf "%.12f" f
+                | VInt64 i -> Printf.sprintf "%Ld" i
+                | VHeapRef id -> (
+                    match Gc.get_string id with
+                    | Some s -> "" ^ replace_escape_sequences s ^ ""
+                    | None -> "<invalid ref>")
+                | VArray items ->
+                    let contents =
+                      items |> List.map string_of_value |> String.concat ", "
+                    in
+                    "[" ^ contents ^ "]"
+                | VTuple items ->
+                    let contents =
+                      items |> List.map string_of_value |> String.concat ", "
+                    in
+                    "(" ^ contents ^ ")"
+                | VModule _ -> "<module>"
+                | VNative _ -> "<native>"
+                | VClosure _ -> "<closure>"
+              in
+              let value = pop1 stack in
+              Buffer.add_string output_buffer (string_of_value value ^ "\n");
+              next ()
+        | INPUT -> (
+            push_trace frame.pc "INPUT";
+            if Stack.is_empty stack then
+              runtime_error "Stack underflow during INPUT"
+            else
+              let value = pop1 stack in
+              let id =
+                match value with
+                | VHeapRef id -> id
+                | _ -> runtime_error "INPUT expected a heap reference ID"
+              in
+              match Gc.get_string id with
+              | Some prompt ->
+                  Printf.printf "%s" prompt;
+                  let input_value = read_line () in
+                  let processed_value =
+                    try VFloat (float_of_string input_value)
+                    with Failure _ ->
+                      Gc.alloc_string_with_gc stack frame.env input_value
+                  in
+                  Stack.push processed_value stack;
+                  next ()
+              | None -> runtime_error "Invalid prompt ID for INPUT")
+        | NEG ->
+            push_trace frame.pc "NEG";
+            let v = pop1 stack in
+            (match v with
+            | VFloat f -> Stack.push (VFloat (-.f)) stack
+            | VInt64 i -> Stack.push (VInt64 (Int64.neg i)) stack
+            | _ -> runtime_error "NEG expects a float or int");
+            next ()
+        | FLOAT ->
+            push_trace frame.pc "FLOAT";
+            let v = pop1 stack in
+            let float_val =
+              match v with
+              | VFloat f -> f
+              | VInt64 i -> Int64.to_float i
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some s -> (
+                      try float_of_string s
+                      with Failure _ ->
+                        runtime_error ("FLOAT: invalid float string: " ^ s))
+                  | None ->
+                      runtime_error "FLOAT: invalid heap reference for string")
+              | _ ->
+                  runtime_error "FLOAT: unsupported type for float conversion"
+            in
+            Stack.push (VFloat float_val) stack;
+            next ()
+        | INT ->
+            push_trace frame.pc "INT";
+            let v = pop1 stack in
+            let int_val =
+              match v with
+              | VInt64 i -> i
+              | VFloat f -> Int64.of_float f
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some s -> (
+                      try Int64.of_string s
+                      with Failure _ ->
+                        runtime_error ("INT: invalid int string: " ^ s))
+                  | None ->
+                      runtime_error "INT: invalid heap reference for string")
+              | _ -> runtime_error "INT: unsupported type for int conversion"
+            in
+            Stack.push (VInt64 int_val) stack;
+            next ()
+        | STRING ->
+            push_trace frame.pc "STRING";
+            let v = pop1 stack in
+            let str_val =
+              match v with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some s -> s
+                  | None ->
+                      runtime_error "STRING: invalid heap reference for string")
+              | VInt64 i -> Int64.to_string i
+              | VFloat f -> string_of_float f
+              | VBool b -> if b then "true" else "false"
+              | VByte c -> String.make 1 c
+              | VUnit -> "()"
+              | _ ->
+                  runtime_error "STRING: unsupported type for string conversion"
+            in
+            let new_str_ref = Gc.alloc_string_with_gc stack frame.env str_val in
+            Stack.push new_str_ref stack;
+            next ()
+        | BYTE ->
+            push_trace frame.pc "TO_BYTES";
+            let v = pop1 stack in
+            let str_val =
+              match v with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some s -> s
+                  | None ->
+                      runtime_error
+                        "TO_BYTES: invalid heap reference for string")
+              | VInt64 i -> Int64.to_string i
+              | VFloat f -> string_of_float f
+              | VBool b -> if b then "true" else "false"
+              | VByte c -> String.make 1 c
+              | VUnit -> "()"
+              | _ -> runtime_error "TO_BYTES: unsupported type for conversion"
+            in
+            let byte_array = string_to_bytes str_val in
+            let new_bytes_ref =
+              Gc.alloc_bytes_with_gc stack frame.env byte_array
+            in
+            Stack.push new_bytes_ref stack;
+            next ()
+        | PLUSASSIGN ->
+            push_trace frame.pc "PLUSASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None ->
+                      runtime_error
+                        "PLUSASSIGN: invalid variable name reference")
+              | _ -> runtime_error "PLUSASSIGN: expected variable name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VFloat oldf, VFloat newf -> VFloat (oldf +. newf)
+              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.add oldi newi)
+              | _ -> runtime_error "PLUSASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            Stack.push result stack;
+            next ()
+        | MINUSASSIGN ->
+            push_trace frame.pc "MINUSASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None ->
+                      runtime_error
+                        "MINUSASSIGN: invalid variable name reference")
+              | _ -> runtime_error "MINUSASSIGN: expected variable name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VFloat oldf, VFloat newf -> VFloat (oldf -. newf)
+              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.sub oldi newi)
+              | _ -> runtime_error "MINUSASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            next ()
+        | STARASSIGN ->
+            push_trace frame.pc "STARASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None ->
+                      runtime_error
+                        "STARASSIGN: invalid variable name reference")
+              | _ -> runtime_error "STARASSIGN: expected variable name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VFloat oldf, VFloat newf -> VFloat (oldf *. newf)
+              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.mul oldi newi)
+              | _ -> runtime_error "STARASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            next ()
+        | SLASHASSIGN ->
+            push_trace frame.pc "SLASHASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None ->
+                      runtime_error
+                        "SLASHASSIGN: invalid variable name reference")
+              | _ -> runtime_error "SLASHASSIGN: expected variable name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VFloat oldf, VFloat newf ->
+                  if newf = 0.0 then
+                    runtime_error "SLASHASSIGN: division by zero";
+                  VFloat (oldf /. newf)
+              | VInt64 oldi, VInt64 newi ->
+                  if newi = 0L then
+                    runtime_error "SLASHASSIGN: division by zero";
+                  VInt64 (Int64.div oldi newi)
+              | _ -> runtime_error "SLASHASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            next ()
+        | LOAD_VAR_REF name ->
+            push_trace frame.pc ("LOAD_VAR_REF " ^ name);
+            let v = Gc.alloc_string_with_gc stack frame.env name in
+            Stack.push v stack;
+            next ()
+        | LENGTH ->
+            push_trace frame.pc "LENGTH";
+            if Stack.is_empty stack then
+              runtime_error "LENGTH expects a value on the stack"
+            else
+              let v = pop1 stack in
+              let length =
+                match v with
+                | VHeapRef id -> (
+                    match Gc.find_heap_obj id with
+                    | Gc.HString s -> Int64.of_int (String.length s)
+                    | Gc.HBytes bytes_arr ->
+                        Int64.of_int (Array.length bytes_arr)
+                    | _ ->
+                        runtime_error
+                          "LENGTH: heap reference is not a string or bytes")
+                | VArray items -> Int64.of_int (List.length items)
+                | VTuple items -> Int64.of_int (List.length items)
+                | _ ->
+                    runtime_error
+                      "LENGTH expects a string, bytes, array, or tuple"
+              in
+              Stack.push (VInt64 length) stack;
+              next ()
+        | BITWISENOT ->
+            push_trace frame.pc "BITWISE_NOT";
+            let v = pop1 stack in
+            (match v with
+            | VInt64 i -> Stack.push (VInt64 (Int64.lognot i)) stack
+            | _ -> runtime_error "BITWISE_NOT expects an int64");
+            next ()
+        | BITWISEAND ->
+            push_trace frame.pc "BITWISE_AND";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logand a b)) stack
+            | _ -> runtime_error "BITWISE_AND expects int64 operands");
+            next ()
+        | BITWISEOR ->
+            push_trace frame.pc "BITWISE_OR";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logor a b)) stack
+            | _ -> runtime_error "BITWISE_OR expects int64 operands");
+            next ()
+        | BITWISEXOR ->
+            push_trace frame.pc "BITWISE_XOR";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logxor a b)) stack
+            | _ -> runtime_error "BITWISE_XOR expects int64 operands");
+            next ()
+        | LEFTSHIFT ->
+            push_trace frame.pc "LEFT_SHIFT";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VInt64 a, VInt64 b ->
+                Stack.push (VInt64 (Int64.shift_left a (Int64.to_int b))) stack
+            | _ -> runtime_error "LEFT_SHIFT expects int64 operands");
+            next ()
+        | RIGHTSHIFT ->
+            push_trace frame.pc "RIGHT_SHIFT";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VInt64 a, VInt64 b ->
+                Stack.push (VInt64 (Int64.shift_right a (Int64.to_int b))) stack
+            | _ -> runtime_error "RIGHT_SHIFT expects int64 operands");
+            next ()
+        | RIGHTSHIFTLOGICAL ->
+            push_trace frame.pc "RIGHT_SHIFT_LOGICAL";
+            let a, b = pop2_safe stack in
+            (match (a, b) with
+            | VInt64 a, VInt64 b ->
+                let shifted = Int64.shift_right_logical a (Int64.to_int b) in
+                Stack.push (VInt64 shifted) stack
+            | _ -> runtime_error "RIGHT_SHIFT_LOGICAL expects int64 operands");
+            next ()
+        | BITWISEANDASSIGN ->
+            push_trace frame.pc "BITWISE_ANDASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None -> runtime_error "BITWISE_ANDASSIGN: invalid var ref")
+              | _ -> runtime_error "BITWISE_ANDASSIGN: expected var name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logand oldi newi)
+              | _ -> runtime_error "BITWISE_ANDASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            next ()
+        | BITWISEORASSIGN ->
+            push_trace frame.pc "BITWISE_ORASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None -> runtime_error "BITWISE_ORASSIGN: invalid var ref")
+              | _ -> runtime_error "BITWISE_ORASSIGN: expected var name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logor oldi newi)
+              | _ -> runtime_error "BITWISE_ORASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            next ()
+        | BITWISEXORASSIGN ->
+            push_trace frame.pc "BITWISE_XORASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None -> runtime_error "BITWISE_XORASSIGN: invalid var ref")
+              | _ -> runtime_error "BITWISE_XORASSIGN: expected var name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logxor oldi newi)
+              | _ -> runtime_error "BITWISE_XORASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            next ()
+        | LEFTSHIFTASSIGN ->
+            push_trace frame.pc "LEFT_SHIFTASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None -> runtime_error "LEFT_SHIFTASSIGN: invalid var ref")
+              | _ -> runtime_error "LEFT_SHIFTASSIGN: expected var name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VInt64 oldi, VInt64 newi ->
+                  VInt64 (Int64.shift_left oldi (Int64.to_int newi))
+              | _ -> runtime_error "LEFT_SHIFTASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            next ()
+        | RIGHTSHIFTASSIGN ->
+            push_trace frame.pc "RIGHT_SHIFTASSIGN";
+            let value = pop1 stack in
+            let var = pop1 stack in
+            let name =
+              match var with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some name -> name
+                  | None -> runtime_error "RIGHT_SHIFTASSIGN: invalid var ref")
+              | _ -> runtime_error "RIGHT_SHIFTASSIGN: expected var name"
+            in
+            let old_value = get_var frame.env name in
+            let result =
+              match (old_value, value) with
+              | VInt64 oldi, VInt64 newi ->
+                  VInt64 (Int64.shift_right oldi (Int64.to_int newi))
+              | _ -> runtime_error "RIGHT_SHIFTASSIGN: type mismatch"
+            in
+            frame.env <- update_variable name result frame.env;
+            next ()
+        | ASSERT -> (
+            push_trace frame.pc "ASSERT";
+            let cond = pop1 stack in
+            match cond with
+            | VBool true -> next ()
+            | VBool false -> runtime_error "Assertion failed"
+            | _ -> runtime_error "ASSERT expects a boolean value")
+        | LOAD_MODULE name ->
+            let m =
+              match Hashtbl.find_opt stdlib_modules name with
+              | Some modval -> modval
+              | None -> failwith ("Unknown module: " ^ name)
+            in
+            Stack.push m stack;
+            next ()
+        | LOAD_FIELD name -> (
+            let module_or_obj = pop1 stack in
+            match module_or_obj with
+            | VModule table -> (
+                match Hashtbl.find_opt table name with
+                | Some v ->
+                    Stack.push v stack;
+                    next ()
+                | None -> failwith ("Unknown field " ^ name))
+            | _ -> failwith "LOAD_FIELD expects a module or object")
+        | CLOSURE func_name ->
+            Stack.push (VClosure func_name) stack;
+            next ()
+    done;
+    print_string (Buffer.contents output_buffer);
+    flush stdout
+  with RuntimeError msg ->
+    print_trace msg;
+    exit 1

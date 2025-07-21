@@ -1,0 +1,17 @@
+-- $Id: tests/enum.cx $
+
+-- basic tests for enum with assert
+
+enum Week {
+    Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
+}
+
+let week_names: []string = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
+
+week_to_string(day: Week): string {
+    return week_names[to_int(day)]
+}
+
+let tuesday_str: string = week_to_string(Week.Tuesday)
+
+assert(tuesday_str == "Tuesday")

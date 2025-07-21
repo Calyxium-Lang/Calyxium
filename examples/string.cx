@@ -1,0 +1,5 @@
+swap(a: string, x: int): tuple {
+    return (x, a)
+}
+
+println(swap("Hello", 5))

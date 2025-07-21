@@ -1,13 +1,29 @@
 (library
- (name Calyxiumlib)
- (modules ast lexer parser typechecker vm bytecode token repl version)
- (libraries ppx_deriving.show zarith unix)
- (preprocess
-  (pps ppx_deriving.show)))
-
-(documentation)
+ (name calyxiumlib)
+ (public_name calyxium.lib)
+ (modules
+  ast
+  token
+  lexer
+  parser
+  typechecker
+  opcode
+  bytecode
+  bytegen
+  vm
+  gc
+  color
+  error
+  help
+  version
+  uint32
+  uint64
+  init)
+ (foreign_stubs
+  (language c)
+  (names uint32 uint64))
+ (libraries calyxium_stdlib unix))
 
 (ocamllex lexer)
 
-(menhir
- (modules parser))
+(ocamlyacc parser)

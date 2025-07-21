@@ -1,0 +1,43 @@
+let source: string = "let x: int = 10"
+
+enum Tokens {
+    Let, Ident, IntType, Assign, IntLiteral
+}
+
+is_alpha(c: byte): bool {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+is_digit(c: byte): bool {
+    return (c >= '0' && c <= '9')
+}
+
+starts_with(bytes: []byte, pos: int, prefix: string): bool {
+    let prefix_bytes: []byte = to_bytes(prefix)
+    let prefix_len: int = length(prefix_bytes)
+    if (pos + prefix_len > length(bytes)) {
+        return false
+    }
+    for (let i: int = 0; i < prefix_len; i++) {
+        if (bytes[pos + i] != prefix_bytes[i]) {
+            return false
+        }
+    }
+
+    return true
+}
+
+tokenize(code: string): []Tokens {
+    let tokens: []Tokens = {}
+    let bytes: []byte = to_bytes(code)
+    let length: int = length(bytes)
+
+    for (let i: int = 0; i < length; i++) {
+        let c: byte = bytes[i]
+        println(c)
+    }
+
+    return tokens
+}
+
+tokenize(source) |> println
