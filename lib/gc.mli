@@ -3,11 +3,11 @@ open Opcode
 type heap_obj =
   | HString of string
   | HArray of float array
+  | HBytes of char array
   | HClosure of string * opcode list * (string * (value * bool)) list
 
 and value =
   | VFloat of float
-  | VInt of int
   | VInt64 of int64
   | VBool of bool
   | VByte of char
@@ -17,6 +17,7 @@ and value =
   | VUnit
   | VModule of (string, value) Hashtbl.t
   | VNative of (value list -> value)
+  | VClosure of string
 
 val allocation_count : int ref
 val allocation_threshold : int ref
@@ -32,6 +33,9 @@ val get_stack_roots : value Stack.t -> value list
 
 val alloc_string_with_gc :
   value Stack.t -> (string * (value * bool)) list -> string -> value
+
+val alloc_bytes_with_gc :
+  value Stack.t -> ('a * (value * 'b)) list -> char array -> value
 
 val alloc_array_with_gc :
   value Stack.t -> (string * (value * bool)) list -> float array -> value

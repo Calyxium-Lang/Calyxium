@@ -32,6 +32,7 @@ rule token = parse
   | "&="                     { at_line_start := false; BitWiseANDAssign }
   | "`="                     { at_line_start := false; BitWiseORAssign }
   | "$="                     { at_line_start := false; BitWiseXORAssign }
+  | "|>"                     { at_line_start := false; Pipeline }
   | "<<="                    { at_line_start := false; LeftShiftAssign }
   | ">>="                    { at_line_start := false; RightShiftAssign }
 
@@ -79,6 +80,7 @@ rule token = parse
   | "mod"                    { at_line_start := false; Module }
   | "true"                   { at_line_start := false; True }
   | "false"                  { at_line_start := false; False }
+  | "enum"                   { at_line_start := false; Enum }
 
   | "int"                    { at_line_start := false; Int64Type }
   | "float"                  { at_line_start := false; FloatType }
@@ -97,7 +99,8 @@ rule token = parse
   | '\''                    { raise (LexerError "Unterminated character literal") }
   | '"'                     { at_line_start := false; read_string (Buffer.create 16) lexbuf }
   | eof                     { EOF }
-  | "0b" ['0'-'1']+ as bin  { at_line_start := false; let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in Binary (parse 2 0) }
+  | "0b" ['0'-'1']+ as bin  { at_line_start := false; let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in Int64 (Int64.of_int (parse 2 0)) }
+  | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+ as hex { at_line_start := false; let len = String.length hex in let rec parse i acc = if i = len then acc else let v = match hex.[i] with | '0'..'9' -> int_of_char hex.[i] - int_of_char '0' | 'a'..'f' -> 10 + int_of_char hex.[i] - int_of_char 'a' | 'A'..'F' -> 10 + int_of_char hex.[i] - int_of_char 'A' | _ -> failwith "Invalid hex digit" in parse (i + 1) ((acc lsl 4) lor v) in Int64 (Int64.of_int (parse 2 0)) }
   | _                       { let c = Lexing.lexeme_char lexbuf 0 in let msg = Printf.sprintf "Unrecognized character: '%c'" c in raise (LexerError msg) }
 
 and read_string buf = parse

@@ -156,6 +156,30 @@ let update_variable name result env =
     else global_env := (name, (result, true)) :: !global_env;
     env
 
+let rec equal_value a b =
+  match (a, b) with
+  | VHeapRef id1, VHeapRef id2 -> (
+      match (Gc.get_string id1, Gc.get_string id2) with
+      | Some sa, Some sb -> sa = sb
+      | _ -> id1 = id2)
+  | VFloat f1, VFloat f2 -> f1 = f2
+  | VInt64 i1, VInt64 i2 -> i1 = i2
+  | VBool b1, VBool b2 -> b1 = b2
+  | VByte c1, VByte c2 -> c1 = c2
+  | VUnit, VUnit -> true
+  | VTuple l1, VTuple l2 ->
+      List.length l1 = List.length l2 && List.for_all2 equal_value l1 l2
+  | _ -> false
+
+let string_to_bytes (s : string) : char array =
+  Array.init (String.length s) (String.get s)
+
+let reset_vm_state () =
+  Stack.clear stack;
+  global_env := [];
+  clear_trace ();
+  Buffer.clear output_buffer
+
 let run (instructions : opcode list) =
   clear_trace ();
   let frame_stack = Stack.create () in
@@ -174,10 +198,6 @@ let run (instructions : opcode list) =
         | LOAD_INT64 v ->
             push_trace frame.pc ("LOAD_INT64 " ^ Int64.to_string v);
             Stack.push (VInt64 v) stack;
-            next ()
-        | LOAD_BINARY v ->
-            push_trace frame.pc ("LOAD_BINARY " ^ string_of_int v);
-            Stack.push (VInt v) stack;
             next ()
         | LOAD_FLOAT v ->
             push_trace frame.pc ("LOAD_FLOAT " ^ string_of_float v);
@@ -352,16 +372,7 @@ let run (instructions : opcode list) =
         | EQUAL ->
             push_trace frame.pc "EQUAL";
             let b, a = pop2_safe stack in
-            let result =
-              match (a, b) with
-              | VHeapRef id1, VHeapRef id2 -> (
-                  match (Gc.get_string id1, Gc.get_string id2) with
-                  | Some sa, Some sb -> sa = sb
-                  | _ -> id1 = id2)
-              | VFloat f1, VFloat f2 -> f1 = f2
-              | VInt64 i1, VInt64 i2 -> i1 = i2
-              | _ -> false
-            in
+            let result = equal_value a b in
             Stack.push (VBool result) stack;
             next ()
         | AND ->
@@ -452,19 +463,44 @@ let run (instructions : opcode list) =
               | _ -> runtime_error "Expected int for index in LOAD_INDEX"
             in
             let collection = pop1 stack in
-            let values =
+            let item =
               match collection with
-              | VArray items -> items
-              | VTuple items -> items
-              | _ -> runtime_error "Expected array or tuple for LOAD_INDEX"
+              | VArray items ->
+                  if index < 0 || index >= List.length items then
+                    runtime_error
+                      ("Index out of bounds in LOAD_INDEX: "
+                     ^ string_of_int index)
+                  else List.nth items index
+              | VTuple items ->
+                  if index < 0 || index >= List.length items then
+                    runtime_error
+                      ("Index out of bounds in LOAD_INDEX: "
+                     ^ string_of_int index)
+                  else List.nth items index
+              | VHeapRef id -> (
+                  match Gc.find_heap_obj id with
+                  | Gc.HString s ->
+                      if index < 0 || index >= String.length s then
+                        runtime_error
+                          ("Index out of bounds in LOAD_INDEX (string): "
+                         ^ string_of_int index)
+                      else VByte s.[index]
+                  | Gc.HBytes arr ->
+                      if index < 0 || index >= Array.length arr then
+                        runtime_error
+                          ("Index out of bounds in LOAD_INDEX (bytes): "
+                         ^ string_of_int index)
+                      else VByte arr.(index)
+                  | _ ->
+                      runtime_error
+                        "Expected array, tuple, string, or bytes for LOAD_INDEX"
+                  )
+              | _ ->
+                  runtime_error
+                    "Expected array, tuple, string, or bytes for LOAD_INDEX"
             in
-            if index < 0 || index >= List.length values then
-              runtime_error
-                ("Index out of bounds in LOAD_INDEX: " ^ string_of_int index)
-            else
-              let item = List.nth values index in
-              Stack.push item stack;
-              next ()
+            Stack.push item stack;
+            next ()
         | FUNCTION _ ->
             let rec skip_function pc =
               if pc >= Array.length frame.code then
@@ -561,7 +597,6 @@ let run (instructions : opcode list) =
                     if f > 0.0 then "inf" else "-inf"
                 | VFloat f -> Printf.sprintf "%.12f" f
                 | VInt64 i -> Printf.sprintf "%Ld" i
-                | VInt i -> Printf.sprintf "%d" i
                 | VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> "" ^ replace_escape_sequences s ^ ""
@@ -578,6 +613,7 @@ let run (instructions : opcode list) =
                     "(" ^ contents ^ ")"
                 | VModule _ -> "<module>"
                 | VNative _ -> "<native>"
+                | VClosure _ -> "<closure>"
               in
               let value = pop1 stack in
               Buffer.add_string output_buffer (string_of_value value ^ "\n");
@@ -672,6 +708,30 @@ let run (instructions : opcode list) =
             in
             let new_str_ref = Gc.alloc_string_with_gc stack frame.env str_val in
             Stack.push new_str_ref stack;
+            next ()
+        | BYTE ->
+            push_trace frame.pc "TO_BYTES";
+            let v = pop1 stack in
+            let str_val =
+              match v with
+              | VHeapRef id -> (
+                  match Gc.get_string id with
+                  | Some s -> s
+                  | None ->
+                      runtime_error
+                        "TO_BYTES: invalid heap reference for string")
+              | VInt64 i -> Int64.to_string i
+              | VFloat f -> string_of_float f
+              | VBool b -> if b then "true" else "false"
+              | VByte c -> String.make 1 c
+              | VUnit -> "()"
+              | _ -> runtime_error "TO_BYTES: unsupported type for conversion"
+            in
+            let byte_array = string_to_bytes str_val in
+            let new_bytes_ref =
+              Gc.alloc_bytes_with_gc stack frame.env byte_array
+            in
+            Stack.push new_bytes_ref stack;
             next ()
         | PLUSASSIGN ->
             push_trace frame.pc "PLUSASSIGN";
@@ -786,14 +846,18 @@ let run (instructions : opcode list) =
               let length =
                 match v with
                 | VHeapRef id -> (
-                    match Gc.get_string id with
-                    | Some s -> Int64.of_int (String.length s)
-                    | None ->
+                    match Gc.find_heap_obj id with
+                    | Gc.HString s -> Int64.of_int (String.length s)
+                    | Gc.HBytes bytes_arr ->
+                        Int64.of_int (Array.length bytes_arr)
+                    | _ ->
                         runtime_error
-                          "LENGTH: invalid heap reference for string")
+                          "LENGTH: heap reference is not a string or bytes")
                 | VArray items -> Int64.of_int (List.length items)
                 | VTuple items -> Int64.of_int (List.length items)
-                | _ -> runtime_error "LENGTH expects a string, array, or tuple"
+                | _ ->
+                    runtime_error
+                      "LENGTH expects a string, bytes, array, or tuple"
               in
               Stack.push (VInt64 length) stack;
               next ()
@@ -801,7 +865,6 @@ let run (instructions : opcode list) =
             push_trace frame.pc "BITWISE_NOT";
             let v = pop1 stack in
             (match v with
-            | VInt i -> Stack.push (VInt (Int.lognot i)) stack
             | VInt64 i -> Stack.push (VInt64 (Int64.lognot i)) stack
             | _ -> runtime_error "BITWISE_NOT expects an int64");
             next ()
@@ -809,7 +872,6 @@ let run (instructions : opcode list) =
             push_trace frame.pc "BITWISE_AND";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Int.logand a b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logand a b)) stack
             | _ -> runtime_error "BITWISE_AND expects int64 operands");
             next ()
@@ -817,7 +879,6 @@ let run (instructions : opcode list) =
             push_trace frame.pc "BITWISE_OR";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Int.logor a b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logor a b)) stack
             | _ -> runtime_error "BITWISE_OR expects int64 operands");
             next ()
@@ -825,7 +886,6 @@ let run (instructions : opcode list) =
             push_trace frame.pc "BITWISE_XOR";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Int.logxor a b)) stack
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logxor a b)) stack
             | _ -> runtime_error "BITWISE_XOR expects int64 operands");
             next ()
@@ -833,7 +893,6 @@ let run (instructions : opcode list) =
             push_trace frame.pc "LEFT_SHIFT";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Int.shift_left a b)) stack
             | VInt64 a, VInt64 b ->
                 Stack.push (VInt64 (Int64.shift_left a (Int64.to_int b))) stack
             | _ -> runtime_error "LEFT_SHIFT expects int64 operands");
@@ -842,7 +901,6 @@ let run (instructions : opcode list) =
             push_trace frame.pc "RIGHT_SHIFT";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Int.shift_right a b)) stack
             | VInt64 a, VInt64 b ->
                 Stack.push (VInt64 (Int64.shift_right a (Int64.to_int b))) stack
             | _ -> runtime_error "RIGHT_SHIFT expects int64 operands");
@@ -851,8 +909,6 @@ let run (instructions : opcode list) =
             push_trace frame.pc "RIGHT_SHIFT_LOGICAL";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VInt a, VInt b ->
-                Stack.push (VInt (Int.shift_right_logical a b)) stack
             | VInt64 a, VInt64 b ->
                 let shifted = Int64.shift_right_logical a (Int64.to_int b) in
                 Stack.push (VInt64 shifted) stack
@@ -873,7 +929,6 @@ let run (instructions : opcode list) =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Int.logand oldi newi)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logand oldi newi)
               | _ -> runtime_error "BITWISE_ANDASSIGN: type mismatch"
             in
@@ -894,7 +949,6 @@ let run (instructions : opcode list) =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Int.logor oldi newi)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logor oldi newi)
               | _ -> runtime_error "BITWISE_ORASSIGN: type mismatch"
             in
@@ -915,7 +969,6 @@ let run (instructions : opcode list) =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Int.logxor oldi newi)
               | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logxor oldi newi)
               | _ -> runtime_error "BITWISE_XORASSIGN: type mismatch"
             in
@@ -936,7 +989,6 @@ let run (instructions : opcode list) =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Int.shift_left oldi newi)
               | VInt64 oldi, VInt64 newi ->
                   VInt64 (Int64.shift_left oldi (Int64.to_int newi))
               | _ -> runtime_error "LEFT_SHIFTASSIGN: type mismatch"
@@ -958,7 +1010,6 @@ let run (instructions : opcode list) =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Int.shift_right oldi newi)
               | VInt64 oldi, VInt64 newi ->
                   VInt64 (Int64.shift_right oldi (Int64.to_int newi))
               | _ -> runtime_error "RIGHT_SHIFTASSIGN: type mismatch"
@@ -990,6 +1041,9 @@ let run (instructions : opcode list) =
                     next ()
                 | None -> failwith ("Unknown field " ^ name))
             | _ -> failwith "LOAD_FIELD expects a module or object")
+        | CLOSURE func_name ->
+            Stack.push (VClosure func_name) stack;
+            next ()
     done;
     print_string (Buffer.contents output_buffer);
     flush stdout

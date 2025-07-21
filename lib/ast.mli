@@ -26,7 +26,7 @@ module Expr : sig
     | DotExpr of { left : t; right : string }
     | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
     | TupleExpr of t list
-    | BinaryLitExpr of { value : int }
+    | PipelineExpr of { left : t; right : t }
 end
 
 module Stmt : sig
@@ -62,4 +62,5 @@ module Stmt : sig
     | ModuleStmt of { module_name : string; block : t list }
     | MatchStmt of { expr : Expr.t; cases : (Expr.t option * t list) list }
     | ExprStmt of Expr.t
+    | EnumStmt of { name : string; members : string list }
 end

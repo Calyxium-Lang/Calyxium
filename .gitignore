@@ -15,6 +15,7 @@ Thumbs.db
 !*.mli
 !*.md
 !*/
+bin/calyxium_js.ml
 
 # === Build system caches ===
 .cache/

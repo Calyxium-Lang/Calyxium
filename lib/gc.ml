@@ -5,11 +5,11 @@ let interned_strings : (string, int) Hashtbl.t = Hashtbl.create 100
 type heap_obj =
   | HString of string
   | HArray of float array
+  | HBytes of char array
   | HClosure of string * opcode list * (string * (value * bool)) list
 
 and value =
   | VFloat of float
-  | VInt of int
   | VInt64 of int64
   | VBool of bool
   | VByte of char
@@ -19,6 +19,7 @@ and value =
   | VUnit
   | VModule of (string, value) Hashtbl.t
   | VNative of (value list -> value)
+  | VClosure of string
 
 type generation = {
   objs : (int, heap_obj) Hashtbl.t;
@@ -128,6 +129,13 @@ let alloc_string_with_gc stack env s =
       Hashtbl.add young_gen.objs id (HString s);
       Hashtbl.add interned_strings s id;
       VHeapRef id
+
+let alloc_bytes_with_gc stack env bytes_arr =
+  let roots = get_stack_roots stack in
+  maybe_collect_gc roots env;
+  let id = alloc_id () in
+  Hashtbl.add young_gen.objs id (HBytes bytes_arr);
+  VHeapRef id
 
 let alloc_array_with_gc stack env arr =
   let roots = get_stack_roots stack in

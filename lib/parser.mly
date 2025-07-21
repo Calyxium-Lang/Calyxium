@@ -11,6 +11,7 @@
 %nonassoc Eq Neq Geq Leq Greater Less
 %left LeftShift RightShift RightShiftLogical
 %left Plus Minus
+%left Pipeline
 %left Star Slash Mod
 %right Pow Carot
 %nonassoc UnaryMinus NotPrec
@@ -19,8 +20,8 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Return For Use Module True False Int64Type FloatType StringType ByteType BoolType UnitType TupleType
-%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign
+%token Recursive If Then Else Let Match With Return For Use Module True False Enum Int64Type FloatType StringType ByteType BoolType UnitType TupleType
+%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
 %token BitWiseANDAssign BitWiseORAssign BitWiseXORAssign
@@ -33,7 +34,6 @@
 %token <char> Byte
 %token <bool> Bool
 %token <unit> Unit
-%token <int> Binary
 %token EOF
 
 %start program
@@ -56,6 +56,7 @@ stmt:
   | ForStmt { $1 }
   | MatchStmt { $1 }
   | ModuleStmt { $1 }
+  | EnumStmt { $1 }
   | expr { Stmt.ExprStmt $1 }
   | Return expr %prec LowPrec { Stmt.ExprStmt (Expr.ReturnExpr $2) }
   | If expr Then expr Else expr %prec IfThenElse { Stmt.ExprStmt (Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; }) }
@@ -92,6 +93,7 @@ type_expr:
   | UnitType { Type.SymbolType { value = "unit"} }
   | TupleType { Type.SymbolType { value = "tuple" } }
   | LBracket RBracket type_expr { Type.ArrayType { element_type = $3 } }
+  | Ident { Type.SymbolType { value = $1 } }
 
 expr:
   | True { Expr.BoolExpr { value = true } }
@@ -127,7 +129,6 @@ expr:
   | Bool { Expr.BoolExpr { value = $1 } }
   | Unit { Expr.UnitExpr { value = $1 } }
   | Ident { Expr.VarExpr $1 }
-  | Binary { Expr.BinaryLitExpr { value = $1 } }
   | LBrace RBrace { Expr.ArrayExpr { elements = [] } }
   | LBrace expr_list RBrace { Expr.ArrayExpr { elements = $2 } }
   | expr LBracket expr RBracket { Expr.IndexExpr { array = $1; index = $3 } }
@@ -147,6 +148,7 @@ expr:
   | expr LeftShiftAssign expr { Expr.BinaryExpr { left = $1; operator = Token.LeftShiftAssign; right = $3 } }
   | expr RightShiftAssign expr { Expr.BinaryExpr { left = $1; operator = Token.RightShiftAssign; right = $3 } }
   | BitWiseNOT expr %prec NotPrec { Expr.UnaryExpr { operator = Token.BitWiseNOT; operand = $2 } }
+  | expr Pipeline expr { Expr.PipelineExpr { left = $1; right = $3 } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }
@@ -164,6 +166,11 @@ ident_list:
 path:
   | Ident { [$1] }
   | path Dot Ident { $1 @ [$3] }
+
+enum_member_list:
+  | /* empty */ { [] }
+  | Ident Comma enum_member_list { $1 :: $3 }
+  | Ident { [$1] }
 
 ImportStmt:
   | Use path { Stmt.ImportStmt { module_name = $2 } }
@@ -190,3 +197,6 @@ IfStmt:
 
 ForStmt:
   | For LParen stmt_opt Semi expr_opt Semi stmt_opt RParen LBrace stmt_list RBrace { let default_condition = Expr.BoolExpr { value = true } in let increment_stmt = match $7 with | None -> (match $3 with | Some (Stmt.VarDeclarationStmt { identifier; _ }) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr identifier })) | Some (Stmt.ExprStmt (Expr.VarExpr var_name)) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr var_name })) | _ -> None) | Some (Stmt.ExprStmt expr) -> Some (Stmt.ExprStmt expr) | Some _ -> None in Stmt.ForStmt { init = $3; condition = Option.value ~default:default_condition $5; increment = increment_stmt; body = Stmt.BlockStmt { body = $10 } } }
+
+EnumStmt:
+  | Enum Ident LBrace enum_member_list RBrace { Stmt.EnumStmt { name = $2; members = $4; }} 

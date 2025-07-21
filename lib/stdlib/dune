@@ -3,7 +3,7 @@
  (public_name calyxium.stdlib)
  (foreign_stubs
   (language c)
-  (names cmathlib cthreadlib coslib ccoroutineslib cnetworklib)
+  (names cmathlib cthreadlib coslib ccoroutineslib cnetworklib cstringlib)
   (flags
    (-lm -Wall -Wextra -Werror -pedantic -pthread)))
  (libraries unix))

@@ -49,6 +49,7 @@ type t =
   | Module
   | True
   | False
+  | Enum
   | IntType
   | FloatType
   | StringType
@@ -76,4 +77,5 @@ type t =
   | BitWiseXORAssign
   | LeftShiftAssign
   | RightShiftAssign
+  | Pipeline
   | EOF

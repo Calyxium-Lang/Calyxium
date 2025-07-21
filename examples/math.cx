@@ -1,5 +1,5 @@
-let pi: float = 3.14159265358979323846
-let e: float = 2.71828182845904523536
+let pi: float = 3.141592653589
+let e: float = 2.718281828459
 
 rec fact(n: int): float {
     if n <= 1 then 1.0 else to_float(n) * fact(n - 1)
@@ -102,3 +102,5 @@ ceil(x: float): float {
 round(x: float): float {
     return floor(x + 0.5)
 }
+
+println(pi)

@@ -4,6 +4,7 @@ open Ast.Expr
 open Ast.Stmt
 
 let function_table : (string, opcode list) Hashtbl.t = Hashtbl.create 10
+let enum_tbl : (string, (string * int) list) Hashtbl.t = Hashtbl.create 10
 
 let builtins =
   [
@@ -11,6 +12,7 @@ let builtins =
     ("to_float", fun args -> args @ [ FLOAT ]);
     ("to_int", fun args -> args @ [ INT ]);
     ("to_string", fun args -> args @ [ STRING ]);
+    ("to_bytes", fun args -> args @ [ BYTE ]);
     ("length", fun args -> args @ [ LENGTH ]);
     ("input", fun args -> args @ [ INPUT ]);
     ("assert", fun args -> args @ [ ASSERT ]);
@@ -51,7 +53,6 @@ let opcode_of_binop = function
 
 let rec compile_expr = function
   | Int64Expr { value } -> [ LOAD_INT64 value ]
-  | BinaryLitExpr { value } -> [ LOAD_BINARY value ]
   | FloatExpr { value } -> [ LOAD_FLOAT value ]
   | StringExpr { value } -> [ LOAD_STRING value ]
   | ByteExpr { value } -> [ LOAD_BYTE value ]
@@ -127,7 +128,27 @@ let rec compile_expr = function
       cond_code
       @ [ JUMP_IF_FALSE true_jump ]
       @ true_code @ [ JUMP false_jump ] @ false_code
-  | _ -> failwith "Not implemented"
+  | PipelineExpr { left; right } -> (
+      let left_code = compile_expr left in
+      match right with
+      | VarExpr name -> (
+          match List.assoc_opt name builtins with
+          | Some handler -> handler left_code
+          | None -> left_code @ [ CALL name ])
+      | _ -> failwith "Right-hand side of pipeline must be a function name")
+  | DotExpr { left; right } -> (
+      match left with
+      | VarExpr enum_name -> (
+          match Hashtbl.find_opt enum_tbl enum_name with
+          | Some members -> (
+              match List.assoc_opt right members with
+              | Some value -> [ LOAD_INT64 (Int64.of_int value) ]
+              | None ->
+                  failwith
+                    ("Unknown enum member `" ^ right ^ "` for enum `"
+                   ^ enum_name ^ "`"))
+          | None -> failwith ("Unknown enum type `" ^ enum_name ^ "`"))
+      | _ -> failwith "DotExpr left must be enum name")
 
 let rec compile_stmt = function
   | ExprStmt expr -> compile_expr expr
@@ -238,4 +259,8 @@ let rec compile_stmt = function
         | [] -> failwith "Invalid module path"
       in
       [ LOAD_MODULE mod_name; LOAD_FIELD field_name; STORE_VAR field_name ]
+  | EnumStmt { name; members } ->
+      let numbered_members = List.mapi (fun i m -> (m, i)) members in
+      Hashtbl.replace enum_tbl name numbered_members;
+      []
   | _ -> failwith ""

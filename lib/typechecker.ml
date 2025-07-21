@@ -37,13 +37,20 @@ let builtins : (string * (Type.t list * Type.t) list) list =
     ( "input",
       [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]
     );
+    ( "to_bytes",
+      [
+        ( [ SymbolType { value = "string" } ],
+          ArrayType { element_type = SymbolType { value = "byte" } } );
+      ] );
     ( "to_float",
       [
+        ([ SymbolType { value = "*" } ], SymbolType { value = "float" });
         ([ SymbolType { value = "string" } ], SymbolType { value = "float" });
         ([ SymbolType { value = "int" } ], SymbolType { value = "float" });
       ] );
     ( "to_int",
       [
+        ([ SymbolType { value = "*" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "byte" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "string" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "float" } ], SymbolType { value = "int" });
@@ -56,6 +63,7 @@ let builtins : (string * (Type.t list * Type.t) list) list =
 
 let rec type_eq expected actual =
   match (expected, actual) with
+  | SymbolType { value = "*" }, SymbolType _ -> true
   | SymbolType { value = "unit" }, _ -> true
   | Any, _ | _, Any -> true
   | SymbolType { value = v1 }, SymbolType { value = v2 } -> v1 = v2
@@ -73,7 +81,6 @@ let rec check_expr (env : (string * Type.t) list)
   let open Expr in
   match expr with
   | Int64Expr _ -> SymbolType { value = "int" }
-  | BinaryLitExpr _ -> SymbolType { value = "int" }
   | FloatExpr _ -> SymbolType { value = "float" }
   | StringExpr _ -> SymbolType { value = "string" }
   | BoolExpr _ -> SymbolType { value = "bool" }
@@ -205,7 +212,18 @@ let rec check_expr (env : (string * Type.t) list)
         raise (TypeError "Branches of if must return same type");
       t_then
   | ReturnExpr expr -> check_expr env func_env expr
-  | DotExpr _ -> raise (TypeError "Dot Expression not implemented")
+  | DotExpr { left; right } -> (
+      let _ = check_expr env func_env left in
+      match left with
+      | VarExpr enum_name -> (
+          match List.assoc_opt (enum_name ^ "." ^ right) env with
+          | Some member_type -> member_type
+          | None ->
+              raise
+                (TypeError
+                   ("Unknown member `" ^ right ^ "` for enum `" ^ enum_name
+                  ^ "`")))
+      | _ -> raise (TypeError "Dot access only supported for enums for now"))
   | TernaryExpr { cond; onTrue; onFalse } ->
       let ct = check_expr env func_env cond in
       if not (type_eq ct (SymbolType { value = "bool" })) then
@@ -218,6 +236,45 @@ let rec check_expr (env : (string * Type.t) list)
           (TypeError
              ("Ternary branches must return same type, but got "
             ^ string_of_type t_true ^ " and " ^ string_of_type t_false))
+  | PipelineExpr { left; right } -> (
+      let arg_type = check_expr env func_env left in
+      match right with
+      | VarExpr name -> (
+          match List.assoc_opt name func_env with
+          | Some overloads -> (
+              let matching =
+                List.find_opt
+                  (fun (params, _) ->
+                    match params with
+                    | [ param_type ] -> type_eq param_type arg_type
+                    | _ -> false)
+                  overloads
+              in
+              match matching with
+              | Some (_, return_type) -> return_type
+              | None ->
+                  raise
+                    (TypeError
+                       ("No matching overload for `" ^ name
+                      ^ "` accepting argument of type "
+                      ^ string_of_type arg_type)))
+          | None -> (
+              match List.assoc_opt name env with
+              | Some (FunctionType ([ param_type ], return_type)) ->
+                  if type_eq param_type arg_type then return_type
+                  else
+                    raise
+                      (TypeError
+                         ("Function `" ^ name ^ "` expected "
+                        ^ string_of_type param_type ^ " but got "
+                        ^ string_of_type arg_type))
+              | Some _ ->
+                  raise (TypeError ("`" ^ name ^ "` is not a unary function"))
+              | None -> raise (TypeError ("Unknown function: " ^ name))))
+      | _ ->
+          raise
+            (TypeError
+               "Right-hand side of pipeline must be a function identifier"))
 
 let rec find_return_exprs env func_env expr =
   let open Expr in
@@ -458,6 +515,16 @@ let rec check_stmt (env : (string * Type.t) list)
                env case_stmts))
         cases;
       env
+  | EnumStmt { name; members } ->
+      let enum_type = SymbolType { value = name } in
+      let new_env =
+        List.fold_left
+          (fun acc_env (_, member) ->
+            (name ^ "." ^ member, enum_type) :: acc_env)
+          env
+          (List.mapi (fun i m -> (i, m)) members)
+      in
+      (name, enum_type) :: new_env
 
 and collect_functions stmts =
   let rec collect_from_stmt stmt acc =
