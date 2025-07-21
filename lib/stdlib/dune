@@ -5,5 +5,5 @@
   (language c)
   (names cmathlib cthreadlib coslib ccoroutineslib cnetworklib cstringlib)
   (flags
-   (-lm -Wall -Wextra -Werror -pedantic -pthread)))
+   (-fPIC -lm -Wall -Wextra -Werror -pedantic -pthread)))
  (libraries unix))
