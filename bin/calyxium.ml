@@ -8,7 +8,6 @@ open Calyxiumlib.Error
 open Calyxiumlib.Version
 open Calyxiumlib.Help
 open Calyxiumlib.Bytegen
-open Calyxiumlib.Opcode
 
 let parse_file ~flags file =
   let bytecode_file = Filename.remove_extension file ^ ".cxc" in
@@ -18,13 +17,6 @@ let parse_file ~flags file =
       try
         let stdlib_used = typecheck_program [ ast ] in
         let bytecode = compile_stmt ast in
-
-        List.iter
-          (fun op ->
-            pp_opcode Format.str_formatter op;
-            let str = Format.flush_str_formatter () in
-            Printf.printf "%s\n" str)
-          bytecode;
 
         if List.mem "--emit-bytecode" flags then (
           save_bytecode_to_file bytecode_file bytecode;
