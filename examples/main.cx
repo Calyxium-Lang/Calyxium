@@ -1,12 +1,5 @@
--- tests/pipeline.cx
-
--- basic tests for pipeline operators
-double(x: int): int {
-    return x * 2
+let rec fact(n: int): float {
+    if n <= 1 then 1.0 else to_float(n) * fact(n - 1)
 }
 
-sqr(x: int): int {
-    return x * x
-}
-
-3 |> double |> sqr |> println
+println(fact(5))

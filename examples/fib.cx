@@ -1,5 +1,5 @@
-fib(n: int): int {
-    rec aux(n: int, a: int, b: int): int {
+let fib(n: int): int {
+    let rec aux(n: int, a: int, b: int): int {
         if n == 0 then a else aux(n - 1, b, a + b)
     }
     aux(n, 0, 1)

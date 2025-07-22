@@ -1,4 +1,4 @@
-swap(a: string, x: int): tuple {
+let swap(a: string, x: int): (int, string) {
     return (x, a)
 }
 

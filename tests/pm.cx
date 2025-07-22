@@ -1,0 +1,106 @@
+-- $Id: tests/pm.cx $
+
+-- basic tests for pattern matching
+enum Colors {
+    Red, Blue, Green
+}
+
+let c: Colors = Colors.Green
+
+let result(): string {
+    match c with
+        | Colors.Red -> "Red"
+        | Colors.Blue -> "Blue"
+        | Colors.Green -> "Green"
+        | _ -> "Error"
+}
+
+assert(result() == "Green")
+
+let numbers(n: int): string {
+    match n with
+        | 0 -> "zero"
+        | 1 -> "one"
+        | _ -> "many"
+}
+
+assert(numbers(0) == "zero")
+assert(numbers(32) == "many")
+
+let pair(p: (int, int)): string {
+    match p with
+        | (0, 0) -> "origin"
+        | _ -> "somewhere" 
+}
+
+assert(pair((0, 0)) == "origin")
+assert(pair((1, 2)) == "somewhere")
+
+let parity(n: int): string {
+    match n % 2 with
+        | 0 -> "even"
+        | _ -> "odd"
+}
+
+assert(parity(4) == "even")
+assert(parity(5) == "odd")
+
+let check(n: int): string {
+    if (n > 10) {
+        match n with
+            | 42 -> "magic"
+            | _ -> "big"
+    } else {
+        return "small"
+    }
+}
+
+assert(check(5) == "small")
+assert(check(42) == "magic")
+assert(check(20) == "big")
+
+enum Light {
+    Red, Yellow, Green
+}
+
+let describe_light(l: Light): string {
+    match l with
+        | Light.Red -> "stop"
+        | Light.Green -> "go"
+        | _ -> match l with
+            | Light.Yellow -> "slow"
+            | _ -> "unknown"
+}
+
+assert(describe_light(Light.Red) == "stop")
+assert(describe_light(Light.Yellow) == "slow")
+
+let sign(n: int): string {
+    if n > 0 then "positive" else "non-positive"
+}
+
+assert(sign(5) == "positive")
+assert(sign(0) == "non-positive")
+assert(sign(-3) == "non-positive")
+
+let nested(n: int): string {
+    if (n > 0) {
+        if n > 10 then "big positive" else "small positive"
+    } else {
+        return "non-positive"
+    }
+}
+
+assert(nested(5) == "small positive")
+assert(nested(20) == "big positive")
+assert(nested(0) == "non-positive")
+
+let fancy(n: int): string {
+    if n < 0 then "negative" else match n with
+        | 0 -> "zero"
+        | _ -> "positive"
+}
+
+assert(fancy(-1) == "negative")
+assert(fancy(0) == "zero")
+assert(fancy(5) == "positive")

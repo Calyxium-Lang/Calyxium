@@ -50,6 +50,7 @@ type t =
   | True
   | False
   | Enum
+  | Ref
   | IntType
   | FloatType
   | StringType

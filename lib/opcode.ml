@@ -66,3 +66,4 @@ type opcode =
   | LOAD_MODULE of string
   | LOAD_FIELD of string
   | CLOSURE of string
+[@@deriving show]

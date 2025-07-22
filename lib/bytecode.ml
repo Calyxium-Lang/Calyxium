@@ -52,7 +52,86 @@ let opcode_of_binop = function
   | RightShiftAssign -> RIGHTSHIFTASSIGN
   | _ -> failwith "Unsupported operator"
 
-let rec compile_expr = function
+let rec compile_stmt = function
+  | ExprStmt expr -> compile_expr expr
+  | BlockStmt { body } -> List.flatten (List.map compile_stmt body)
+  | FunctionDeclStmt { name; is_rec = _; parameters; body; _ } ->
+      let start_bytecode = [ FUNCTION name ] in
+      let param_bytecodes =
+        List.map
+          (fun (param : parameter) -> [ STORE_VAR param.name ])
+          parameters
+      in
+      let function_body = compile_stmt (BlockStmt { body }) in
+      let full_function_bytecode =
+        start_bytecode
+        @ List.concat param_bytecodes
+        @ function_body @ [ RETURN ]
+      in
+      Hashtbl.replace function_table name full_function_bytecode;
+      []
+  | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
+      let expr_bytecode =
+        match assigned_value with
+        | Some expr -> compile_expr expr
+        | None -> [ LOAD_INT64 0L ]
+      in
+      expr_bytecode @ [ STORE_VAR identifier ]
+  | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
+      let expr_codes = List.map compile_expr assigned_value in
+      let store_codes =
+        List.map2
+          (fun ident _expr_code -> [ STORE_VAR ident ])
+          (List.rev identifier) expr_codes
+        |> List.concat
+      in
+      List.concat expr_codes @ store_codes
+  | IfStmt { condition; then_branch; else_branch } ->
+      let condition = compile_expr condition in
+      let then_branch = compile_stmt then_branch in
+      let else_branch =
+        match else_branch with Some branch -> compile_stmt branch | None -> []
+      in
+      let then_jump_label = List.length then_branch + 1 in
+      let else_jump_label = List.length else_branch + 1 in
+      condition
+      @ [ JUMP_IF_FALSE (then_jump_label + 1) ]
+      @ then_branch @ [ JUMP else_jump_label ] @ else_branch
+  | ForStmt { init; condition; increment; body } ->
+      let init_code =
+        match init with Some stmt -> compile_stmt stmt | None -> []
+      in
+      let condition_code = compile_expr condition in
+      let body_code = compile_stmt body in
+      let increment_code =
+        match increment with Some stmt -> compile_stmt stmt | None -> []
+      in
+
+      let init_len = List.length init_code in
+      let cond_len = List.length condition_code in
+      let body_len = List.length body_code in
+      let incr_len = List.length increment_code in
+
+      let jump_to_end = init_len + body_len + incr_len + 1 in
+      let jump_back = -(cond_len + body_len + incr_len + 1) in
+
+      init_code @ condition_code
+      @ [ JUMP_IF_FALSE jump_to_end ]
+      @ body_code @ increment_code @ [ JUMP jump_back ] @ [ POP ]
+  | ImportStmt { module_name } ->
+      let mod_name, field_name =
+        match List.rev module_name with
+        | field :: rest -> (String.concat "." (List.rev rest), field)
+        | [] -> failwith "Invalid module path"
+      in
+      [ LOAD_MODULE mod_name; LOAD_FIELD field_name; STORE_VAR field_name ]
+  | EnumStmt { name; members } ->
+      let numbered_members = List.mapi (fun i m -> (m, i)) members in
+      Hashtbl.replace enum_tbl name numbered_members;
+      []
+  | _ -> failwith ""
+
+and compile_expr = function
   | Int64Expr { value } -> [ LOAD_INT64 value ]
   | FloatExpr { value } -> [ LOAD_FLOAT value ]
   | StringExpr { value } -> [ LOAD_STRING value ]
@@ -150,53 +229,7 @@ let rec compile_expr = function
                    ^ enum_name ^ "`"))
           | None -> failwith ("Unknown enum type `" ^ enum_name ^ "`"))
       | _ -> failwith "DotExpr left must be enum name")
-
-let rec compile_stmt = function
-  | ExprStmt expr -> compile_expr expr
-  | BlockStmt { body } -> List.flatten (List.map compile_stmt body)
-  | FunctionDeclStmt { name; is_rec = _; parameters; body; _ } ->
-      let start_bytecode = [ FUNCTION name ] in
-      let param_bytecodes =
-        List.map
-          (fun (param : parameter) -> [ STORE_VAR param.name ])
-          parameters
-      in
-      let function_body = compile_stmt (BlockStmt { body }) in
-      let full_function_bytecode =
-        start_bytecode
-        @ List.concat param_bytecodes
-        @ function_body @ [ RETURN ]
-      in
-      Hashtbl.replace function_table name full_function_bytecode;
-      []
-  | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
-      let expr_bytecode =
-        match assigned_value with
-        | Some expr -> compile_expr expr
-        | None -> [ LOAD_INT64 0L ]
-      in
-      expr_bytecode @ [ STORE_VAR identifier ]
-  | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
-      let expr_codes = List.map compile_expr assigned_value in
-      let store_codes =
-        List.map2
-          (fun ident _expr_code -> [ STORE_VAR ident ])
-          (List.rev identifier) expr_codes
-        |> List.concat
-      in
-      List.concat expr_codes @ store_codes
-  | IfStmt { condition; then_branch; else_branch } ->
-      let condition = compile_expr condition in
-      let then_branch = compile_stmt then_branch in
-      let else_branch =
-        match else_branch with Some branch -> compile_stmt branch | None -> []
-      in
-      let then_jump_label = List.length then_branch + 1 in
-      let else_jump_label = List.length else_branch + 1 in
-      condition
-      @ [ JUMP_IF_FALSE (then_jump_label + 1) ]
-      @ then_branch @ [ JUMP else_jump_label ] @ else_branch
-  | MatchStmt { expr; cases } ->
+  | MatchExpr { expr; cases } ->
       let expr_bytecode = compile_expr expr in
       let compiled_cases = ref [] in
       let jump_placeholders = ref [] in
@@ -232,36 +265,3 @@ let rec compile_stmt = function
         | instr :: rest -> instr :: patch_jumps (idx + 1) rest
       in
       patch_jumps 0 full_code
-  | ForStmt { init; condition; increment; body } ->
-      let init_code =
-        match init with Some stmt -> compile_stmt stmt | None -> []
-      in
-      let condition_code = compile_expr condition in
-      let body_code = compile_stmt body in
-      let increment_code =
-        match increment with Some stmt -> compile_stmt stmt | None -> []
-      in
-
-      let init_len = List.length init_code in
-      let cond_len = List.length condition_code in
-      let body_len = List.length body_code in
-      let incr_len = List.length increment_code in
-
-      let jump_to_end = init_len + body_len + incr_len + 1 in
-      let jump_back = -(cond_len + body_len + incr_len + 1) in
-
-      init_code @ condition_code
-      @ [ JUMP_IF_FALSE jump_to_end ]
-      @ body_code @ increment_code @ [ JUMP jump_back ] @ [ POP ]
-  | ImportStmt { module_name } ->
-      let mod_name, field_name =
-        match List.rev module_name with
-        | field :: rest -> (String.concat "." (List.rev rest), field)
-        | [] -> failwith "Invalid module path"
-      in
-      [ LOAD_MODULE mod_name; LOAD_FIELD field_name; STORE_VAR field_name ]
-  | EnumStmt { name; members } ->
-      let numbered_members = List.mapi (fun i m -> (m, i)) members in
-      Hashtbl.replace enum_tbl name numbered_members;
-      []
-  | _ -> failwith ""

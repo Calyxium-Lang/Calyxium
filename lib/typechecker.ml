@@ -78,225 +78,6 @@ let rec type_eq expected actual =
       List.length xs = List.length ys && List.for_all2 type_eq xs ys
   | _ -> false
 
-let rec check_expr env func_env expr =
-  match expr with
-  | Int64Expr _ -> SymbolType { value = "int" }
-  | FloatExpr _ -> SymbolType { value = "float" }
-  | StringExpr _ -> SymbolType { value = "string" }
-  | BoolExpr _ -> SymbolType { value = "bool" }
-  | ByteExpr _ -> SymbolType { value = "byte" }
-  | UnitExpr _ -> SymbolType { value = "unit" }
-  | TupleExpr elements ->
-      let element_types = List.map (check_expr env func_env) elements in
-      TupleType element_types
-  | VarExpr name -> (
-      try List.assoc name env
-      with Not_found -> raise (TypeError ("Unbound variable: " ^ name)))
-  | UnaryExpr { operator; operand } -> (
-      let operand_type = check_expr env func_env operand in
-      match operator with
-      | Not ->
-          if not (type_eq operand_type (SymbolType { value = "bool" })) then
-            raise (TypeError "Unary `not` operator requires a boolean operand");
-          SymbolType { value = "bool" }
-      | BitWiseNOT ->
-          if not (type_eq operand_type (SymbolType { value = "int" })) then
-            raise (TypeError "Bitwise NOT requires an int or int64 operand");
-          operand_type
-      | Inc | Dec ->
-          if
-            not
-              (type_eq operand_type (SymbolType { value = "int" })
-              || type_eq operand_type (SymbolType { value = "float" }))
-          then
-            raise
-              (TypeError "Increment/Decrement requires int or float operand");
-          operand_type
-      | Minus ->
-          if
-            not
-              (type_eq operand_type (SymbolType { value = "int" })
-              || type_eq operand_type (SymbolType { value = "float" }))
-          then raise (TypeError "Unary minus requires int or float operand");
-          operand_type
-      | _ -> raise (TypeError "Unsupported unary operator"))
-  | BinaryExpr { left; operator; right } -> (
-      let lt = check_expr env func_env left in
-      let rt = check_expr env func_env right in
-      if not (type_eq lt rt) then
-        raise (TypeError "Binary operands must have the same type");
-      match operator with
-      | Eq | Neq | Geq | Leq | LogicalAnd | LogicalOr | Less | Greater ->
-          SymbolType { value = "bool" }
-      | BitWiseAND | BitWiseOR | BitWiseXOR | LeftShift | RightShift
-      | RightShiftLogical | BitWiseANDAssign | BitWiseORAssign
-      | BitWiseXORAssign | LeftShiftAssign | RightShiftAssign ->
-          if not (type_eq lt (SymbolType { value = "int" })) then
-            raise (TypeError "Bitwise operators require int operands");
-          lt
-      | _ -> lt)
-  | CallExpr { callee = VarExpr name; arguments } -> (
-      match List.assoc_opt name func_env with
-      | Some overloads -> (
-          let arg_types = List.map (check_expr env func_env) arguments in
-          let matching =
-            List.find_opt
-              (fun (params, _) ->
-                List.length params = List.length arg_types
-                && List.for_all2 type_eq params arg_types)
-              overloads
-          in
-          match matching with
-          | Some (_, return_type) -> return_type
-          | None ->
-              raise
-                (TypeError ("Function argument type mismatch for `" ^ name ^ "`"))
-          )
-      | None -> (
-          match List.assoc_opt name env with
-          | Some (FunctionType (param_types, ret_type)) ->
-              let arg_types = List.map (check_expr env func_env) arguments in
-              if
-                List.length param_types = List.length arg_types
-                && List.for_all2 type_eq param_types arg_types
-              then ret_type
-              else
-                raise
-                  (TypeError
-                     ("Function argument type mismatch for `" ^ name ^ "`"))
-          | _ -> raise (TypeError ("Unknown function: " ^ name))))
-  | CallExpr _ ->
-      raise (TypeError "Only simple function calls supported for now")
-  | ArrayExpr { elements } -> (
-      let types = List.map (check_expr env func_env) elements in
-      match types with
-      | [] -> ArrayType { element_type = Any }
-      | hd :: tl ->
-          List.iter
-            (fun t ->
-              if not (type_eq t hd) then
-                raise (TypeError "Array element type mismatch"))
-            tl;
-          ArrayType { element_type = hd })
-  | IndexExpr { array; index } -> (
-      let at = check_expr env func_env array in
-      let index_type = check_expr env func_env index in
-      if not (type_eq index_type (SymbolType { value = "int" })) then
-        raise (TypeError "Index must be an integer");
-      match at with
-      | ArrayType { element_type } -> element_type
-      | TupleType element_types -> (
-          match index with
-          | Int64Expr { value } ->
-              let idx = Int64.to_int value in
-              if idx < 0 || idx >= List.length element_types then
-                raise
-                  (TypeError
-                     ("Tuple index out of bounds: " ^ string_of_int idx
-                    ^ " for tuple of size "
-                     ^ string_of_int (List.length element_types)));
-              List.nth element_types idx
-          | _ ->
-              raise
-                (TypeError
-                   "Can only use constant integer indices for tuples (e.g. \
-                    t[0])"))
-      | _ -> raise (TypeError "Can only index into arrays or tuples"))
-  | IfExpr { condition; then_branch; else_branch } ->
-      let ct = check_expr env func_env condition in
-      if not (type_eq ct (Type.SymbolType { value = "bool" })) then
-        raise (TypeError "If condition must be boolean");
-      let t_then = check_expr env func_env then_branch in
-      let t_else = check_expr env func_env else_branch in
-      if not (type_eq t_then t_else) then
-        raise (TypeError "Branches of if must return same type");
-      t_then
-  | ReturnExpr expr -> check_expr env func_env expr
-  | DotExpr { left; right } -> (
-      let _ = check_expr env func_env left in
-      match left with
-      | VarExpr enum_name -> (
-          match List.assoc_opt (enum_name ^ "." ^ right) env with
-          | Some member_type -> member_type
-          | None ->
-              raise
-                (TypeError
-                   ("Unknown member `" ^ right ^ "` for enum `" ^ enum_name
-                  ^ "`")))
-      | _ -> raise (TypeError "Dot access only supported for enums for now"))
-  | TernaryExpr { cond; onTrue; onFalse } ->
-      let ct = check_expr env func_env cond in
-      if not (type_eq ct (SymbolType { value = "bool" })) then
-        raise (TypeError "Ternary condition must be boolean");
-      let t_true = check_expr env func_env onTrue in
-      let t_false = check_expr env func_env onFalse in
-      if type_eq t_true t_false then t_true
-      else
-        raise
-          (TypeError
-             ("Ternary branches must return same type, but got "
-            ^ string_of_type t_true ^ " and " ^ string_of_type t_false))
-  | PipelineExpr { left; right } -> (
-      let arg_type = check_expr env func_env left in
-      match right with
-      | VarExpr name -> (
-          match List.assoc_opt name func_env with
-          | Some overloads -> (
-              let matching =
-                List.find_opt
-                  (fun (params, _) ->
-                    match params with
-                    | [ param_type ] -> type_eq param_type arg_type
-                    | _ -> false)
-                  overloads
-              in
-              match matching with
-              | Some (_, return_type) -> return_type
-              | None ->
-                  raise
-                    (TypeError
-                       ("No matching overload for `" ^ name
-                      ^ "` accepting argument of type "
-                      ^ string_of_type arg_type)))
-          | None -> (
-              match List.assoc_opt name env with
-              | Some (FunctionType ([ param_type ], return_type)) ->
-                  if type_eq param_type arg_type then return_type
-                  else
-                    raise
-                      (TypeError
-                         ("Function `" ^ name ^ "` expected "
-                        ^ string_of_type param_type ^ " but got "
-                        ^ string_of_type arg_type))
-              | Some _ ->
-                  raise (TypeError ("`" ^ name ^ "` is not a unary function"))
-              | None -> raise (TypeError ("Unknown function: " ^ name))))
-      | _ ->
-          raise
-            (TypeError
-               "Right-hand side of pipeline must be a function identifier"))
-
-let rec find_return_exprs env func_env expr =
-  let open Expr in
-  match expr with
-  | ReturnExpr e -> [ check_expr env func_env e ]
-  | IfExpr { condition; then_branch; else_branch } ->
-      let _ = check_expr env func_env condition in
-      find_return_exprs env func_env then_branch
-      @ find_return_exprs env func_env else_branch
-  | BinaryExpr { left; operator = _; right } ->
-      find_return_exprs env func_env left @ find_return_exprs env func_env right
-  | CallExpr { callee; arguments } ->
-      find_return_exprs env func_env callee
-      @ List.concat_map (find_return_exprs env func_env) arguments
-  | ArrayExpr { elements } ->
-      List.flatten (List.map (find_return_exprs env func_env) elements)
-  | UnaryExpr { operand; _ } -> find_return_exprs env func_env operand
-  | IndexExpr { array; index } ->
-      find_return_exprs env func_env array
-      @ find_return_exprs env func_env index
-  | _ -> []
-
 let rec check_stmt env func_env stmt =
   match stmt with
   | ExprStmt expr ->
@@ -497,22 +278,6 @@ let rec check_stmt env func_env stmt =
         List.fold_left (fun e stmt -> check_stmt e func_env stmt) env block
       in
       env
-  | MatchStmt { expr; cases } ->
-      let et = check_expr env func_env expr in
-      List.iter
-        (fun (pat_opt, case_stmts) ->
-          (match pat_opt with
-          | Some pat_expr ->
-              let pt = check_expr env func_env pat_expr in
-              if not (type_eq et pt) then
-                raise (TypeError "Pattern type does not match match expression")
-          | None -> ());
-          ignore
-            (List.fold_left
-               (fun e stmt -> check_stmt e func_env stmt)
-               env case_stmts))
-        cases;
-      env
   | EnumStmt { name; members } ->
       let enum_type = SymbolType { value = name } in
       let new_env =
@@ -523,6 +288,259 @@ let rec check_stmt env func_env stmt =
           (List.mapi (fun i m -> (i, m)) members)
       in
       (name, enum_type) :: new_env
+
+and check_expr env func_env expr =
+  match expr with
+  | Int64Expr _ -> SymbolType { value = "int" }
+  | FloatExpr _ -> SymbolType { value = "float" }
+  | StringExpr _ -> SymbolType { value = "string" }
+  | BoolExpr _ -> SymbolType { value = "bool" }
+  | ByteExpr _ -> SymbolType { value = "byte" }
+  | UnitExpr _ -> SymbolType { value = "unit" }
+  | TupleExpr elements ->
+      let element_types = List.map (check_expr env func_env) elements in
+      TupleType element_types
+  | VarExpr name -> (
+      try List.assoc name env
+      with Not_found -> raise (TypeError ("Unbound variable: " ^ name)))
+  | UnaryExpr { operator; operand } -> (
+      let operand_type = check_expr env func_env operand in
+      match operator with
+      | Not ->
+          if not (type_eq operand_type (SymbolType { value = "bool" })) then
+            raise (TypeError "Unary `not` operator requires a boolean operand");
+          SymbolType { value = "bool" }
+      | BitWiseNOT ->
+          if not (type_eq operand_type (SymbolType { value = "int" })) then
+            raise (TypeError "Bitwise NOT requires an int or int64 operand");
+          operand_type
+      | Inc | Dec ->
+          if
+            not
+              (type_eq operand_type (SymbolType { value = "int" })
+              || type_eq operand_type (SymbolType { value = "float" }))
+          then
+            raise
+              (TypeError "Increment/Decrement requires int or float operand");
+          operand_type
+      | Minus ->
+          if
+            not
+              (type_eq operand_type (SymbolType { value = "int" })
+              || type_eq operand_type (SymbolType { value = "float" }))
+          then raise (TypeError "Unary minus requires int or float operand");
+          operand_type
+      | _ -> raise (TypeError "Unsupported unary operator"))
+  | BinaryExpr { left; operator; right } -> (
+      let lt = check_expr env func_env left in
+      let rt = check_expr env func_env right in
+      if not (type_eq lt rt) then
+        raise (TypeError "Binary operands must have the same type");
+      match operator with
+      | Eq | Neq | Geq | Leq | LogicalAnd | LogicalOr | Less | Greater ->
+          SymbolType { value = "bool" }
+      | BitWiseAND | BitWiseOR | BitWiseXOR | LeftShift | RightShift
+      | RightShiftLogical | BitWiseANDAssign | BitWiseORAssign
+      | BitWiseXORAssign | LeftShiftAssign | RightShiftAssign ->
+          if not (type_eq lt (SymbolType { value = "int" })) then
+            raise (TypeError "Bitwise operators require int operands");
+          lt
+      | _ -> lt)
+  | CallExpr { callee = VarExpr name; arguments } -> (
+      match List.assoc_opt name func_env with
+      | Some overloads -> (
+          let arg_types = List.map (check_expr env func_env) arguments in
+          let matching =
+            List.find_opt
+              (fun (params, _) ->
+                List.length params = List.length arg_types
+                && List.for_all2 type_eq params arg_types)
+              overloads
+          in
+          match matching with
+          | Some (_, return_type) -> return_type
+          | None ->
+              raise
+                (TypeError ("Function argument type mismatch for `" ^ name ^ "`"))
+          )
+      | None -> (
+          match List.assoc_opt name env with
+          | Some (FunctionType (param_types, ret_type)) ->
+              let arg_types = List.map (check_expr env func_env) arguments in
+              if
+                List.length param_types = List.length arg_types
+                && List.for_all2 type_eq param_types arg_types
+              then ret_type
+              else
+                raise
+                  (TypeError
+                     ("Function argument type mismatch for `" ^ name ^ "`"))
+          | _ -> raise (TypeError ("Unknown function: " ^ name))))
+  | CallExpr _ ->
+      raise (TypeError "Only simple function calls supported for now")
+  | ArrayExpr { elements } -> (
+      let types = List.map (check_expr env func_env) elements in
+      match types with
+      | [] -> ArrayType { element_type = Any }
+      | hd :: tl ->
+          List.iter
+            (fun t ->
+              if not (type_eq t hd) then
+                raise (TypeError "Array element type mismatch"))
+            tl;
+          ArrayType { element_type = hd })
+  | IndexExpr { array; index } -> (
+      let at = check_expr env func_env array in
+      let index_type = check_expr env func_env index in
+      if not (type_eq index_type (SymbolType { value = "int" })) then
+        raise (TypeError "Index must be an integer");
+      match at with
+      | ArrayType { element_type } -> element_type
+      | TupleType element_types -> (
+          match index with
+          | Int64Expr { value } ->
+              let idx = Int64.to_int value in
+              if idx < 0 || idx >= List.length element_types then
+                raise
+                  (TypeError
+                     ("Tuple index out of bounds: " ^ string_of_int idx
+                    ^ " for tuple of size "
+                     ^ string_of_int (List.length element_types)));
+              List.nth element_types idx
+          | _ ->
+              raise
+                (TypeError
+                   "Can only use constant integer indices for tuples (e.g. \
+                    t[0])"))
+      | _ -> raise (TypeError "Can only index into arrays or tuples"))
+  | IfExpr { condition; then_branch; else_branch } ->
+      let ct = check_expr env func_env condition in
+      if not (type_eq ct (Type.SymbolType { value = "bool" })) then
+        raise (TypeError "If condition must be boolean");
+      let t_then = check_expr env func_env then_branch in
+      let t_else = check_expr env func_env else_branch in
+      if not (type_eq t_then t_else) then
+        raise (TypeError "Branches of if must return same type");
+      t_then
+  | ReturnExpr expr -> check_expr env func_env expr
+  | DotExpr { left; right } -> (
+      let _ = check_expr env func_env left in
+      match left with
+      | VarExpr enum_name -> (
+          match List.assoc_opt (enum_name ^ "." ^ right) env with
+          | Some member_type -> member_type
+          | None ->
+              raise
+                (TypeError
+                   ("Unknown member `" ^ right ^ "` for enum `" ^ enum_name
+                  ^ "`")))
+      | _ -> raise (TypeError "Dot access only supported for enums for now"))
+  | TernaryExpr { cond; onTrue; onFalse } ->
+      let ct = check_expr env func_env cond in
+      if not (type_eq ct (SymbolType { value = "bool" })) then
+        raise (TypeError "Ternary condition must be boolean");
+      let t_true = check_expr env func_env onTrue in
+      let t_false = check_expr env func_env onFalse in
+      if type_eq t_true t_false then t_true
+      else
+        raise
+          (TypeError
+             ("Ternary branches must return same type, but got "
+            ^ string_of_type t_true ^ " and " ^ string_of_type t_false))
+  | PipelineExpr { left; right } -> (
+      let arg_type = check_expr env func_env left in
+      match right with
+      | VarExpr name -> (
+          match List.assoc_opt name func_env with
+          | Some overloads -> (
+              let matching =
+                List.find_opt
+                  (fun (params, _) ->
+                    match params with
+                    | [ param_type ] -> type_eq param_type arg_type
+                    | _ -> false)
+                  overloads
+              in
+              match matching with
+              | Some (_, return_type) -> return_type
+              | None ->
+                  raise
+                    (TypeError
+                       ("No matching overload for `" ^ name
+                      ^ "` accepting argument of type "
+                      ^ string_of_type arg_type)))
+          | None -> (
+              match List.assoc_opt name env with
+              | Some (FunctionType ([ param_type ], return_type)) ->
+                  if type_eq param_type arg_type then return_type
+                  else
+                    raise
+                      (TypeError
+                         ("Function `" ^ name ^ "` expected "
+                        ^ string_of_type param_type ^ " but got "
+                        ^ string_of_type arg_type))
+              | Some _ ->
+                  raise (TypeError ("`" ^ name ^ "` is not a unary function"))
+              | None -> raise (TypeError ("Unknown function: " ^ name))))
+      | _ ->
+          raise
+            (TypeError
+               "Right-hand side of pipeline must be a function identifier"))
+  | MatchExpr { expr; cases } -> (
+      let et = check_expr env func_env expr in
+      let branch_types =
+        List.map
+          (fun (pat_opt, case_stmts) ->
+            (match pat_opt with
+            | Some pat_expr ->
+                let pt = check_expr env func_env pat_expr in
+                if not (type_eq et pt) then
+                  raise
+                    (TypeError "Pattern type does not match match expression")
+            | None -> ());
+            let final_env =
+              List.fold_left
+                (fun e stmt -> check_stmt e func_env stmt)
+                env case_stmts
+            in
+            match List.rev case_stmts with
+            | ExprStmt expr :: _ -> check_expr final_env func_env expr
+            | _ -> SymbolType { value = "unit" })
+          cases
+      in
+      match branch_types with
+      | [] -> SymbolType { value = "unit" }
+      | first :: rest ->
+          List.iter
+            (fun t ->
+              if not (type_eq t first) then
+                raise
+                  (TypeError
+                     ("All match cases must return the same type, but got "
+                    ^ string_of_type first ^ " and " ^ string_of_type t)))
+            rest;
+          first)
+
+and find_return_exprs env func_env expr =
+  let open Expr in
+  match expr with
+  | ReturnExpr e -> [ check_expr env func_env e ]
+  | IfExpr { condition; then_branch; else_branch } ->
+      let _ = check_expr env func_env condition in
+      find_return_exprs env func_env then_branch
+      @ find_return_exprs env func_env else_branch
+  | BinaryExpr { left; operator = _; right } ->
+      find_return_exprs env func_env left @ find_return_exprs env func_env right
+  | CallExpr { callee; arguments } ->
+      find_return_exprs env func_env callee
+      @ List.concat_map (find_return_exprs env func_env) arguments
+  | ArrayExpr { elements } ->
+      List.flatten (List.map (find_return_exprs env func_env) elements)
+  | UnaryExpr { operand; _ } -> find_return_exprs env func_env operand
+  | IndexExpr { array; index } ->
+      find_return_exprs env func_env array
+      @ find_return_exprs env func_env index
+  | _ -> []
 
 and collect_functions stmts =
   let rec collect_from_stmt stmt acc =

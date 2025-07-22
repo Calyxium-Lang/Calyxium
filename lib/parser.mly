@@ -2,7 +2,7 @@
   open Ast
 %}
 
-%right Assign PlusAssign MinusAssign StarAssign SlashAssign
+%right PlusAssign MinusAssign StarAssign SlashAssign
 %left LogicalOr
 %left LogicalAnd
 %left BitWiseOR
@@ -20,7 +20,7 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Return For Use Module True False Enum Int64Type FloatType StringType ByteType BoolType UnitType TupleType
+%token Recursive If Then Else Let Match With Return For Use Module True False Enum Int64Type FloatType StringType ByteType BoolType UnitType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
@@ -54,12 +54,9 @@ stmt:
   | FunctionDeclStmt { $1 }
   | IfStmt { $1 }
   | ForStmt { $1 }
-  | MatchStmt { $1 }
   | ModuleStmt { $1 }
   | EnumStmt { $1 }
   | expr { Stmt.ExprStmt $1 }
-  | Return expr %prec LowPrec { Stmt.ExprStmt (Expr.ReturnExpr $2) }
-  | If expr Then expr Else expr %prec IfThenElse { Stmt.ExprStmt (Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; }) }
 
 stmt_opt:
   | stmt { Some $1 }
@@ -91,9 +88,13 @@ type_expr:
   | ByteType { Type.SymbolType { value = "byte" } }
   | BoolType { Type.SymbolType { value = "bool" } }
   | UnitType { Type.SymbolType { value = "unit"} }
-  | TupleType { Type.SymbolType { value = "tuple" } }
   | LBracket RBracket type_expr { Type.ArrayType { element_type = $3 } }
   | Ident { Type.SymbolType { value = $1 } }
+  | LParen type_expr_list RParen { match $2 with | [single] -> single | multiple -> Type.TupleType multiple }
+
+type_expr_list:
+  | type_expr Comma type_expr_list { $1 :: $3 }
+  | type_expr { [$1] }
 
 expr:
   | True { Expr.BoolExpr { value = true } }
@@ -149,6 +150,9 @@ expr:
   | expr RightShiftAssign expr { Expr.BinaryExpr { left = $1; operator = Token.RightShiftAssign; right = $3 } }
   | BitWiseNOT expr %prec NotPrec { Expr.UnaryExpr { operator = Token.BitWiseNOT; operand = $2 } }
   | expr Pipeline expr { Expr.PipelineExpr { left = $1; right = $3 } }
+  | Match expr With case_list { Expr.MatchExpr { expr = $2; cases = $4; } }
+  | Return expr { Expr.ReturnExpr $2 }
+  | If expr Then expr Else expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }
@@ -157,6 +161,7 @@ expr_list:
 argument_list:
   | expr Comma argument_list { $1 :: $3 }
   | expr { [$1] }
+  | /* empty */ { [] }
 
 ident_list:
   | Ident Comma ident_list { $1 :: $3 }
@@ -181,12 +186,9 @@ VarDeclStmt:
   | Let ident_list Colon type_expr Assign expr_list { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4; } }
   
 FunctionDeclStmt:
-  | Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = $3; return_type = $6; body = $8 } }
-  | Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = true; parameters = $4; return_type = $7; body = $9 } }
-  | Ident LParen RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = []; return_type = $5; body = $7 } }
-  
-MatchStmt:
-  | Match expr With case_list { Stmt.MatchStmt { expr = $2; cases = $4; } }
+  | Let Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = $7; body = $9 } }
+  | Let Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = $8; body = $10 } }
+  | Let Ident LParen RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = $6; body = $8 } }
 
 IfStmt:
   | If LParen expr RParen LBrace stmt_list RBrace Else LBrace stmt_list RBrace { Stmt.IfStmt { condition = $3; then_branch = Stmt.BlockStmt { body = $6 }; else_branch = Some (Stmt.BlockStmt { body = $10 }) } }
