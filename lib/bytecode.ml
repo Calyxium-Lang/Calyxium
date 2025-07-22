@@ -8,6 +8,7 @@ let enum_tbl : (string, (string * int) list) Hashtbl.t = Hashtbl.create 10
 
 let builtins =
   [
+    ("print", fun args -> args @ [ PRINT ]);
     ("println", fun args -> args @ [ PRINTLN ]);
     ("to_float", fun args -> args @ [ FLOAT ]);
     ("to_int", fun args -> args @ [ INT ]);

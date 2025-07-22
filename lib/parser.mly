@@ -10,8 +10,8 @@
 %left BitWiseAND
 %nonassoc Eq Neq Geq Leq Greater Less
 %left LeftShift RightShift RightShiftLogical
-%left Plus Minus
 %left Pipeline
+%left Plus Minus
 %left Star Slash Mod
 %right Pow Carot
 %nonassoc UnaryMinus NotPrec
@@ -45,7 +45,7 @@ program:
     stmt_list EOF { Stmt.BlockStmt { body = $1 } }
 
 stmt_list:
-  stmt stmt_list { $1 :: $2 }
+  | stmt stmt_list { $1 :: $2 }
   | stmt { [$1] }
 
 stmt:
@@ -155,7 +155,6 @@ expr_list:
   | expr { [$1] }
 
 argument_list:
-  | /* empty */ { [] }
   | expr Comma argument_list { $1 :: $3 }
   | expr { [$1] }
 
@@ -164,11 +163,10 @@ ident_list:
   | Ident { [$1] }
 
 path:
-  | Ident { [$1] }
   | path Dot Ident { $1 @ [$3] }
+  | Ident { [$1] }
 
 enum_member_list:
-  | /* empty */ { [] }
   | Ident Comma enum_member_list { $1 :: $3 }
   | Ident { [$1] }
 
@@ -180,8 +178,7 @@ ModuleStmt:
 
 VarDeclStmt:
   | Let Ident Colon type_expr Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
-  | Let ident_list Colon type_expr Assign expr { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = [$6]; explicit_type = $4 } }
-  | Let ident_list  Colon type_expr Assign expr_list { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4; } }
+  | Let ident_list Colon type_expr Assign expr_list { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4; } }
   
 FunctionDeclStmt:
   | Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $1; is_rec = false; parameters = $3; return_type = $6; body = $8 } }

@@ -32,6 +32,7 @@ type opcode =
   | LESS_EQUAL
   | NOT_EQUAL
   | RETURN
+  | PRINT
   | PRINTLN
   | NOT
   | INC

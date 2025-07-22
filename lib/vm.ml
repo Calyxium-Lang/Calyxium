@@ -615,7 +615,45 @@ let run instructions =
                 | VClosure _ -> "<closure>"
               in
               let value = pop1 stack in
-              Buffer.add_string output_buffer (string_of_value value ^ "\n");
+              print_endline (string_of_value value);
+              next ()
+        | PRINT ->
+            push_trace frame.pc "PRINT";
+            if Stack.is_empty stack then
+              runtime_error "PRINTLN attempted with empty stack"
+            else
+              let rec string_of_value = function
+                | VUnit -> "unit"
+                | VByte c -> Printf.sprintf "'%c'" c
+                | VBool true -> "true"
+                | VBool false -> "false"
+                | VFloat f when Float.is_nan f -> "unit"
+                | VFloat 1.0 -> "true"
+                | VFloat 0.0 -> "false"
+                | VFloat f when Float.is_infinite f ->
+                    if f > 0.0 then "inf" else "-inf"
+                | VFloat f -> Printf.sprintf "%.12f" f
+                | VInt64 i -> Printf.sprintf "%Ld" i
+                | VHeapRef id -> (
+                    match Gc.get_string id with
+                    | Some s -> "" ^ replace_escape_sequences s ^ ""
+                    | None -> "<invalid ref>")
+                | VArray items ->
+                    let contents =
+                      items |> List.map string_of_value |> String.concat ", "
+                    in
+                    "[" ^ contents ^ "]"
+                | VTuple items ->
+                    let contents =
+                      items |> List.map string_of_value |> String.concat ", "
+                    in
+                    "(" ^ contents ^ ")"
+                | VModule _ -> "<module>"
+                | VNative _ -> "<native>"
+                | VClosure _ -> "<closure>"
+              in
+              let value = pop1 stack in
+              print_string (string_of_value value);
               next ()
         | INPUT -> (
             push_trace frame.pc "INPUT";
@@ -1043,9 +1081,7 @@ let run instructions =
         | CLOSURE func_name ->
             Stack.push (VClosure func_name) stack;
             next ()
-    done;
-    print_string (Buffer.contents output_buffer);
-    flush stdout
+    done
   with RuntimeError msg ->
     print_trace msg;
     exit 1
