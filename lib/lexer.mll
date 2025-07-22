@@ -88,7 +88,6 @@ rule token = parse
   | "byte"                   { at_line_start := false; ByteType }
   | "bool"                   { at_line_start := false; BoolType }
   | "unit"                   { at_line_start := false; UnitType }
-  | "tuple"                  { at_line_start := false; TupleType }
 
   | floats as f              { at_line_start := false; Float (float_of_string f) }
   | digits as d              { at_line_start := false; Int64 (Int64.of_string d) }

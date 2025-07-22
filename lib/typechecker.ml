@@ -6,6 +6,7 @@ open Token
 
 exception TypeError of string
 
+let stdlib_used = ref false
 let float_type = SymbolType { value = "float" }
 
 let rec string_of_type = function
@@ -77,7 +78,218 @@ let rec type_eq expected actual =
       List.length xs = List.length ys && List.for_all2 type_eq xs ys
   | _ -> false
 
-let rec check_expr env func_env expr =
+let rec check_stmt env func_env stmt =
+  match stmt with
+  | ExprStmt expr ->
+      let _ = check_expr env func_env expr in
+      env
+  | VarDeclarationStmt { identifier; assigned_value; explicit_type } -> (
+      match assigned_value with
+      | Some expr ->
+          let expr_type = check_expr env func_env expr in
+          if not (type_eq expr_type explicit_type) then
+            raise (TypeError ("Type mismatch in declaration of " ^ identifier));
+          (identifier, explicit_type) :: env
+      | None -> (identifier, explicit_type) :: env)
+  | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } ->
+      if List.length identifier <> List.length assigned_value then
+        raise
+          (TypeError
+             "Number of identifiers does not match number of assigned \
+              expressions");
+      List.iter2
+        (fun ident expr ->
+          let expr_type = check_expr env func_env expr in
+          if not (type_eq expr_type explicit_type) then
+            raise (TypeError ("Type mismatch in declaration of " ^ ident)))
+        identifier assigned_value;
+      List.fold_left
+        (fun acc_env ident -> (ident, explicit_type) :: acc_env)
+        env identifier
+  | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
+      let local_funcs = collect_functions body in
+      let param_types = List.map (fun p -> p.param_type) parameters in
+      let this_func = (name, [ (param_types, return_type) ]) in
+      let func_env =
+        let base_env = local_funcs @ func_env in
+        match List.assoc_opt name base_env with
+        | Some overloads ->
+            (name, (param_types, return_type) :: overloads)
+            :: List.remove_assoc name base_env
+        | None -> this_func :: base_env
+      in
+      let rec contains_recursive_call fname expr =
+        let open Expr in
+        match expr with
+        | CallExpr { callee = VarExpr callee_name; _ } -> callee_name = fname
+        | CallExpr { callee; arguments } ->
+            contains_recursive_call fname callee
+            || List.exists (contains_recursive_call fname) arguments
+        | UnaryExpr { operand; _ } -> contains_recursive_call fname operand
+        | BinaryExpr { left; right; _ } ->
+            contains_recursive_call fname left
+            || contains_recursive_call fname right
+        | IfExpr { condition; then_branch; else_branch } ->
+            contains_recursive_call fname condition
+            || contains_recursive_call fname then_branch
+            || contains_recursive_call fname else_branch
+        | ArrayExpr { elements } ->
+            List.exists (contains_recursive_call fname) elements
+        | IndexExpr { array; index } ->
+            contains_recursive_call fname array
+            || contains_recursive_call fname index
+        | ReturnExpr e -> contains_recursive_call fname e
+        | _ -> false
+      in
+
+      let rec contains_recursive_call_stmt fname stmt =
+        let open Stmt in
+        match stmt with
+        | ExprStmt e -> contains_recursive_call fname e
+        | BlockStmt { body } ->
+            List.exists (contains_recursive_call_stmt fname) body
+        | IfStmt { condition; then_branch; else_branch } -> (
+            contains_recursive_call fname condition
+            || contains_recursive_call_stmt fname then_branch
+            ||
+            match else_branch with
+            | Some b -> contains_recursive_call_stmt fname b
+            | None -> false)
+        | ForStmt { init; condition; increment; body } ->
+            (match init with
+            | Some s -> contains_recursive_call_stmt fname s
+            | None -> false)
+            || contains_recursive_call fname condition
+            || (match increment with
+               | Some s -> contains_recursive_call_stmt fname s
+               | None -> false)
+            || contains_recursive_call_stmt fname body
+        | _ -> false
+      in
+
+      let has_recursive_call =
+        List.exists (contains_recursive_call_stmt name) body
+      in
+
+      if has_recursive_call && not is_rec then
+        raise
+          (TypeError
+             ("Function `" ^ name
+            ^ "` calls itself recursively but is not marked `rec`. Please add \
+               `rec`."));
+
+      let param_env = List.map (fun p -> (p.name, p.param_type)) parameters in
+      let env_with_params = param_env @ env in
+      let _final_env =
+        List.fold_left
+          (fun e stmt -> check_stmt e func_env stmt)
+          env_with_params body
+      in
+      let rec gather_return_types env func_env stmts =
+        List.concat_map
+          (function
+            | ExprStmt e -> find_return_exprs env func_env e
+            | BlockStmt { body } -> gather_return_types env func_env body
+            | IfStmt { condition = _; then_branch; else_branch } ->
+                let then_returns =
+                  gather_return_types env func_env [ then_branch ]
+                in
+                let else_returns =
+                  match else_branch with
+                  | Some b -> gather_return_types env func_env [ b ]
+                  | None -> []
+                in
+                then_returns @ else_returns
+            | _ -> [])
+          stmts
+      in
+      let return_expr_types = gather_return_types _final_env func_env body in
+
+      let last_expr_type =
+        match
+          List.rev body
+          |> List.find_opt (function ExprStmt _ -> true | _ -> false)
+        with
+        | Some (ExprStmt expr) -> Some (check_expr _final_env func_env expr)
+        | _ -> None
+      in
+
+      let all_return_types =
+        match last_expr_type with
+        | Some t -> if return_expr_types = [] then [ t ] else return_expr_types
+        | None -> return_expr_types
+      in
+
+      List.iter
+        (fun actual_type ->
+          if not (type_eq return_type actual_type) then
+            raise
+              (TypeError
+                 ("Function `" ^ name
+                ^ "` has mismatched return type: expected "
+                ^ string_of_type return_type ^ ", got "
+                ^ string_of_type actual_type)))
+        all_return_types;
+      env
+  | BlockStmt { body } ->
+      let _final_env =
+        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
+      in
+      _final_env
+  | IfStmt { condition; then_branch; else_branch } ->
+      let ct = check_expr env func_env condition in
+      if not (type_eq ct (SymbolType { value = "bool" })) then
+        raise (TypeError "If condition must be boolean");
+      let _ = check_stmt env func_env then_branch in
+      let _ =
+        match else_branch with
+        | Some b -> check_stmt env func_env b
+        | None -> env
+      in
+      env
+  | ForStmt { init; condition; increment; body } ->
+      let env =
+        match init with
+        | Some stmt -> check_stmt env func_env stmt
+        | None -> env
+      in
+      let ct = check_expr env func_env condition in
+      if not (type_eq ct (SymbolType { value = "bool" })) then
+        raise (TypeError "For loop condition must be boolean");
+      let _ = Option.map (check_stmt env func_env) increment in
+      let _ = check_stmt env func_env body in
+      env
+  | ImportStmt { module_name = mod_parts } -> (
+      match mod_parts with
+      | [ mod_name; symbol ] -> (
+          if List.mem_assoc mod_name built_in_modules then stdlib_used := true;
+          match List.assoc_opt mod_name built_in_modules with
+          | Some mod_entries -> (
+              match List.assoc_opt symbol mod_entries with
+              | Some ty -> (symbol, ty) :: env
+              | None ->
+                  raise
+                    (TypeError
+                       ("Module `" ^ mod_name ^ "` has no `" ^ symbol ^ "`")))
+          | None -> raise (TypeError ("Unknown module `" ^ mod_name ^ "`")))
+      | _ -> failwith "Invalid use syntax")
+  | ModuleStmt { module_name = _; block } ->
+      let _ =
+        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env block
+      in
+      env
+  | EnumStmt { name; members } ->
+      let enum_type = SymbolType { value = name } in
+      let new_env =
+        List.fold_left
+          (fun acc_env (_, member) ->
+            (name ^ "." ^ member, enum_type) :: acc_env)
+          env
+          (List.mapi (fun i m -> (i, m)) members)
+      in
+      (name, enum_type) :: new_env
+
+and check_expr env func_env expr =
   match expr with
   | Int64Expr _ -> SymbolType { value = "int" }
   | FloatExpr _ -> SymbolType { value = "float" }
@@ -274,8 +486,42 @@ let rec check_expr env func_env expr =
           raise
             (TypeError
                "Right-hand side of pipeline must be a function identifier"))
+  | MatchExpr { expr; cases } -> (
+      let et = check_expr env func_env expr in
+      let branch_types =
+        List.map
+          (fun (pat_opt, case_stmts) ->
+            (match pat_opt with
+            | Some pat_expr ->
+                let pt = check_expr env func_env pat_expr in
+                if not (type_eq et pt) then
+                  raise
+                    (TypeError "Pattern type does not match match expression")
+            | None -> ());
+            let final_env =
+              List.fold_left
+                (fun e stmt -> check_stmt e func_env stmt)
+                env case_stmts
+            in
+            match List.rev case_stmts with
+            | ExprStmt expr :: _ -> check_expr final_env func_env expr
+            | _ -> SymbolType { value = "unit" })
+          cases
+      in
+      match branch_types with
+      | [] -> SymbolType { value = "unit" }
+      | first :: rest ->
+          List.iter
+            (fun t ->
+              if not (type_eq t first) then
+                raise
+                  (TypeError
+                     ("All match cases must return the same type, but got "
+                    ^ string_of_type first ^ " and " ^ string_of_type t)))
+            rest;
+          first)
 
-let rec find_return_exprs env func_env expr =
+and find_return_exprs env func_env expr =
   let open Expr in
   match expr with
   | ReturnExpr e -> [ check_expr env func_env e ]
@@ -295,232 +541,6 @@ let rec find_return_exprs env func_env expr =
       find_return_exprs env func_env array
       @ find_return_exprs env func_env index
   | _ -> []
-
-let rec check_stmt env func_env stmt =
-  match stmt with
-  | ExprStmt expr ->
-      let _ = check_expr env func_env expr in
-      env
-  | VarDeclarationStmt { identifier; assigned_value; explicit_type } -> (
-      match assigned_value with
-      | Some expr ->
-          let expr_type = check_expr env func_env expr in
-          if not (type_eq expr_type explicit_type) then
-            raise (TypeError ("Type mismatch in declaration of " ^ identifier));
-          (identifier, explicit_type) :: env
-      | None -> (identifier, explicit_type) :: env)
-  | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } ->
-      if List.length identifier <> List.length assigned_value then
-        raise
-          (TypeError
-             "Number of identifiers does not match number of assigned \
-              expressions");
-      List.iter2
-        (fun ident expr ->
-          let expr_type = check_expr env func_env expr in
-          if not (type_eq expr_type explicit_type) then
-            raise (TypeError ("Type mismatch in declaration of " ^ ident)))
-        identifier assigned_value;
-      List.fold_left
-        (fun acc_env ident -> (ident, explicit_type) :: acc_env)
-        env identifier
-  | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
-      let local_funcs = collect_functions body in
-      let param_types = List.map (fun p -> p.param_type) parameters in
-      let this_func = (name, [ (param_types, return_type) ]) in
-      let func_env =
-        let base_env = local_funcs @ func_env in
-        match List.assoc_opt name base_env with
-        | Some overloads ->
-            (name, (param_types, return_type) :: overloads)
-            :: List.remove_assoc name base_env
-        | None -> this_func :: base_env
-      in
-      let rec contains_recursive_call fname expr =
-        let open Expr in
-        match expr with
-        | CallExpr { callee = VarExpr callee_name; _ } -> callee_name = fname
-        | CallExpr { callee; arguments } ->
-            contains_recursive_call fname callee
-            || List.exists (contains_recursive_call fname) arguments
-        | UnaryExpr { operand; _ } -> contains_recursive_call fname operand
-        | BinaryExpr { left; right; _ } ->
-            contains_recursive_call fname left
-            || contains_recursive_call fname right
-        | IfExpr { condition; then_branch; else_branch } ->
-            contains_recursive_call fname condition
-            || contains_recursive_call fname then_branch
-            || contains_recursive_call fname else_branch
-        | ArrayExpr { elements } ->
-            List.exists (contains_recursive_call fname) elements
-        | IndexExpr { array; index } ->
-            contains_recursive_call fname array
-            || contains_recursive_call fname index
-        | ReturnExpr e -> contains_recursive_call fname e
-        | _ -> false
-      in
-
-      let rec contains_recursive_call_stmt fname stmt =
-        let open Stmt in
-        match stmt with
-        | ExprStmt e -> contains_recursive_call fname e
-        | BlockStmt { body } ->
-            List.exists (contains_recursive_call_stmt fname) body
-        | IfStmt { condition; then_branch; else_branch } -> (
-            contains_recursive_call fname condition
-            || contains_recursive_call_stmt fname then_branch
-            ||
-            match else_branch with
-            | Some b -> contains_recursive_call_stmt fname b
-            | None -> false)
-        | ForStmt { init; condition; increment; body } ->
-            (match init with
-            | Some s -> contains_recursive_call_stmt fname s
-            | None -> false)
-            || contains_recursive_call fname condition
-            || (match increment with
-               | Some s -> contains_recursive_call_stmt fname s
-               | None -> false)
-            || contains_recursive_call_stmt fname body
-        | _ -> false
-      in
-
-      let has_recursive_call =
-        List.exists (contains_recursive_call_stmt name) body
-      in
-
-      if has_recursive_call && not is_rec then
-        raise
-          (TypeError
-             ("Function `" ^ name
-            ^ "` calls itself recursively but is not marked `rec`. Please add \
-               `rec`."));
-
-      let param_env = List.map (fun p -> (p.name, p.param_type)) parameters in
-      let env_with_params = param_env @ env in
-      let _final_env =
-        List.fold_left
-          (fun e stmt -> check_stmt e func_env stmt)
-          env_with_params body
-      in
-      let rec gather_return_types env func_env stmts =
-        List.concat_map
-          (function
-            | ExprStmt e -> find_return_exprs env func_env e
-            | BlockStmt { body } -> gather_return_types env func_env body
-            | IfStmt { condition = _; then_branch; else_branch } ->
-                let then_returns =
-                  gather_return_types env func_env [ then_branch ]
-                in
-                let else_returns =
-                  match else_branch with
-                  | Some b -> gather_return_types env func_env [ b ]
-                  | None -> []
-                in
-                then_returns @ else_returns
-            | _ -> [])
-          stmts
-      in
-      let return_expr_types = gather_return_types _final_env func_env body in
-
-      let last_expr_type =
-        match
-          List.rev body
-          |> List.find_opt (function ExprStmt _ -> true | _ -> false)
-        with
-        | Some (ExprStmt expr) -> Some (check_expr _final_env func_env expr)
-        | _ -> None
-      in
-
-      let all_return_types =
-        match last_expr_type with
-        | Some t -> if return_expr_types = [] then [ t ] else return_expr_types
-        | None -> return_expr_types
-      in
-
-      List.iter
-        (fun actual_type ->
-          if not (type_eq return_type actual_type) then
-            raise
-              (TypeError
-                 ("Function `" ^ name
-                ^ "` has mismatched return type: expected "
-                ^ string_of_type return_type ^ ", got "
-                ^ string_of_type actual_type)))
-        all_return_types;
-      env
-  | BlockStmt { body } ->
-      let _final_env =
-        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
-      in
-      _final_env
-  | IfStmt { condition; then_branch; else_branch } ->
-      let ct = check_expr env func_env condition in
-      if not (type_eq ct (SymbolType { value = "bool" })) then
-        raise (TypeError "If condition must be boolean");
-      let _ = check_stmt env func_env then_branch in
-      let _ =
-        match else_branch with
-        | Some b -> check_stmt env func_env b
-        | None -> env
-      in
-      env
-  | ForStmt { init; condition; increment; body } ->
-      let env =
-        match init with
-        | Some stmt -> check_stmt env func_env stmt
-        | None -> env
-      in
-      let ct = check_expr env func_env condition in
-      if not (type_eq ct (SymbolType { value = "bool" })) then
-        raise (TypeError "For loop condition must be boolean");
-      let _ = Option.map (check_stmt env func_env) increment in
-      let _ = check_stmt env func_env body in
-      env
-  | ImportStmt { module_name = mod_parts } -> (
-      match mod_parts with
-      | [ mod_name; symbol ] -> (
-          match List.assoc_opt mod_name built_in_modules with
-          | Some mod_entries -> (
-              match List.assoc_opt symbol mod_entries with
-              | Some ty -> (symbol, ty) :: env
-              | None ->
-                  raise
-                    (TypeError
-                       ("Module `" ^ mod_name ^ "` has no `" ^ symbol ^ "`")))
-          | None -> raise (TypeError ("Unknown module `" ^ mod_name ^ "`")))
-      | _ -> failwith "Invalid use syntax")
-  | ModuleStmt { module_name = _; block } ->
-      let _ =
-        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env block
-      in
-      env
-  | MatchStmt { expr; cases } ->
-      let et = check_expr env func_env expr in
-      List.iter
-        (fun (pat_opt, case_stmts) ->
-          (match pat_opt with
-          | Some pat_expr ->
-              let pt = check_expr env func_env pat_expr in
-              if not (type_eq et pt) then
-                raise (TypeError "Pattern type does not match match expression")
-          | None -> ());
-          ignore
-            (List.fold_left
-               (fun e stmt -> check_stmt e func_env stmt)
-               env case_stmts))
-        cases;
-      env
-  | EnumStmt { name; members } ->
-      let enum_type = SymbolType { value = name } in
-      let new_env =
-        List.fold_left
-          (fun acc_env (_, member) ->
-            (name ^ "." ^ member, enum_type) :: acc_env)
-          env
-          (List.mapi (fun i m -> (i, m)) members)
-      in
-      (name, enum_type) :: new_env
 
 and collect_functions stmts =
   let rec collect_from_stmt stmt acc =
@@ -552,7 +572,7 @@ and collect_functions stmts =
   in
   List.fold_right collect_from_stmt stmts builtins
 
-let typecheck_program stmts =
+let typecheck_program stmts : bool =
   let env =
     [
       ("true", Type.SymbolType { value = "bool" });
@@ -560,7 +580,7 @@ let typecheck_program stmts =
     ]
   in
   let func_env = collect_functions stmts in
-  let final_env =
-    List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts
-  in
-  final_env
+  ignore (List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts);
+  let used = !stdlib_used in
+  stdlib_used := false;
+  used

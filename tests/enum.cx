@@ -1,6 +1,6 @@
 -- $Id: tests/enum.cx $
 
--- basic tests for enum with assert
+-- basic tests for enum
 
 enum Week {
     Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
@@ -8,7 +8,7 @@ enum Week {
 
 let week_names: []string = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 
-week_to_string(day: Week): string {
+let week_to_string(day: Week): string {
     return week_names[to_int(day)]
 }
 

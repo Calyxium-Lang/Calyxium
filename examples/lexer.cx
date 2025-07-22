@@ -4,15 +4,15 @@ enum Tokens {
     Let, Ident, IntType, Assign, IntLiteral
 }
 
-is_alpha(c: byte): bool {
+let is_alpha(c: byte): bool {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-is_digit(c: byte): bool {
+let is_digit(c: byte): bool {
     return (c >= '0' && c <= '9')
 }
 
-starts_with(bytes: []byte, pos: int, prefix: string): bool {
+let starts_with(bytes: []byte, pos: int, prefix: string): bool {
     let prefix_bytes: []byte = to_bytes(prefix)
     let prefix_len: int = length(prefix_bytes)
     if (pos + prefix_len > length(bytes)) {
@@ -27,7 +27,7 @@ starts_with(bytes: []byte, pos: int, prefix: string): bool {
     return true
 }
 
-tokenize(code: string): []Tokens {
+let tokenize(code: string): []Tokens {
     let tokens: []Tokens = {}
     let bytes: []byte = to_bytes(code)
     let length: int = length(bytes)
