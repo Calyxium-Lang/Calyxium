@@ -1,1 +1,8 @@
-let x: bool = 1
+add(x: int): int {
+    sub(x: int): int {
+        return x
+    }
+    return sub(x)
+}
+
+println(add(5))

@@ -34,6 +34,7 @@ let built_in_modules : (string * (string * Type.t) list) list =
 
 let builtins : (string * (Type.t list * Type.t) list) list =
   [
+    ("print", [ ([ Any ], SymbolType { value = "unit" }) ]);
     ("println", [ ([ Any ], SymbolType { value = "unit" }) ]);
     ( "input",
       [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]

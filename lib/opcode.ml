@@ -32,6 +32,7 @@ type opcode =
   | LESS_EQUAL
   | NOT_EQUAL
   | RETURN
+  | PRINT
   | PRINTLN
   | NOT
   | INC
@@ -65,3 +66,4 @@ type opcode =
   | LOAD_MODULE of string
   | LOAD_FIELD of string
   | CLOSURE of string
+[@@deriving show]
