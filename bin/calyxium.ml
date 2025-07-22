@@ -15,15 +15,18 @@ let parse_file ~flags file =
   match program token lexbuf with
   | ast -> (
       try
-        ignore (typecheck_program [ ast ]);
+        let stdlib_used = typecheck_program [ ast ] in
         let bytecode = compile_stmt ast in
 
         if List.mem "--emit-bytecode" flags then (
           save_bytecode_to_file bytecode_file bytecode;
           Printf.printf "Bytecode saved to %s\n" bytecode_file);
 
-        if not (List.mem "--emit-bytecode" flags || List.mem "--no-run" flags)
+        if
+          stdlib_used
+          && not (List.mem "--emit-bytecode" flags || List.mem "--no-run" flags)
         then init_stdlib ();
+
         ignore (run bytecode)
       with TypeError msg ->
         Printf.eprintf "%s%s: %s%s\n" red file msg reset;

@@ -6,6 +6,7 @@ open Token
 
 exception TypeError of string
 
+let stdlib_used = ref false
 let float_type = SymbolType { value = "float" }
 
 let rec string_of_type = function
@@ -480,6 +481,7 @@ let rec check_stmt env func_env stmt =
   | ImportStmt { module_name = mod_parts } -> (
       match mod_parts with
       | [ mod_name; symbol ] -> (
+          if List.mem_assoc mod_name built_in_modules then stdlib_used := true;
           match List.assoc_opt mod_name built_in_modules with
           | Some mod_entries -> (
               match List.assoc_opt symbol mod_entries with
@@ -552,7 +554,7 @@ and collect_functions stmts =
   in
   List.fold_right collect_from_stmt stmts builtins
 
-let typecheck_program stmts =
+let typecheck_program stmts : bool =
   let env =
     [
       ("true", Type.SymbolType { value = "bool" });
@@ -560,7 +562,7 @@ let typecheck_program stmts =
     ]
   in
   let func_env = collect_functions stmts in
-  let final_env =
-    List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts
-  in
-  final_env
+  ignore (List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts);
+  let used = !stdlib_used in
+  stdlib_used := false;
+  used
