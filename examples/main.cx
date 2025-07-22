@@ -1,8 +1,12 @@
-add(x: int): int {
-    sub(x: int): int {
-        return x
-    }
-    return sub(x)
+-- tests/pipeline.cx
+
+-- basic tests for pipeline operators
+double(x: int): int {
+    return x * 2
 }
 
-println(add(5))
+sqr(x: int): int {
+    return x * x
+}
+
+3 |> double |> sqr |> println

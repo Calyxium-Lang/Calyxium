@@ -10,6 +10,7 @@
 %left BitWiseAND
 %nonassoc Eq Neq Geq Leq Greater Less
 %left LeftShift RightShift RightShiftLogical
+%left Pipeline
 %left Plus Minus
 %left Star Slash Mod
 %right Pow Carot
