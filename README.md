@@ -13,6 +13,8 @@
 
 <!-- TOC -->
 
+![Build Status](https://github.com/Calyxium-Lang/Calyxium/actions/workflows/ci.yml/badge.svg)
+
 ## Why
 Going to be real, Calyxium exists because I needed a project impressive enough to skip some classes in my applied math degree.
 
