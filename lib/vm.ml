@@ -171,6 +171,21 @@ let rec equal_value a b =
       List.length l1 = List.length l2 && List.for_all2 equal_value l1 l2
   | _ -> false
 
+let rec not_equal_value a b =
+  match (a, b) with
+  | VHeapRef id1, VHeapRef id2 -> (
+      match (Gc.get_string id1, Gc.get_string id2) with
+      | Some sa, Some sb -> sa <> sb
+      | _ -> id1 = id2)
+  | VFloat f1, VFloat f2 -> f1 <> f2
+  | VInt64 i1, VInt64 i2 -> i1 <> i2
+  | VBool b1, VBool b2 -> b1 <> b2
+  | VByte c1, VByte c2 -> c1 <> c2
+  | VUnit, VUnit -> true
+  | VTuple l1, VTuple l2 ->
+      List.length l1 = List.length l2 && List.for_all2 not_equal_value l1 l2
+  | _ -> false
+
 let string_to_bytes s = Array.init (String.length s) (String.get s)
 
 let reset_vm_state () =
@@ -209,8 +224,7 @@ let run instructions =
             next ()
         | LOAD_BYTE c ->
             push_trace frame.pc ("LOAD_BYTE " ^ String.make 1 c);
-            let v = Gc.alloc_string_with_gc stack frame.env (String.make 1 c) in
-            Stack.push v stack;
+            Stack.push (VByte c) stack;
             next ()
         | LOAD_BOOL b ->
             push_trace frame.pc ("LOAD_BOOL " ^ string_of_bool b);
@@ -360,13 +374,8 @@ let run instructions =
         | NOT_EQUAL ->
             push_trace frame.pc "NOT_EQUAL";
             let a, b = pop2_safe stack in
-            let result =
-              match (a, b) with
-              | VFloat a, VFloat b -> VFloat (bool_to_float (a <> b))
-              | VInt64 a, VInt64 b -> VInt64 (bool_to_int64 (a <> b))
-              | _ -> runtime_error "NOT_EQUAL expects two floats or int64"
-            in
-            Stack.push result stack;
+            let result = not_equal_value a b in
+            Stack.push (VBool result) stack;
             next ()
         | EQUAL ->
             push_trace frame.pc "EQUAL";
@@ -598,8 +607,15 @@ let run instructions =
                 | VInt64 i -> Printf.sprintf "%Ld" i
                 | VHeapRef id -> (
                     match Gc.get_string id with
-                    | Some s -> "" ^ replace_escape_sequences s ^ ""
-                    | None -> "<invalid ref>")
+                    | Some s -> s
+                    | None -> (
+                        match Gc.get_bytes id with
+                        | Some arr ->
+                            String.init (Array.length arr) (Array.get arr)
+                        | None -> (
+                            match Gc.get_value id with
+                            | Some v -> string_of_value v
+                            | None -> "<invalid ref>")))
                 | VArray items ->
                     let contents =
                       items |> List.map string_of_value |> String.concat ", "
@@ -636,8 +652,15 @@ let run instructions =
                 | VInt64 i -> Printf.sprintf "%Ld" i
                 | VHeapRef id -> (
                     match Gc.get_string id with
-                    | Some s -> "" ^ replace_escape_sequences s ^ ""
-                    | None -> "<invalid ref>")
+                    | Some s -> s
+                    | None -> (
+                        match Gc.get_bytes id with
+                        | Some arr ->
+                            String.init (Array.length arr) (Array.get arr)
+                        | None -> (
+                            match Gc.get_value id with
+                            | Some v -> string_of_value v
+                            | None -> "<invalid ref>")))
                 | VArray items ->
                     let contents =
                       items |> List.map string_of_value |> String.concat ", "
@@ -673,7 +696,9 @@ let run instructions =
                   let processed_value =
                     try VFloat (float_of_string input_value)
                     with Failure _ ->
-                      Gc.alloc_string_with_gc stack frame.env input_value
+                      if String.length input_value = 1 then
+                        VByte input_value.[0]
+                      else Gc.alloc_string_with_gc stack frame.env input_value
                   in
                   Stack.push processed_value stack;
                   next ()
@@ -733,8 +758,20 @@ let run instructions =
               | VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> s
-                  | None ->
-                      runtime_error "STRING: invalid heap reference for string")
+                  | None -> (
+                      match Gc.get_bytes id with
+                      | Some arr ->
+                          String.init (Array.length arr) (Array.get arr)
+                      | None ->
+                          runtime_error
+                            "STRING: invalid heap reference for string or byte \
+                             array"))
+              | VArray vs ->
+                  if List.for_all (function VByte _ -> true | _ -> false) vs
+                  then
+                    String.init (List.length vs) (fun i ->
+                        match List.nth vs i with VByte c -> c | _ -> '\000')
+                  else runtime_error "STRING: array is not []byte"
               | VInt64 i -> Int64.to_string i
               | VFloat f -> string_of_float f
               | VBool b -> if b then "true" else "false"

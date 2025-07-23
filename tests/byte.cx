@@ -1,0 +1,18 @@
+-- $Id: tests/byte.cx $
+
+-- $ basic test for bytes $
+let a: byte = 'A'
+assert(a == 'A')
+
+let arr: []byte = {'H', 'e', 'l', 'l', 'o'}
+assert(arr[0] == 'H')
+assert(arr[4] == 'o')
+
+let c: byte = 'c'
+let d: byte = 'c'
+assert(c == d)
+
+let greeting: []byte = {'H', 'i'}
+assert(greeting[0] == 'H')
+assert(greeting[1] == 'i')
+assert(to_string(greeting) == "Hi")

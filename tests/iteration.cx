@@ -1,7 +1,6 @@
 -- $Id: tests/iteration.cx $
 
---basic tests for iteration operations
-
+-- $ basic tests for iteration operations $
 let acc: int = 0
 for (let i: int = 1; i <= 5; i++) {
     acc += i

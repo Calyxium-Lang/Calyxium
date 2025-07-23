@@ -1,0 +1,9 @@
+-- $Id: tests/tuples.cx $
+
+-- $ basic tests for tuples $
+let t1: (int, int) = (1, 2)
+let t2: (string, float, bool) = ("hello", 3.14, true)
+
+let a, b: (int, int) = t1
+assert(a == 1)
+assert(b == 2)
