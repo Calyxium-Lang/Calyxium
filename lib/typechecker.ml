@@ -6,6 +6,7 @@ open Token
 
 exception TypeError of string
 
+let enum_variants : (string, string list) Hashtbl.t = Hashtbl.create 10
 let stdlib_used = ref false
 let float_type = SymbolType { value = "float" }
 
@@ -91,21 +92,93 @@ let rec check_stmt env func_env stmt =
             raise (TypeError ("Type mismatch in declaration of " ^ identifier));
           (identifier, explicit_type) :: env
       | None -> (identifier, explicit_type) :: env)
-  | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } ->
-      if List.length identifier <> List.length assigned_value then
+  | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } -> (
+      let values =
+        match assigned_value with
+        | [ TupleExpr elements ] -> elements
+        | [ VarExpr name ] -> (
+            match List.assoc_opt name env with
+            | Some (TupleType element_types) ->
+                List.mapi
+                  (fun i _ ->
+                    IndexExpr
+                      {
+                        array = VarExpr name;
+                        index = Int64Expr { value = Int64.of_int i };
+                      })
+                  element_types
+            | Some t ->
+                raise
+                  (TypeError
+                     ("Cannot destructure non-tuple variable `" ^ name
+                    ^ "` of type " ^ string_of_type t))
+            | None -> raise (TypeError ("Unbound variable `" ^ name ^ "`")))
+        | [ expr ] -> (
+            let expr_type = check_expr env func_env expr in
+            match expr_type with
+            | TupleType element_types ->
+                List.mapi
+                  (fun i _ ->
+                    IndexExpr
+                      {
+                        array = expr;
+                        index = Int64Expr { value = Int64.of_int i };
+                      })
+                  element_types
+            | _ ->
+                raise
+                  (TypeError
+                     ("Cannot destructure non-tuple expression of type "
+                    ^ string_of_type expr_type)))
+        | _ -> assigned_value
+      in
+      let id_count = List.length identifier in
+      let val_count = List.length values in
+      if id_count <> val_count then
         raise
           (TypeError
-             "Number of identifiers does not match number of assigned \
-              expressions");
-      List.iter2
-        (fun ident expr ->
-          let expr_type = check_expr env func_env expr in
-          if not (type_eq expr_type explicit_type) then
-            raise (TypeError ("Type mismatch in declaration of " ^ ident)))
-        identifier assigned_value;
-      List.fold_left
-        (fun acc_env ident -> (ident, explicit_type) :: acc_env)
-        env identifier
+             ("Number of identifiers (" ^ string_of_int id_count
+            ^ ") does not match number of assigned values ("
+            ^ string_of_int val_count ^ ")"));
+      match explicit_type with
+      | TupleType declared_types ->
+          let type_count = List.length declared_types in
+          if type_count <> id_count then
+            raise
+              (TypeError
+                 ("Declared tuple type has " ^ string_of_int type_count
+                ^ " elements but got " ^ string_of_int id_count ^ " identifiers"
+                 ));
+          List.iteri
+            (fun i ident ->
+              let expr = List.nth values i in
+              let expected_type = List.nth declared_types i in
+              let actual_type = check_expr env func_env expr in
+              if not (type_eq actual_type expected_type) then
+                raise
+                  (TypeError
+                     ("Type mismatch for `" ^ ident ^ "`: expected "
+                     ^ string_of_type expected_type
+                     ^ " but got " ^ string_of_type actual_type)))
+            identifier;
+          List.fold_left2
+            (fun acc_env ident ty -> (ident, ty) :: acc_env)
+            env identifier declared_types
+      | _ ->
+          List.iteri
+            (fun i ident ->
+              let expr = List.nth values i in
+              let actual_type = check_expr env func_env expr in
+              if not (type_eq actual_type explicit_type) then
+                raise
+                  (TypeError
+                     ("Type mismatch for `" ^ ident ^ "`: expected "
+                     ^ string_of_type explicit_type
+                     ^ " but got " ^ string_of_type actual_type)))
+            identifier;
+          List.fold_left
+            (fun acc_env ident -> (ident, explicit_type) :: acc_env)
+            env identifier)
   | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
       let local_funcs = collect_functions body in
       let param_types = List.map (fun p -> p.param_type) parameters in
@@ -279,6 +352,7 @@ let rec check_stmt env func_env stmt =
       in
       env
   | EnumStmt { name; members } ->
+      Hashtbl.replace enum_variants name members;
       let enum_type = SymbolType { value = name } in
       let new_env =
         List.fold_left
@@ -392,8 +466,16 @@ and check_expr env func_env expr =
   | IndexExpr { array; index } -> (
       let at = check_expr env func_env array in
       let index_type = check_expr env func_env index in
-      if not (type_eq index_type (SymbolType { value = "int" })) then
-        raise (TypeError "Index must be an integer");
+      let is_enum_type = function
+        | SymbolType { value } -> Hashtbl.mem enum_variants value
+        | _ -> false
+      in
+
+      if
+        not
+          (type_eq index_type (SymbolType { value = "int" })
+          || is_enum_type index_type)
+      then raise (TypeError "Index must be an integer or enum");
       match at with
       | ArrayType { element_type } -> element_type
       | TupleType element_types -> (

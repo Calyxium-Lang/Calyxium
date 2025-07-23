@@ -78,7 +78,29 @@ let rec compile_stmt = function
       in
       expr_bytecode @ [ STORE_VAR identifier ]
   | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
-      let expr_codes = List.map compile_expr assigned_value in
+      let unpack expr =
+        List.mapi
+          (fun i _ ->
+            IndexExpr
+              { array = expr; index = Int64Expr { value = Int64.of_int i } })
+          identifier
+      in
+      let values =
+        match assigned_value with
+        | [ TupleExpr elements ] -> elements
+        | [ VarExpr name ] when List.length identifier > 1 ->
+            unpack (VarExpr name)
+        | [ expr ] when List.length identifier > 1 -> unpack expr
+        | _ -> assigned_value
+      in
+      if List.length identifier <> List.length values then
+        failwith
+          ("MultiVarDeclarationStmt: number of identifiers ("
+          ^ string_of_int (List.length identifier)
+          ^ ") does not match number of assigned values ("
+          ^ string_of_int (List.length values)
+          ^ ")");
+      let expr_codes = List.map compile_expr values in
       let store_codes =
         List.map2
           (fun ident _expr_code -> [ STORE_VAR ident ])

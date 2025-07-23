@@ -25,6 +25,8 @@ val alloc_id : unit -> int
 val alloc_in_young : heap_obj -> value
 val find_heap_obj : int -> heap_obj
 val get_string : int -> string option
+val get_bytes : int -> char array option
+val get_value : int -> value option
 val get_array : int -> float array option
 val mark_and_promote : value list -> (string * (value * bool)) list -> unit
 val reset_heap : unit -> unit

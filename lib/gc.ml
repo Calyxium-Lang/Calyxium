@@ -51,6 +51,22 @@ let get_string id =
   | Some (HString s) -> Some s
   | _ -> None
 
+let get_bytes id =
+  match try Some (find_heap_obj id) with Not_found -> None with
+  | Some (HBytes arr) -> Some arr
+  | _ -> None
+
+let get_value id =
+  match try Some (find_heap_obj id) with Not_found -> None with
+  | Some (HString s) ->
+      Some (VArray (List.init (String.length s) (fun i -> VByte s.[i])))
+  | Some (HBytes b) ->
+      Some (VArray (Array.to_list (Array.map (fun c -> VByte c) b)))
+  | Some (HArray floats) ->
+      Some (VArray (Array.to_list (Array.map (fun f -> VFloat f) floats)))
+  | Some (HClosure (name, _, _)) -> Some (VClosure name)
+  | None -> None
+
 let get_array id =
   match try Some (find_heap_obj id) with Not_found -> None with
   | Some (HArray arr) -> Some arr

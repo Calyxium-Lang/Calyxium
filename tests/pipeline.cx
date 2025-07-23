@@ -1,6 +1,6 @@
--- tests/pipeline.cx
+-- $ tests/pipeline.cx $
 
--- basic tests for pipeline operators
+-- $ basic tests for pipeline operators $
 let double(x: int): int {
     return x * 2
 }

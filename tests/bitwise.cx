@@ -2,7 +2,7 @@
 
 assert(~0 == -1)
 
--- basic tests for bitwise operators
+-- $ basic tests for bitwise operators $
 let a: int = 0xFFFFFFFFFFFFFFFF
 assert((a == -1) && ((a & -1) == a) && ((a & 35) == 35))
 let b: int = 0xFFFFFFFFFFFFFFFF 
