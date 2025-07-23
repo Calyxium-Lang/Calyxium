@@ -22,9 +22,7 @@
  (foreign_stubs
   (language c)
   (names uint32 uint64))
- (libraries calyxium_stdlib unix)
- (preprocess
-  (pps ppx_deriving.show)))
+ (libraries calyxium_stdlib unix))
 
 (ocamllex lexer)
 
