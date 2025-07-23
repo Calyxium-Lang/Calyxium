@@ -157,7 +157,7 @@ let rec check_stmt env func_env stmt =
               if not (type_eq actual_type expected_type) then
                 raise
                   (TypeError
-                     ("Type mismatch for `" ^ ident ^ "`: expected "
+                     ("Type mismatch for " ^ ident ^ ": expected "
                      ^ string_of_type expected_type
                      ^ " but got " ^ string_of_type actual_type)))
             identifier;
@@ -172,7 +172,7 @@ let rec check_stmt env func_env stmt =
               if not (type_eq actual_type explicit_type) then
                 raise
                   (TypeError
-                     ("Type mismatch for `" ^ ident ^ "`: expected "
+                     ("Type mismatch for " ^ ident ^ ": expected "
                      ^ string_of_type explicit_type
                      ^ " but got " ^ string_of_type actual_type)))
             identifier;

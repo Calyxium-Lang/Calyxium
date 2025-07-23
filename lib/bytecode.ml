@@ -78,19 +78,20 @@ let rec compile_stmt = function
       in
       expr_bytecode @ [ STORE_VAR identifier ]
   | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
-      let unpack expr =
-        List.mapi
-          (fun i _ ->
+      let rec flatten_expr expr =
+        match expr with
+        | TupleExpr elements -> List.concat_map flatten_expr elements
+        | _ -> [ expr ]
+      in
+      let index_exprs expr =
+        List.init (List.length identifier) (fun i ->
             IndexExpr
               { array = expr; index = Int64Expr { value = Int64.of_int i } })
-          identifier
       in
       let values =
         match assigned_value with
-        | [ TupleExpr elements ] -> elements
-        | [ VarExpr name ] when List.length identifier > 1 ->
-            unpack (VarExpr name)
-        | [ expr ] when List.length identifier > 1 -> unpack expr
+        | [ (TupleExpr _ as t) ] -> flatten_expr t
+        | [ expr ] when List.length identifier > 1 -> index_exprs expr
         | _ -> assigned_value
       in
       if List.length identifier <> List.length values then
@@ -103,7 +104,7 @@ let rec compile_stmt = function
       let expr_codes = List.map compile_expr values in
       let store_codes =
         List.map2
-          (fun ident _expr_code -> [ STORE_VAR ident ])
+          (fun ident _ -> [ STORE_VAR ident ])
           (List.rev identifier) expr_codes
         |> List.concat
       in

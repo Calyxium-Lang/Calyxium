@@ -12,6 +12,10 @@ let is_digit(c: byte): bool {
     return (c >= '0' && c <= '9')
 }
 
+let is_whitespace(c: byte): bool {
+    return c == ' ' || c == '\t' || c == '\n'
+}
+
 let starts_with(bytes: []byte, pos: int, prefix: string): bool {
     let prefix_bytes: []byte = to_bytes(prefix)
     let prefix_len: int = length(prefix_bytes)
