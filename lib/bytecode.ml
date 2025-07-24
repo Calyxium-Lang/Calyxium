@@ -120,27 +120,37 @@ let rec compile_stmt = function
       condition
       @ [ JUMP_IF_FALSE (then_jump_label + 1) ]
       @ then_branch @ [ JUMP else_jump_label ] @ else_branch
-  | ForStmt { init; condition; increment; body } ->
-      let init_code =
-        match init with Some stmt -> compile_stmt stmt | None -> []
-      in
-      let condition_code = compile_expr condition in
-      let body_code = compile_stmt body in
-      let increment_code =
-        match increment with Some stmt -> compile_stmt stmt | None -> []
-      in
+  | ForStmt { init; condition; increment; body } -> (
+      match condition with
+      | BoolExpr { value = false } -> []
+      | _ ->
+          let init_code =
+            match init with Some stmt -> compile_stmt stmt | None -> []
+          in
+          let condition_code = compile_expr condition in
+          let body_code = compile_stmt body in
+          let increment_code =
+            match increment with Some stmt -> compile_stmt stmt | None -> []
+          in
 
-      let init_len = List.length init_code in
-      let cond_len = List.length condition_code in
-      let body_len = List.length body_code in
-      let incr_len = List.length increment_code in
+          let init_len = List.length init_code in
+          let cond_len = List.length condition_code in
+          let body_len = List.length body_code in
+          let incr_len = List.length increment_code in
 
-      let jump_to_end = init_len + body_len + incr_len + 1 in
-      let jump_back = -(cond_len + body_len + incr_len + 1) in
+          let jump_back = -(cond_len + body_len + incr_len + 1) in
+          let jump_to_end = init_len + body_len + incr_len + 1 in
 
-      init_code @ condition_code
-      @ [ JUMP_IF_FALSE jump_to_end ]
-      @ body_code @ increment_code @ [ JUMP jump_back ] @ [ POP ]
+          let baseOpcodes =
+            init_code @ condition_code
+            @ [
+                JUMP_IF_FALSE
+                  (if incr_len = 0 then jump_to_end + 1 else jump_to_end);
+              ]
+            @ body_code @ increment_code @ [ JUMP jump_back ]
+          in
+
+          if incr_len = 0 then baseOpcodes else baseOpcodes @ [ POP ])
   | ImportStmt { module_name } ->
       let mod_name, field_name =
         match List.rev module_name with
