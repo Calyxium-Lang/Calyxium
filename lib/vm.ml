@@ -37,8 +37,6 @@ let print_trace msg =
 let runtime_error msg = raise (RuntimeError msg)
 let stack = Stack.create ()
 let global_env = ref []
-let bool_to_float b = if b then 1.0 else 0.0
-let bool_to_int64 b = if b then 1L else 0L
 let output_buffer = Buffer.create 1024
 
 let escape_sequences =
@@ -188,6 +186,37 @@ let rec not_equal_value a b =
 
 let string_to_bytes s = Array.init (String.length s) (String.get s)
 
+let safe_add a b =
+  let res = Int64.add a b in
+  if (a > 0L && b > 0L && res < 0L) || (a < 0L && b < 0L && res > 0L) then
+    runtime_error "Integer overflow in addition"
+  else res
+
+let safe_sub a b =
+  let res = Int64.sub a b in
+  if
+    (b > 0L && a < Int64.add Int64.min_int b)
+    || (b < 0L && a > Int64.add Int64.max_int b)
+  then runtime_error "Integer overflow in subtraction"
+  else res
+
+let safe_mul a b =
+  if a = 0L || b = 0L then 0L
+  else
+    let res = Int64.mul a b in
+    if Int64.div res a <> b then
+      runtime_error "Integer overflow in multiplication"
+    else res
+
+let safe_shift_left a b =
+  if b < 0L || b > 63L then runtime_error "Invalid shift amount"
+  else
+    let b_int = Int64.to_int b in
+    let res = Int64.shift_left a b_int in
+    let expected = Int64.shift_right_logical res b_int in
+    if expected <> a then runtime_error "Integer overflow in shift left"
+    else res
+
 let reset_vm_state () =
   Stack.clear stack;
   global_env := [];
@@ -252,24 +281,44 @@ let run instructions =
             push_trace frame.pc "PLUS";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VFloat a, VFloat b -> Stack.push (VFloat (a +. b)) stack
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.add a b)) stack
+            | VFloat a, VFloat b ->
+                let res = a +. b in
+                if
+                  classify_float res = FP_nan
+                  || classify_float res = FP_infinite
+                then runtime_error "Float overflow in addition"
+                else Stack.push (VFloat res) stack
+            | VInt64 a, VInt64 b ->
+                let res = safe_add a b in
+                Stack.push (VInt64 res) stack
             | _ -> runtime_error "PLUS expects numbers");
             next ()
         | MINUS ->
             push_trace frame.pc "MINUS";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VFloat a, VFloat b -> Stack.push (VFloat (a -. b)) stack
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.sub a b)) stack
+            | VFloat a, VFloat b ->
+                let res = a -. b in
+                if
+                  classify_float res = FP_nan
+                  || classify_float res = FP_infinite
+                then runtime_error "Float overflow in subtraction"
+                else Stack.push (VFloat res) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (safe_sub a b)) stack
             | _ -> runtime_error "MINUS expects numbers");
             next ()
         | STAR ->
             push_trace frame.pc "STAR";
             let a, b = pop2_safe stack in
             (match (a, b) with
-            | VFloat a, VFloat b -> Stack.push (VFloat (a *. b)) stack
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.mul a b)) stack
+            | VFloat a, VFloat b ->
+                let res = a *. b in
+                if
+                  classify_float res = FP_nan
+                  || classify_float res = FP_infinite
+                then runtime_error "Float overflow in multiplication"
+                else Stack.push (VFloat res) stack
+            | VInt64 a, VInt64 b -> Stack.push (VInt64 (safe_mul a b)) stack
             | _ -> runtime_error "STAR expects numbers");
             next ()
         | SLASH ->
@@ -278,8 +327,17 @@ let run instructions =
             (match (a, b) with
             | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
             | VInt64 _, VInt64 0L -> runtime_error "Division by zero"
-            | VFloat a, VFloat b -> Stack.push (VFloat (a /. b)) stack
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.div a b)) stack
+            | VFloat a, VFloat b ->
+                let res = a /. b in
+                if
+                  classify_float res = FP_nan
+                  || classify_float res = FP_infinite
+                then runtime_error "Float overflow in division"
+                else Stack.push (VFloat res) stack
+            | VInt64 a, VInt64 b ->
+                if a = Int64.min_int && b = -1L then
+                  runtime_error "Integer overflow in division"
+                else Stack.push (VInt64 (Int64.div a b)) stack
             | _ -> runtime_error "SLASH expects numbers");
             next ()
         | MOD ->
@@ -328,9 +386,8 @@ let run instructions =
             let a, b = pop2_safe stack in
             let result =
               match (a, b) with
-              | VFloat a, VFloat b -> VFloat (bool_to_float (a < b))
-              | VInt64 a, VInt64 b ->
-                  VInt64 (bool_to_int64 (Int64.compare a b < 0))
+              | VFloat a, VFloat b -> VBool (a < b)
+              | VInt64 a, VInt64 b -> VBool (Int64.compare a b < 0)
               | _ -> runtime_error "LESS expects two floats or int64"
             in
             Stack.push result stack;
@@ -340,9 +397,8 @@ let run instructions =
             let a, b = pop2_safe stack in
             let result =
               match (a, b) with
-              | VFloat a, VFloat b -> VFloat (bool_to_float (a > b))
-              | VInt64 a, VInt64 b ->
-                  VInt64 (bool_to_int64 (Int64.compare a b > 0))
+              | VFloat a, VFloat b -> VBool (a > b)
+              | VInt64 a, VInt64 b -> VBool (Int64.compare a b > 0)
               | _ -> runtime_error "GREATER expects two floats or int64"
             in
             Stack.push result stack;
@@ -352,9 +408,8 @@ let run instructions =
             let a, b = pop2_safe stack in
             let result =
               match (a, b) with
-              | VFloat a, VFloat b -> VFloat (bool_to_float (a <= b))
-              | VInt64 a, VInt64 b ->
-                  VInt64 (bool_to_int64 (Int64.compare a b <= 0))
+              | VFloat a, VFloat b -> VBool (a <= b)
+              | VInt64 a, VInt64 b -> VBool (Int64.compare a b <= 0)
               | _ -> runtime_error "LESS_EQUAL expects two floats or int64"
             in
             Stack.push result stack;
@@ -364,9 +419,8 @@ let run instructions =
             let a, b = pop2_safe stack in
             let result =
               match (a, b) with
-              | VFloat a, VFloat b -> VFloat (bool_to_float (a >= b))
-              | VInt64 a, VInt64 b ->
-                  VInt64 (bool_to_int64 (Int64.compare a b >= 0))
+              | VFloat a, VFloat b -> VBool (a >= b)
+              | VInt64 a, VInt64 b -> VBool (Int64.compare a b >= 0)
               | _ -> runtime_error "GREATER_EQUAL expects two floats or int64"
             in
             Stack.push result stack;
@@ -421,8 +475,14 @@ let run instructions =
             let v = pop1 stack in
             let result =
               match v with
-              | VFloat f -> VFloat (f +. 1.0)
-              | VInt64 i -> VInt64 Int64.(add i 1L)
+              | VFloat f ->
+                  let res = f +. 1.0 in
+                  if
+                    classify_float res = FP_nan
+                    || classify_float res = FP_infinite
+                  then runtime_error "Float overflow in increment"
+                  else VFloat res
+              | VInt64 i -> VInt64 (safe_add i 1L)
               | _ -> runtime_error "INC expects float or int64"
             in
             Stack.push result stack;
@@ -432,8 +492,14 @@ let run instructions =
             let v = pop1 stack in
             let result =
               match v with
-              | VFloat f -> VFloat (f -. 1.0)
-              | VInt64 i -> VInt64 Int64.(sub i 1L)
+              | VFloat f ->
+                  let res = f -. 1.0 in
+                  if
+                    classify_float res = FP_nan
+                    || classify_float res = FP_infinite
+                  then runtime_error "Float overflow in decrement"
+                  else VFloat res
+              | VInt64 i -> VInt64 (safe_sub i 1L)
               | _ -> runtime_error "DEC expects float or int64"
             in
             Stack.push result stack;
@@ -601,6 +667,8 @@ let run instructions =
                 | VFloat f when Float.is_nan f -> "unit"
                 | VFloat 1.0 -> "true"
                 | VFloat 0.0 -> "false"
+                | VInt64 1L -> "true"
+                | VInt64 0L -> "false"
                 | VFloat f when Float.is_infinite f ->
                     if f > 0.0 then "inf" else "-inf"
                 | VFloat f -> Printf.sprintf "%.12f" f
@@ -707,8 +775,17 @@ let run instructions =
             push_trace frame.pc "NEG";
             let v = pop1 stack in
             (match v with
-            | VFloat f -> Stack.push (VFloat (-.f)) stack
-            | VInt64 i -> Stack.push (VInt64 (Int64.neg i)) stack
+            | VFloat f ->
+                let res = -.f in
+                if
+                  classify_float res = FP_nan
+                  || classify_float res = FP_infinite
+                then runtime_error "Float overflow in negation"
+                else Stack.push (VFloat res) stack
+            | VInt64 i ->
+                if i = Int64.min_int then
+                  runtime_error "Integer overflow in negation"
+                else Stack.push (VInt64 (Int64.neg i)) stack
             | _ -> runtime_error "NEG expects a float or int");
             next ()
         | FLOAT ->
@@ -964,12 +1041,12 @@ let run instructions =
             | _ -> runtime_error "BITWISE_XOR expects int64 operands");
             next ()
         | LEFTSHIFT ->
-            push_trace frame.pc "LEFT_SHIFT";
+            push_trace frame.pc "LEFTSHIFT";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt64 a, VInt64 b ->
-                Stack.push (VInt64 (Int64.shift_left a (Int64.to_int b))) stack
-            | _ -> runtime_error "LEFT_SHIFT expects int64 operands");
+                Stack.push (VInt64 (safe_shift_left a b)) stack
+            | _ -> runtime_error "LEFTSHIFT expects int64 operands");
             next ()
         | RIGHTSHIFT ->
             push_trace frame.pc "RIGHT_SHIFT";

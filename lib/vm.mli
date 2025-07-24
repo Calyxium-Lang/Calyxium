@@ -1,7 +1,5 @@
 val stack : Gc.value Stack.t
 val init_stdlib : unit -> unit
-val bool_to_float : bool -> float
-val bool_to_int64 : bool -> int64
 val escape_sequences : (string * char) list
 val replace_escape_sequences : string -> string
 val get_var : (string * (Gc.value * 'a)) list -> string -> Gc.value

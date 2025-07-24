@@ -1,7 +1,7 @@
 let source: string = "let x: int = 10"
 
 enum Tokens {
-    Let, Ident, IntType, Assign, IntLiteral
+    Let, Ident, IntType, Assign, IntLiteral, Colon
 }
 
 let is_alpha(c: byte): bool {
@@ -31,17 +31,39 @@ let starts_with(bytes: []byte, pos: int, prefix: string): bool {
     return true
 }
 
-let tokenize(code: string): []Tokens {
-    let tokens: []Tokens = {}
-    let bytes: []byte = to_bytes(code)
-    let length: int = length(bytes)
-
-    for (let i: int = 0; i < length; i++) {
-        let c: byte = bytes[i]
-        println(c)
+let rec tokenize_at(i: int, bytes: []byte, tokens: []Tokens): []Tokens {
+    if (i >= length(bytes)) {
+        return tokens
     }
 
-    return tokens
+    let c: byte = bytes[i]
+
+    if (is_whitespace(c)) {
+        return tokenize_at(i + 1, bytes, tokens)
+    }
+
+    if (starts_with(bytes, i, "let")) {
+        return tokenize_at(i + 3, bytes, { Tokens.Let })
+    } 
+
+    if (starts_with(bytes, i, "int")) {
+        return tokenize_at(i + 3, bytes, { Tokens.IntType })
+    }
+
+    if (c == ':') {
+        return tokenize_at(i + 1, bytes, { Tokens.Colon })
+    }
+
+     if (c == '=') {
+        return tokenize_at(i + 1, bytes, { Tokens.Assign })
+    }
+
+    return tokenize_at(i + 1, bytes, tokens)
+}
+
+let tokenize(code: string): []Tokens {
+    let bytes: []byte = to_bytes(code)
+    return tokenize_at(0, bytes, {})
 }
 
 tokenize(source) |> println

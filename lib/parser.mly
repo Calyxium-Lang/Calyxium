@@ -196,6 +196,7 @@ IfStmt:
 
 ForStmt:
   | For LParen stmt_opt Semi expr_opt Semi stmt_opt RParen LBrace stmt_list RBrace { let default_condition = Expr.BoolExpr { value = true } in let increment_stmt = match $7 with | None -> (match $3 with | Some (Stmt.VarDeclarationStmt { identifier; _ }) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr identifier })) | Some (Stmt.ExprStmt (Expr.VarExpr var_name)) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr var_name })) | _ -> None) | Some (Stmt.ExprStmt expr) -> Some (Stmt.ExprStmt expr) | Some _ -> None in Stmt.ForStmt { init = $3; condition = Option.value ~default:default_condition $5; increment = increment_stmt; body = Stmt.BlockStmt { body = $10 } } }
+  | For LParen expr RParen LBrace stmt_list RBrace { Stmt.ForStmt { init = None; condition = $3; increment = None; body = Stmt.BlockStmt { body = $6 } } }
 
 EnumStmt:
   | Enum Ident LBrace enum_member_list RBrace { Stmt.EnumStmt { name = $2; members = $4; }} 
