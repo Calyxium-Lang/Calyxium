@@ -1,3 +1,3 @@
 val token : Lexing.lexbuf -> Parser.token
 
-exception LexerError of string
+exception LexerError of string * Lexing.position

@@ -1,6 +1,6 @@
 {
   open Parser
-  exception LexerError of string
+  exception LexerError of string * Lexing.position
   let at_line_start = ref true
 }
 
@@ -95,17 +95,17 @@ rule token = parse
 
   | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\''  { at_line_start := false; let c = match esc with | 'n' -> '\n' | 't' -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | '0' -> '\000' | _ -> esc in Byte c }
   | '\'' ([^'\n' '\\'] as c) '\''  { at_line_start := false; Byte c }
-  | '\''                    { raise (LexerError "Unterminated character literal") }
+  | '\''                    { raise (LexerError ("Unterminated character literal", Lexing.lexeme_start_p lexbuf)) }
   | '"'                     { at_line_start := false; read_string (Buffer.create 16) lexbuf }
   | eof                     { EOF }
   | "0b" ['0'-'1']+ as bin  { at_line_start := false; let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in Int64 (Int64.of_int (parse 2 0)) }
   | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+ as hex { at_line_start := false; let len = String.length hex in let rec parse i acc = if i = len then acc else let v = match hex.[i] with | '0'..'9' -> int_of_char hex.[i] - int_of_char '0' | 'a'..'f' -> 10 + int_of_char hex.[i] - int_of_char 'a' | 'A'..'F' -> 10 + int_of_char hex.[i] - int_of_char 'A' | _ -> failwith "Invalid hex digit" in parse (i + 1) ((acc lsl 4) lor v) in Int64 (Int64.of_int (parse 2 0)) }
-  | _                       { let c = Lexing.lexeme_char lexbuf 0 in let msg = Printf.sprintf "Unrecognized character: '%c'" c in raise (LexerError msg) }
+  | _                       { let c = Lexing.lexeme_char lexbuf 0 in let msg = Printf.sprintf "Unrecognized character: '%c'" c in raise (LexerError (msg, Lexing.lexeme_start_p lexbuf)) }
 
 and read_string buf = parse
   | '"'                     { String (Buffer.contents buf) }
-  | '\n'                    { raise (LexerError "Unterminated string literal") }
-  | eof                     { raise (LexerError "Unterminated string literal") }
+  | '\n'                    { raise (LexerError ("Unterminated string literal", Lexing.lexeme_start_p lexbuf)) }
+  | eof                     { raise (LexerError ("Unterminated string literal", Lexing.lexeme_start_p lexbuf)) }
   | '\\' (['\\' '"' 'n' 't'] as esc) { Buffer.add_char buf ( match esc with | '\\' -> '\\' | '"' -> '"' | 'n' -> '\n' | 't' -> '\t' | _ -> esc ); read_string buf lexbuf }
   | _ as c                  { Buffer.add_char buf c; read_string buf lexbuf }
 

@@ -21,7 +21,6 @@ let parse_file ~flags file =
         if List.mem "--emit-bytecode" flags then (
           save_bytecode_to_file bytecode_file bytecode;
           Printf.printf "Bytecode saved to %s\n" bytecode_file);
-
         if
           stdlib_used
           && not (List.mem "--emit-bytecode" flags || List.mem "--no-run" flags)
@@ -29,18 +28,17 @@ let parse_file ~flags file =
 
         ignore (run bytecode)
       with TypeError msg ->
-        Printf.eprintf "%s%s: %s%s\n" red file msg reset;
+        Printf.eprintf "%s%s%s: %s%s\n" red file reset msg reset;
         exit 1)
-  | exception LexerError msg ->
-      let pos = lexbuf.lex_curr_p in
+  | exception LexerError (msg, pos) ->
       print_error ~file ~msg ~line:pos.pos_lnum
-        ~col:(pos.pos_cnum - pos.pos_bol)
+        ~col:(pos.pos_cnum - pos.pos_bol + 1)
         ~source:(get_line file pos.pos_lnum);
       exit 1
   | exception Parsing.Parse_error ->
-      let pos = lexbuf.lex_curr_p in
+      let pos = Lexing.lexeme_start_p lexbuf in
       print_error ~file ~msg:"Syntax Error" ~line:pos.pos_lnum
-        ~col:(pos.pos_cnum - pos.pos_bol)
+        ~col:(pos.pos_cnum - pos.pos_bol + 1)
         ~source:(get_line file pos.pos_lnum);
       exit 1
   | exception Failure msg ->

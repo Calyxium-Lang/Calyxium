@@ -6,4 +6,4 @@ let sqr(x: int): int {
     return x * x
 }
 
-3 |> double |> sqr |> println
+3 |> double |> sqr |> print

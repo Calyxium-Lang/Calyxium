@@ -1,1 +1,7 @@
-println("Hello, world")
+let println(n: string): unit {
+    print(n ^ "\n")
+}
+
+for (;;) {
+    println("Hello")
+}

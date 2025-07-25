@@ -37,7 +37,6 @@ let built_in_modules : (string * (string * Type.t) list) list =
 let builtins : (string * (Type.t list * Type.t) list) list =
   [
     ("print", [ ([ Any ], SymbolType { value = "unit" }) ]);
-    ("println", [ ([ Any ], SymbolType { value = "unit" }) ]);
     ( "input",
       [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]
     );
@@ -89,7 +88,11 @@ let rec check_stmt env func_env stmt =
       | Some expr ->
           let expr_type = check_expr env func_env expr in
           if not (type_eq expr_type explicit_type) then
-            raise (TypeError ("Type mismatch in declaration of " ^ identifier));
+            raise
+              (TypeError
+                 ("Type error in declaration of `" ^ identifier ^ "`: expected "
+                 ^ string_of_type explicit_type
+                 ^ ", but got " ^ string_of_type expr_type));
           (identifier, explicit_type) :: env
       | None -> (identifier, explicit_type) :: env)
   | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } -> (
@@ -111,7 +114,7 @@ let rec check_stmt env func_env stmt =
                 raise
                   (TypeError
                      ("Cannot destructure non-tuple variable `" ^ name
-                    ^ "` of type " ^ string_of_type t))
+                    ^ "`: expected tuple, but got " ^ string_of_type t))
             | None -> raise (TypeError ("Unbound variable `" ^ name ^ "`")))
         | [ expr ] -> (
             let expr_type = check_expr env func_env expr in
@@ -128,8 +131,8 @@ let rec check_stmt env func_env stmt =
             | _ ->
                 raise
                   (TypeError
-                     ("Cannot destructure non-tuple expression of type "
-                    ^ string_of_type expr_type)))
+                     ("Cannot destructure non-tuple expression: expected \
+                       tuple, but got " ^ string_of_type expr_type)))
         | _ -> assigned_value
       in
       let id_count = List.length identifier in
@@ -137,9 +140,8 @@ let rec check_stmt env func_env stmt =
       if id_count <> val_count then
         raise
           (TypeError
-             ("Number of identifiers (" ^ string_of_int id_count
-            ^ ") does not match number of assigned values ("
-            ^ string_of_int val_count ^ ")"));
+             ("Tuple destructure mismatch: expected " ^ string_of_int id_count
+            ^ " values, but got " ^ string_of_int val_count));
       match explicit_type with
       | TupleType declared_types ->
           let type_count = List.length declared_types in
@@ -147,8 +149,8 @@ let rec check_stmt env func_env stmt =
             raise
               (TypeError
                  ("Declared tuple type has " ^ string_of_int type_count
-                ^ " elements but got " ^ string_of_int id_count ^ " identifiers"
-                 ));
+                ^ " elements, but destructure has " ^ string_of_int id_count
+                ^ " identifiers"));
           List.iteri
             (fun i ident ->
               let expr = List.nth values i in
@@ -157,9 +159,10 @@ let rec check_stmt env func_env stmt =
               if not (type_eq actual_type expected_type) then
                 raise
                   (TypeError
-                     ("Type mismatch for " ^ ident ^ ": expected "
+                     ("Type mismatch in destructure of `" ^ ident
+                    ^ "`: expected "
                      ^ string_of_type expected_type
-                     ^ " but got " ^ string_of_type actual_type)))
+                     ^ ", but got " ^ string_of_type actual_type)))
             identifier;
           List.fold_left2
             (fun acc_env ident ty -> (ident, ty) :: acc_env)
@@ -172,9 +175,10 @@ let rec check_stmt env func_env stmt =
               if not (type_eq actual_type explicit_type) then
                 raise
                   (TypeError
-                     ("Type mismatch for " ^ ident ^ ": expected "
+                     ("Type mismatch in destructure of `" ^ ident
+                    ^ "`: expected "
                      ^ string_of_type explicit_type
-                     ^ " but got " ^ string_of_type actual_type)))
+                     ^ ", but got " ^ string_of_type actual_type)))
             identifier;
           List.fold_left
             (fun acc_env ident -> (ident, explicit_type) :: acc_env)
@@ -214,7 +218,6 @@ let rec check_stmt env func_env stmt =
         | ReturnExpr e -> contains_recursive_call fname e
         | _ -> false
       in
-
       let rec contains_recursive_call_stmt fname stmt =
         let open Stmt in
         match stmt with
@@ -239,18 +242,15 @@ let rec check_stmt env func_env stmt =
             || contains_recursive_call_stmt fname body
         | _ -> false
       in
-
       let has_recursive_call =
         List.exists (contains_recursive_call_stmt name) body
       in
-
       if has_recursive_call && not is_rec then
         raise
           (TypeError
-             ("Function `" ^ name
-            ^ "` calls itself recursively but is not marked `rec`. Please add \
-               `rec`."));
-
+             ("Function `" ^ name ^ "` is missing `rec` keyword:\n"
+            ^ "  This function contains a recursive call to itself, but is not \
+               marked `rec`.\n" ^ "  Add `rec` to allow recursive behavior."));
       let param_env = List.map (fun p -> (p.name, p.param_type)) parameters in
       let env_with_params = param_env @ env in
       let _final_env =
@@ -277,7 +277,6 @@ let rec check_stmt env func_env stmt =
           stmts
       in
       let return_expr_types = gather_return_types _final_env func_env body in
-
       let last_expr_type =
         match
           List.rev body
@@ -292,16 +291,16 @@ let rec check_stmt env func_env stmt =
         | Some t -> if return_expr_types = [] then [ t ] else return_expr_types
         | None -> return_expr_types
       in
-
       List.iter
         (fun actual_type ->
           if not (type_eq return_type actual_type) then
             raise
               (TypeError
-                 ("Function `" ^ name
-                ^ "` has mismatched return type: expected "
-                ^ string_of_type return_type ^ ", got "
-                ^ string_of_type actual_type)))
+                 ("Function `" ^ name ^ "` has mismatched return type:\n"
+                ^ "  Expected: " ^ string_of_type return_type ^ "\n"
+                ^ "  Found:    " ^ string_of_type actual_type ^ "\n"
+                ^ "  All return expressions must match the declared return \
+                   type.")))
         all_return_types;
       env
   | BlockStmt { body } ->
@@ -312,7 +311,10 @@ let rec check_stmt env func_env stmt =
   | IfStmt { condition; then_branch; else_branch } ->
       let ct = check_expr env func_env condition in
       if not (type_eq ct (SymbolType { value = "bool" })) then
-        raise (TypeError "If condition must be boolean");
+        raise
+          (TypeError
+             ("Type error in `if` condition:\n" ^ "  Expected: bool\n"
+            ^ "  Found:    " ^ string_of_type ct));
       let _ = check_stmt env func_env then_branch in
       let _ =
         match else_branch with
@@ -328,7 +330,10 @@ let rec check_stmt env func_env stmt =
       in
       let ct = check_expr env func_env condition in
       if not (type_eq ct (SymbolType { value = "bool" })) then
-        raise (TypeError "For loop condition must be boolean");
+        raise
+          (TypeError
+             ("Type error in `for` loop condition:\n" ^ "  Expected: bool\n"
+            ^ "  Found:    " ^ string_of_type ct));
       let _ = Option.map (check_stmt env func_env) increment in
       let _ = check_stmt env func_env body in
       env
@@ -343,9 +348,19 @@ let rec check_stmt env func_env stmt =
               | None ->
                   raise
                     (TypeError
-                       ("Module `" ^ mod_name ^ "` has no `" ^ symbol ^ "`")))
-          | None -> raise (TypeError ("Unknown module `" ^ mod_name ^ "`")))
-      | _ -> failwith "Invalid use syntax")
+                       ("Import error:\n" ^ "  Module `" ^ mod_name
+                      ^ "` does not contain symbol `" ^ symbol ^ "`")))
+          | None ->
+              raise
+                (TypeError
+                   ("Import error:\n" ^ "  Unknown module `" ^ mod_name ^ "`")))
+      | _ ->
+          raise
+            (TypeError
+               ("Invalid import syntax:\n"
+              ^ "  Expected format: import `module.symbol`\n" ^ "  Got: `"
+               ^ String.concat "." mod_parts
+               ^ "`")))
   | ModuleStmt { module_name = _; block } ->
       let _ =
         List.fold_left (fun e stmt -> check_stmt e func_env stmt) env block
@@ -376,17 +391,29 @@ and check_expr env func_env expr =
       TupleType element_types
   | VarExpr name -> (
       try List.assoc name env
-      with Not_found -> raise (TypeError ("Unbound variable: " ^ name)))
+      with Not_found ->
+        raise
+          (TypeError
+             ("Unbound variable reference:\n" ^ "  Variable `" ^ name
+            ^ "` is not in scope.")))
   | UnaryExpr { operator; operand } -> (
       let operand_type = check_expr env func_env operand in
       match operator with
       | Not ->
           if not (type_eq operand_type (SymbolType { value = "bool" })) then
-            raise (TypeError "Unary `not` operator requires a boolean operand");
+            raise
+              (TypeError
+                 ("Type error in unary `not` expression:\n"
+                ^ "  Expected: bool\n" ^ "  Found:    "
+                 ^ string_of_type operand_type));
           SymbolType { value = "bool" }
       | BitWiseNOT ->
           if not (type_eq operand_type (SymbolType { value = "int" })) then
-            raise (TypeError "Bitwise NOT requires an int or int64 operand");
+            raise
+              (TypeError
+                 ("Type error in unary bitwise NOT expression:\n"
+                ^ "  Expected: int\n" ^ "  Found:    "
+                 ^ string_of_type operand_type));
           operand_type
       | Inc | Dec ->
           if
@@ -395,21 +422,34 @@ and check_expr env func_env expr =
               || type_eq operand_type (SymbolType { value = "float" }))
           then
             raise
-              (TypeError "Increment/Decrement requires int or float operand");
+              (TypeError
+                 ("Type error in increment/decrement expression:\n"
+                ^ "  Expected: int or float\n" ^ "  Found:    "
+                 ^ string_of_type operand_type));
           operand_type
       | Minus ->
           if
             not
               (type_eq operand_type (SymbolType { value = "int" })
               || type_eq operand_type (SymbolType { value = "float" }))
-          then raise (TypeError "Unary minus requires int or float operand");
+          then
+            raise
+              (TypeError
+                 ("Type error in unary minus expression:\n"
+                ^ "  Expected: int or float\n" ^ "  Found:    "
+                 ^ string_of_type operand_type));
           operand_type
-      | _ -> raise (TypeError "Unsupported unary operator"))
+      | _ -> raise (TypeError "Unsupported unary operator in expression"))
   | BinaryExpr { left; operator; right } -> (
       let lt = check_expr env func_env left in
       let rt = check_expr env func_env right in
       if not (type_eq lt rt) then
-        raise (TypeError "Binary operands must have the same type");
+        raise
+          (TypeError
+             ("Type error in binary expression:\n" ^ "  Left operand type:  "
+            ^ string_of_type lt ^ "\n" ^ "  Right operand type: "
+            ^ string_of_type rt ^ "\n"
+            ^ "  Both operands must have the same type."));
       match operator with
       | Eq | Neq | Geq | Leq | LogicalAnd | LogicalOr | Less | Greater ->
           SymbolType { value = "bool" }
@@ -417,7 +457,10 @@ and check_expr env func_env expr =
       | RightShiftLogical | BitWiseANDAssign | BitWiseORAssign
       | BitWiseXORAssign | LeftShiftAssign | RightShiftAssign ->
           if not (type_eq lt (SymbolType { value = "int" })) then
-            raise (TypeError "Bitwise operators require int operands");
+            raise
+              (TypeError
+                 ("Type error in binary bitwise expression:\n"
+                ^ "  Expected: int\n" ^ "  Found:    " ^ string_of_type lt));
           lt
       | _ -> lt)
   | CallExpr { callee = VarExpr name; arguments } -> (
@@ -435,23 +478,37 @@ and check_expr env func_env expr =
           | Some (_, return_type) -> return_type
           | None ->
               raise
-                (TypeError ("Function argument type mismatch for `" ^ name ^ "`"))
-          )
+                (TypeError
+                   ("Function call argument mismatch for `" ^ name ^ "`:\n"
+                  ^ "  No matching overload found for arguments:\n" ^ "  "
+                   ^ String.concat ", " (List.map string_of_type arg_types))))
       | None -> (
           match List.assoc_opt name env with
-          | Some (FunctionType (param_types, ret_type)) ->
+          | Some (FunctionType (param_types, return_type)) ->
               let arg_types = List.map (check_expr env func_env) arguments in
               if
                 List.length param_types = List.length arg_types
                 && List.for_all2 type_eq param_types arg_types
-              then ret_type
+              then return_type
               else
                 raise
                   (TypeError
-                     ("Function argument type mismatch for `" ^ name ^ "`"))
-          | _ -> raise (TypeError ("Unknown function: " ^ name))))
+                     ("Function call argument mismatch for `" ^ name ^ "`:\n"
+                    ^ "  Expected: ("
+                     ^ String.concat ", " (List.map string_of_type param_types)
+                     ^ ")\n" ^ "  Found:    ("
+                     ^ String.concat ", " (List.map string_of_type arg_types)
+                     ^ ")"))
+          | _ ->
+              raise
+                (TypeError
+                   ("Unknown function:\n" ^ "  `" ^ name
+                  ^ "` is not declared as a function"))))
   | CallExpr _ ->
-      raise (TypeError "Only simple function calls supported for now")
+      raise
+        (TypeError
+           "Only calls to named functions (e.g. `foo(...)`) are currently \
+            supported")
   | ArrayExpr { elements } -> (
       let types = List.map (check_expr env func_env) elements in
       match types with
@@ -460,7 +517,12 @@ and check_expr env func_env expr =
           List.iter
             (fun t ->
               if not (type_eq t hd) then
-                raise (TypeError "Array element type mismatch"))
+                raise
+                  (TypeError
+                     ("Type error in array expression:\n"
+                    ^ "  All elements must have the same type\n"
+                    ^ "  Found mismatch: " ^ string_of_type t ^ " vs "
+                    ^ string_of_type hd)))
             tl;
           ArrayType { element_type = hd })
   | IndexExpr { array; index } -> (
@@ -475,7 +537,13 @@ and check_expr env func_env expr =
         not
           (type_eq index_type (SymbolType { value = "int" })
           || is_enum_type index_type)
-      then raise (TypeError "Index must be an integer or enum");
+      then
+        raise
+          (TypeError
+             ("Type error in index expression:\n"
+            ^ "  Index must be an integer or enum value\n" ^ "  Found: "
+            ^ string_of_type index_type));
+
       match at with
       | ArrayType { element_type } -> element_type
       | TupleType element_types -> (
@@ -485,24 +553,37 @@ and check_expr env func_env expr =
               if idx < 0 || idx >= List.length element_types then
                 raise
                   (TypeError
-                     ("Tuple index out of bounds: " ^ string_of_int idx
-                    ^ " for tuple of size "
+                     ("Tuple index out of bounds:\n" ^ "  Index: "
+                    ^ string_of_int idx ^ "\n" ^ "  Tuple size: "
                      ^ string_of_int (List.length element_types)));
               List.nth element_types idx
           | _ ->
               raise
                 (TypeError
-                   "Can only use constant integer indices for tuples (e.g. \
-                    t[0])"))
-      | _ -> raise (TypeError "Can only index into arrays or tuples"))
+                   ("Invalid tuple index:\n"
+                  ^ "  Only constant integer indices (e.g. `t[0]`) are allowed"
+                   )))
+      | _ ->
+          raise
+            (TypeError
+               ("Type error in index expression:\n"
+              ^ "  Can only index into arrays or tuples\n" ^ "  Found: "
+              ^ string_of_type at)))
   | IfExpr { condition; then_branch; else_branch } ->
       let ct = check_expr env func_env condition in
       if not (type_eq ct (Type.SymbolType { value = "bool" })) then
-        raise (TypeError "If condition must be boolean");
+        raise
+          (TypeError
+             ("Type error in `if` expression condition:\n"
+            ^ "  Expected: bool\n" ^ "  Found:    " ^ string_of_type ct));
       let t_then = check_expr env func_env then_branch in
       let t_else = check_expr env func_env else_branch in
       if not (type_eq t_then t_else) then
-        raise (TypeError "Branches of if must return same type");
+        raise
+          (TypeError
+             ("Type mismatch in `if` expression branches:\n" ^ "  Then branch: "
+            ^ string_of_type t_then ^ "\n" ^ "  Else branch: "
+            ^ string_of_type t_else));
       t_then
   | ReturnExpr expr -> check_expr env func_env expr
   | DotExpr { left; right } -> (
@@ -514,21 +595,30 @@ and check_expr env func_env expr =
           | None ->
               raise
                 (TypeError
-                   ("Unknown member `" ^ right ^ "` for enum `" ^ enum_name
-                  ^ "`")))
-      | _ -> raise (TypeError "Dot access only supported for enums for now"))
+                   ("Unknown enum member:\n" ^ "  `" ^ right
+                  ^ "` is not a member of enum `" ^ enum_name ^ "`")))
+      | _ ->
+          raise
+            (TypeError
+               ("Dot access error:\n"
+              ^ "  Only enum member access (e.g., `Color.Red`) is supported at \
+                 this time")))
   | TernaryExpr { cond; onTrue; onFalse } ->
       let ct = check_expr env func_env cond in
       if not (type_eq ct (SymbolType { value = "bool" })) then
-        raise (TypeError "Ternary condition must be boolean");
+        raise
+          (TypeError
+             ("Type error in ternary condition:\n" ^ "  Expected: bool\n"
+            ^ "  Found:    " ^ string_of_type ct));
       let t_true = check_expr env func_env onTrue in
       let t_false = check_expr env func_env onFalse in
       if type_eq t_true t_false then t_true
       else
         raise
           (TypeError
-             ("Ternary branches must return same type, but got "
-            ^ string_of_type t_true ^ " and " ^ string_of_type t_false))
+             ("Type mismatch in ternary branches:\n" ^ "  True branch:  "
+            ^ string_of_type t_true ^ "\n" ^ "  False branch: "
+            ^ string_of_type t_false))
   | PipelineExpr { left; right } -> (
       let arg_type = check_expr env func_env left in
       match right with
@@ -548,9 +638,9 @@ and check_expr env func_env expr =
               | None ->
                   raise
                     (TypeError
-                       ("No matching overload for `" ^ name
-                      ^ "` accepting argument of type "
-                      ^ string_of_type arg_type)))
+                       ("No matching overload for pipeline call to `" ^ name
+                      ^ "`:\n" ^ "  Argument type: " ^ string_of_type arg_type))
+              )
           | None -> (
               match List.assoc_opt name env with
               | Some (FunctionType ([ param_type ], return_type)) ->
@@ -558,16 +648,27 @@ and check_expr env func_env expr =
                   else
                     raise
                       (TypeError
-                         ("Function `" ^ name ^ "` expected "
-                        ^ string_of_type param_type ^ " but got "
-                        ^ string_of_type arg_type))
+                         ("Function `" ^ name
+                        ^ "` called via pipeline expects:\n"
+                        ^ "  Parameter type: " ^ string_of_type param_type
+                        ^ "\n" ^ "  But got:         " ^ string_of_type arg_type
+                         ))
               | Some _ ->
-                  raise (TypeError ("`" ^ name ^ "` is not a unary function"))
-              | None -> raise (TypeError ("Unknown function: " ^ name))))
+                  raise
+                    (TypeError
+                       ("Pipeline error:\n" ^ "  `" ^ name
+                      ^ "` is not a unary function"))
+              | None ->
+                  raise
+                    (TypeError
+                       ("Unknown function in pipeline:\n" ^ "  `" ^ name
+                      ^ "` is not declared"))))
       | _ ->
           raise
             (TypeError
-               "Right-hand side of pipeline must be a function identifier"))
+               ("Invalid pipeline usage:\n"
+              ^ "  Right-hand side must be a function identifier (e.g., `value \
+                 |> foo`)")))
   | MatchExpr { expr; cases } -> (
       let et = check_expr env func_env expr in
       let branch_types =
@@ -578,7 +679,10 @@ and check_expr env func_env expr =
                 let pt = check_expr env func_env pat_expr in
                 if not (type_eq et pt) then
                   raise
-                    (TypeError "Pattern type does not match match expression")
+                    (TypeError
+                       ("Pattern match type mismatch:\n"
+                      ^ "  Match expression type: " ^ string_of_type et ^ "\n"
+                      ^ "  Pattern type:          " ^ string_of_type pt))
             | None -> ());
             let final_env =
               List.fold_left
@@ -598,8 +702,9 @@ and check_expr env func_env expr =
               if not (type_eq t first) then
                 raise
                   (TypeError
-                     ("All match cases must return the same type, but got "
-                    ^ string_of_type first ^ " and " ^ string_of_type t)))
+                     ("Type mismatch in match branches:\n" ^ "  Expected: "
+                    ^ string_of_type first ^ "\n" ^ "  Found:    "
+                    ^ string_of_type t)))
             rest;
           first)
 
