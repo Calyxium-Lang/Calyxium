@@ -33,7 +33,6 @@ type opcode =
   | NOT_EQUAL
   | RETURN
   | PRINT
-  | PRINTLN
   | NOT
   | INC
   | DEC

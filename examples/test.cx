@@ -1,3 +1,3 @@
 use Math.sin
 
-println(sin(0.5))
+print(sin(0.5))

@@ -107,8 +107,15 @@ let sweep gen =
 
 let mark_and_promote roots env =
   Hashtbl.clear young_gen.marked;
+  Hashtbl.clear old_gen.marked;
   List.iter mark_value roots;
   mark_env env;
+
+  Hashtbl.iter
+    (fun _str id ->
+      mark id young_gen;
+      mark id old_gen)
+    interned_strings;
 
   let to_promote = ref [] in
   Hashtbl.iter

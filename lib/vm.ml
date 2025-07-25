@@ -4,7 +4,7 @@ open Gc
 
 exception RuntimeError of string
 
-type trace_entry = { pc : int; instr : string }
+type trace_entry = { instr : string }
 
 type frame = {
   code : opcode array;
@@ -12,10 +12,26 @@ type frame = {
   mutable env : (string * (value * bool)) list;
 }
 
+let output_buffer : string list ref = ref []
 let stdlib_modules : (string, value) Hashtbl.t = Hashtbl.create 16
 let trace : trace_entry list ref = ref []
-let push_trace pc instr = trace := { pc; instr } :: !trace
+let push_trace instr = trace := { instr } :: !trace
 let clear_trace () = trace := []
+
+let flush_buffer () =
+  List.iter print_string (List.rev !output_buffer);
+  output_buffer := [];
+  flush stdout
+
+let max_buffer_size = 1000
+
+let safe_push_output s =
+  output_buffer := s :: !output_buffer;
+  if List.length !output_buffer >= 10 then flush_buffer ();
+  if List.length !output_buffer >= max_buffer_size then (
+    flush_buffer ();
+    Printf.eprintf
+      "Warning: output buffer flushed early to prevent overflow.\n%!")
 
 let init_stdlib () =
   List.iter
@@ -27,17 +43,12 @@ let init_stdlib () =
 
 let print_trace msg =
   match !trace with
-  | { pc; instr } :: _ ->
-      prerr_endline "Stack Trace (most recent call last):";
-      prerr_endline
-        ("  at instruction '" ^ instr ^ "' (pc=" ^ string_of_int pc ^ ")");
-      prerr_endline ("Fatal error: " ^ msg)
-  | [] -> prerr_endline ("Fatal error: " ^ msg)
+  | { instr; _ } :: _ -> prerr_endline ("Error at '" ^ instr ^ "': " ^ msg)
+  | [] -> prerr_endline ("Error: " ^ msg)
 
 let runtime_error msg = raise (RuntimeError msg)
 let stack = Stack.create ()
 let global_env = ref []
-let output_buffer = Buffer.create 1024
 
 let escape_sequences =
   [
@@ -221,7 +232,7 @@ let reset_vm_state () =
   Stack.clear stack;
   global_env := [];
   clear_trace ();
-  Buffer.clear output_buffer
+  output_buffer := []
 
 let run instructions =
   clear_trace ();
@@ -239,32 +250,32 @@ let run instructions =
         let next () = frame.pc <- frame.pc + 1 in
         match instr with
         | LOAD_INT64 v ->
-            push_trace frame.pc ("LOAD_INT64 " ^ Int64.to_string v);
+            push_trace ("LOAD_INT64 " ^ Int64.to_string v);
             Stack.push (VInt64 v) stack;
             next ()
         | LOAD_FLOAT v ->
-            push_trace frame.pc ("LOAD_FLOAT " ^ string_of_float v);
+            push_trace ("LOAD_FLOAT " ^ string_of_float v);
             Stack.push (VFloat v) stack;
             next ()
         | LOAD_STRING s ->
-            push_trace frame.pc ("LOAD_STRING " ^ s);
+            push_trace ("LOAD_STRING " ^ s);
             let v = Gc.alloc_string_with_gc stack frame.env s in
             Stack.push v stack;
             next ()
         | LOAD_BYTE c ->
-            push_trace frame.pc ("LOAD_BYTE " ^ String.make 1 c);
+            push_trace ("LOAD_BYTE " ^ String.make 1 c);
             Stack.push (VByte c) stack;
             next ()
         | LOAD_BOOL b ->
-            push_trace frame.pc ("LOAD_BOOL " ^ string_of_bool b);
+            push_trace ("LOAD_BOOL " ^ string_of_bool b);
             Stack.push (VBool b) stack;
             next ()
         | LOAD_UNIT _ ->
-            push_trace frame.pc "LOAD_UNIT";
+            push_trace "LOAD_UNIT";
             Stack.push (VFloat nan) stack;
             next ()
         | LOAD_TUPLE n ->
-            push_trace frame.pc ("LOAD_TUPLE " ^ string_of_int n);
+            push_trace ("LOAD_TUPLE " ^ string_of_int n);
             if Stack.length stack < n then
               runtime_error
                 ("LOAD_TUPLE expects " ^ string_of_int n
@@ -274,11 +285,11 @@ let run instructions =
               Stack.push (VTuple items) stack;
               next ()
         | LOAD_VAR name ->
-            push_trace frame.pc ("LOAD_VAR " ^ name);
+            push_trace ("LOAD_VAR " ^ name);
             Stack.push (get_var frame.env name) stack;
             next ()
         | PLUS ->
-            push_trace frame.pc "PLUS";
+            push_trace "PLUS";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat a, VFloat b ->
@@ -294,7 +305,7 @@ let run instructions =
             | _ -> runtime_error "PLUS expects numbers");
             next ()
         | MINUS ->
-            push_trace frame.pc "MINUS";
+            push_trace "MINUS";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat a, VFloat b ->
@@ -308,7 +319,7 @@ let run instructions =
             | _ -> runtime_error "MINUS expects numbers");
             next ()
         | STAR ->
-            push_trace frame.pc "STAR";
+            push_trace "STAR";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat a, VFloat b ->
@@ -322,7 +333,7 @@ let run instructions =
             | _ -> runtime_error "STAR expects numbers");
             next ()
         | SLASH ->
-            push_trace frame.pc "SLASH";
+            push_trace "SLASH";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
@@ -341,7 +352,7 @@ let run instructions =
             | _ -> runtime_error "SLASH expects numbers");
             next ()
         | MOD ->
-            push_trace frame.pc "MOD";
+            push_trace "MOD";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
@@ -351,7 +362,7 @@ let run instructions =
             | _ -> runtime_error "MOD expects numbers");
             next ()
         | POW ->
-            push_trace frame.pc "POW";
+            push_trace "POW";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VFloat a, VFloat b -> Stack.push (VFloat (a ** b)) stack
@@ -363,26 +374,26 @@ let run instructions =
             | _ -> runtime_error "POW expects numbers");
             next ()
         | CONCAT ->
-            push_trace frame.pc "CONCAT";
-            let b, a = pop2_safe stack in
+            push_trace "CONCAT";
+            let a, b = pop2_safe stack in
             let result =
-              get_string_from_stack_value b ^ get_string_from_stack_value a
+              get_string_from_stack_value a ^ get_string_from_stack_value b
             in
             let v = Gc.alloc_string_with_gc stack frame.env result in
             Stack.push v stack;
             next ()
         | JUMP_IF_FALSE offset -> (
-            push_trace frame.pc ("JUMP_IF_FALSE " ^ string_of_int offset);
+            push_trace ("JUMP_IF_FALSE " ^ string_of_int offset);
             match Stack.pop_opt stack with
             | Some (VFloat 0.0) | Some (VInt64 0L) | Some (VBool false) ->
                 frame.pc <- frame.pc + offset
             | Some _ -> next ()
             | None -> runtime_error "JUMP_IF_FALSE with empty stack")
         | JUMP n ->
-            push_trace frame.pc ("JUMP " ^ string_of_int n);
+            push_trace ("JUMP " ^ string_of_int n);
             frame.pc <- frame.pc + n
         | LESS ->
-            push_trace frame.pc "LESS";
+            push_trace "LESS";
             let a, b = pop2_safe stack in
             let result =
               match (a, b) with
@@ -393,7 +404,7 @@ let run instructions =
             Stack.push result stack;
             next ()
         | GREATER ->
-            push_trace frame.pc "GREATER";
+            push_trace "GREATER";
             let a, b = pop2_safe stack in
             let result =
               match (a, b) with
@@ -404,7 +415,7 @@ let run instructions =
             Stack.push result stack;
             next ()
         | LESS_EQUAL ->
-            push_trace frame.pc "LESS_EQUAL";
+            push_trace "LESS_EQUAL";
             let a, b = pop2_safe stack in
             let result =
               match (a, b) with
@@ -415,7 +426,7 @@ let run instructions =
             Stack.push result stack;
             next ()
         | GREATER_EQUAL ->
-            push_trace frame.pc "GREATER_EQUAL";
+            push_trace "GREATER_EQUAL";
             let a, b = pop2_safe stack in
             let result =
               match (a, b) with
@@ -426,19 +437,19 @@ let run instructions =
             Stack.push result stack;
             next ()
         | NOT_EQUAL ->
-            push_trace frame.pc "NOT_EQUAL";
+            push_trace "NOT_EQUAL";
             let a, b = pop2_safe stack in
             let result = not_equal_value a b in
             Stack.push (VBool result) stack;
             next ()
         | EQUAL ->
-            push_trace frame.pc "EQUAL";
+            push_trace "EQUAL";
             let b, a = pop2_safe stack in
             let result = equal_value a b in
             Stack.push (VBool result) stack;
             next ()
         | AND ->
-            push_trace frame.pc "AND";
+            push_trace "AND";
             let a, b = pop2_safe stack in
             let bool_val = function
               | VBool b -> b
@@ -449,7 +460,7 @@ let run instructions =
             Stack.push (VBool (bool_val a && bool_val b)) stack;
             next ()
         | OR ->
-            push_trace frame.pc "OR";
+            push_trace "OR";
             let a, b = pop2_safe stack in
             let bool_val = function
               | VBool b -> b
@@ -460,7 +471,7 @@ let run instructions =
             Stack.push (VBool (bool_val a || bool_val b)) stack;
             next ()
         | NOT ->
-            push_trace frame.pc "NOT";
+            push_trace "NOT";
             let v = pop1 stack in
             let bool_val =
               match v with
@@ -471,7 +482,7 @@ let run instructions =
             Stack.push (VFloat (if not bool_val then 1.0 else 0.0)) stack;
             next ()
         | INC ->
-            push_trace frame.pc "INC";
+            push_trace "INC";
             let v = pop1 stack in
             let result =
               match v with
@@ -488,7 +499,7 @@ let run instructions =
             Stack.push result stack;
             next ()
         | DEC ->
-            push_trace frame.pc "DEC";
+            push_trace "DEC";
             let v = pop1 stack in
             let result =
               match v with
@@ -505,18 +516,18 @@ let run instructions =
             Stack.push result stack;
             next ()
         | DUP ->
-            push_trace frame.pc "DUP";
+            push_trace "DUP";
             Stack.top_opt stack |> Option.iter (fun v -> Stack.push v stack);
             if Stack.is_empty stack then
               runtime_error "Stack underflow during DUP";
             next ()
         | POP ->
-            push_trace frame.pc "POP";
+            push_trace "POP";
             if Stack.pop_opt stack = None then
               runtime_error "POP attempted on empty stack"
             else next ()
         | LOAD_ARRAY length ->
-            push_trace frame.pc ("LOAD_ARRAY " ^ string_of_int length);
+            push_trace ("LOAD_ARRAY " ^ string_of_int length);
             if Stack.length stack < length then
               runtime_error
                 ("LOAD_ARRAY expects " ^ string_of_int length
@@ -526,7 +537,7 @@ let run instructions =
               Stack.push (VArray items) stack;
               next ()
         | LOAD_INDEX ->
-            push_trace frame.pc "LOAD_INDEX";
+            push_trace "LOAD_INDEX";
             if Stack.length stack < 2 then
               runtime_error
                 "LOAD_INDEX requires two values on the stack (collection, \
@@ -586,7 +597,7 @@ let run instructions =
             in
             frame.pc <- skip_function (frame.pc + 1)
         | CALL function_name ->
-            push_trace frame.pc ("CALL " ^ function_name);
+            push_trace ("CALL " ^ function_name);
             let function_body = resolve_function_body function_name in
             let param_names = extract_param_names function_body in
             let arg_count = List.length param_names in
@@ -612,7 +623,7 @@ let run instructions =
             frame.pc <- frame.pc + 1;
             push_frame code local_env
         | TAIL_CALL function_name ->
-            push_trace frame.pc ("TAIL_CALL " ^ function_name);
+            push_trace ("TAIL_CALL " ^ function_name);
             let function_body = resolve_function_body function_name in
             let param_names = extract_param_names function_body in
             let arg_count = List.length param_names in
@@ -634,14 +645,14 @@ let run instructions =
             ignore (pop1 frame_stack);
             Stack.push { code; pc = 0; env = local_env } frame_stack
         | RETURN ->
-            push_trace frame.pc "RETURN";
+            push_trace "RETURN";
             let return_value =
               match Stack.pop_opt stack with Some v -> v | None -> VFloat nan
             in
             ignore (pop1 frame_stack);
             Stack.push return_value stack
         | STORE_VAR name ->
-            push_trace frame.pc ("STORE_VAR " ^ name);
+            push_trace ("STORE_VAR " ^ name);
             if Stack.is_empty stack then
               runtime_error ("STORE_VAR '" ^ name ^ "' failed: stack is empty")
             else
@@ -654,55 +665,8 @@ let run instructions =
                 global_env :=
                   (name, (value, true)) :: List.remove_assoc name !global_env;
                 next ())
-        | PRINTLN ->
-            push_trace frame.pc "PRINTLN";
-            if Stack.is_empty stack then
-              runtime_error "PRINTLN attempted with empty stack"
-            else
-              let rec string_of_value = function
-                | VUnit -> "unit"
-                | VByte c -> Printf.sprintf "'%c'" c
-                | VBool true -> "true"
-                | VBool false -> "false"
-                | VFloat f when Float.is_nan f -> "unit"
-                | VFloat 1.0 -> "true"
-                | VFloat 0.0 -> "false"
-                | VInt64 1L -> "true"
-                | VInt64 0L -> "false"
-                | VFloat f when Float.is_infinite f ->
-                    if f > 0.0 then "inf" else "-inf"
-                | VFloat f -> Printf.sprintf "%.12f" f
-                | VInt64 i -> Printf.sprintf "%Ld" i
-                | VHeapRef id -> (
-                    match Gc.get_string id with
-                    | Some s -> s
-                    | None -> (
-                        match Gc.get_bytes id with
-                        | Some arr ->
-                            String.init (Array.length arr) (Array.get arr)
-                        | None -> (
-                            match Gc.get_value id with
-                            | Some v -> string_of_value v
-                            | None -> "<invalid ref>")))
-                | VArray items ->
-                    let contents =
-                      items |> List.map string_of_value |> String.concat ", "
-                    in
-                    "[" ^ contents ^ "]"
-                | VTuple items ->
-                    let contents =
-                      items |> List.map string_of_value |> String.concat ", "
-                    in
-                    "(" ^ contents ^ ")"
-                | VModule _ -> "<module>"
-                | VNative _ -> "<native>"
-                | VClosure _ -> "<closure>"
-              in
-              let value = pop1 stack in
-              print_endline (string_of_value value);
-              next ()
         | PRINT ->
-            push_trace frame.pc "PRINT";
+            push_trace "PRINT";
             if Stack.is_empty stack then
               runtime_error "PRINTLN attempted with empty stack"
             else
@@ -711,13 +675,12 @@ let run instructions =
                 | VByte c -> Printf.sprintf "'%c'" c
                 | VBool true -> "true"
                 | VBool false -> "false"
-                | VFloat f when Float.is_nan f -> "unit"
-                | VFloat 1.0 -> "true"
-                | VFloat 0.0 -> "false"
-                | VFloat f when Float.is_infinite f ->
-                    if f > 0.0 then "inf" else "-inf"
-                | VFloat f -> Printf.sprintf "%.12f" f
-                | VInt64 i -> Printf.sprintf "%Ld" i
+                | VFloat f ->
+                    if Float.is_nan f then "NaN"
+                    else if Float.is_infinite f then
+                      if f > 0.0 then "inf" else "-inf"
+                    else Printf.sprintf "%.12f" f
+                | VInt64 i -> Int64.to_string i
                 | VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> s
@@ -740,14 +703,14 @@ let run instructions =
                     in
                     "(" ^ contents ^ ")"
                 | VModule _ -> "<module>"
-                | VNative _ -> "<native>"
-                | VClosure _ -> "<closure>"
+                | VNative _ -> "<native function>"
+                | VClosure name -> "<function " ^ name ^ ">"
               in
               let value = pop1 stack in
-              print_string (string_of_value value);
+              safe_push_output (string_of_value value);
               next ()
         | INPUT -> (
-            push_trace frame.pc "INPUT";
+            push_trace "INPUT";
             if Stack.is_empty stack then
               runtime_error "Stack underflow during INPUT"
             else
@@ -772,7 +735,7 @@ let run instructions =
                   next ()
               | None -> runtime_error "Invalid prompt ID for INPUT")
         | NEG ->
-            push_trace frame.pc "NEG";
+            push_trace "NEG";
             let v = pop1 stack in
             (match v with
             | VFloat f ->
@@ -789,7 +752,7 @@ let run instructions =
             | _ -> runtime_error "NEG expects a float or int");
             next ()
         | FLOAT ->
-            push_trace frame.pc "FLOAT";
+            push_trace "FLOAT";
             let v = pop1 stack in
             let float_val =
               match v with
@@ -809,7 +772,7 @@ let run instructions =
             Stack.push (VFloat float_val) stack;
             next ()
         | INT ->
-            push_trace frame.pc "INT";
+            push_trace "INT";
             let v = pop1 stack in
             let int_val =
               match v with
@@ -828,7 +791,7 @@ let run instructions =
             Stack.push (VInt64 int_val) stack;
             next ()
         | STRING ->
-            push_trace frame.pc "STRING";
+            push_trace "STRING";
             let v = pop1 stack in
             let str_val =
               match v with
@@ -861,7 +824,7 @@ let run instructions =
             Stack.push new_str_ref stack;
             next ()
         | BYTE ->
-            push_trace frame.pc "TO_BYTES";
+            push_trace "TO_BYTES";
             let v = pop1 stack in
             let str_val =
               match v with
@@ -885,7 +848,7 @@ let run instructions =
             Stack.push new_bytes_ref stack;
             next ()
         | PLUSASSIGN ->
-            push_trace frame.pc "PLUSASSIGN";
+            push_trace "PLUSASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -909,7 +872,7 @@ let run instructions =
             Stack.push result stack;
             next ()
         | MINUSASSIGN ->
-            push_trace frame.pc "MINUSASSIGN";
+            push_trace "MINUSASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -932,7 +895,7 @@ let run instructions =
             frame.env <- update_variable name result frame.env;
             next ()
         | STARASSIGN ->
-            push_trace frame.pc "STARASSIGN";
+            push_trace "STARASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -955,7 +918,7 @@ let run instructions =
             frame.env <- update_variable name result frame.env;
             next ()
         | SLASHASSIGN ->
-            push_trace frame.pc "SLASHASSIGN";
+            push_trace "SLASHASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -984,12 +947,12 @@ let run instructions =
             frame.env <- update_variable name result frame.env;
             next ()
         | LOAD_VAR_REF name ->
-            push_trace frame.pc ("LOAD_VAR_REF " ^ name);
+            push_trace ("LOAD_VAR_REF " ^ name);
             let v = Gc.alloc_string_with_gc stack frame.env name in
             Stack.push v stack;
             next ()
         | LENGTH ->
-            push_trace frame.pc "LENGTH";
+            push_trace "LENGTH";
             if Stack.is_empty stack then
               runtime_error "LENGTH expects a value on the stack"
             else
@@ -1013,35 +976,35 @@ let run instructions =
               Stack.push (VInt64 length) stack;
               next ()
         | BITWISENOT ->
-            push_trace frame.pc "BITWISE_NOT";
+            push_trace "BITWISE_NOT";
             let v = pop1 stack in
             (match v with
             | VInt64 i -> Stack.push (VInt64 (Int64.lognot i)) stack
             | _ -> runtime_error "BITWISE_NOT expects an int64");
             next ()
         | BITWISEAND ->
-            push_trace frame.pc "BITWISE_AND";
+            push_trace "BITWISE_AND";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logand a b)) stack
             | _ -> runtime_error "BITWISE_AND expects int64 operands");
             next ()
         | BITWISEOR ->
-            push_trace frame.pc "BITWISE_OR";
+            push_trace "BITWISE_OR";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logor a b)) stack
             | _ -> runtime_error "BITWISE_OR expects int64 operands");
             next ()
         | BITWISEXOR ->
-            push_trace frame.pc "BITWISE_XOR";
+            push_trace "BITWISE_XOR";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logxor a b)) stack
             | _ -> runtime_error "BITWISE_XOR expects int64 operands");
             next ()
         | LEFTSHIFT ->
-            push_trace frame.pc "LEFTSHIFT";
+            push_trace "LEFTSHIFT";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt64 a, VInt64 b ->
@@ -1049,7 +1012,7 @@ let run instructions =
             | _ -> runtime_error "LEFTSHIFT expects int64 operands");
             next ()
         | RIGHTSHIFT ->
-            push_trace frame.pc "RIGHT_SHIFT";
+            push_trace "RIGHT_SHIFT";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt64 a, VInt64 b ->
@@ -1057,7 +1020,7 @@ let run instructions =
             | _ -> runtime_error "RIGHT_SHIFT expects int64 operands");
             next ()
         | RIGHTSHIFTLOGICAL ->
-            push_trace frame.pc "RIGHT_SHIFT_LOGICAL";
+            push_trace "RIGHT_SHIFT_LOGICAL";
             let a, b = pop2_safe stack in
             (match (a, b) with
             | VInt64 a, VInt64 b ->
@@ -1066,7 +1029,7 @@ let run instructions =
             | _ -> runtime_error "RIGHT_SHIFT_LOGICAL expects int64 operands");
             next ()
         | BITWISEANDASSIGN ->
-            push_trace frame.pc "BITWISE_ANDASSIGN";
+            push_trace "BITWISE_ANDASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -1086,7 +1049,7 @@ let run instructions =
             frame.env <- update_variable name result frame.env;
             next ()
         | BITWISEORASSIGN ->
-            push_trace frame.pc "BITWISE_ORASSIGN";
+            push_trace "BITWISE_ORASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -1106,7 +1069,7 @@ let run instructions =
             frame.env <- update_variable name result frame.env;
             next ()
         | BITWISEXORASSIGN ->
-            push_trace frame.pc "BITWISE_XORASSIGN";
+            push_trace "BITWISE_XORASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -1126,7 +1089,7 @@ let run instructions =
             frame.env <- update_variable name result frame.env;
             next ()
         | LEFTSHIFTASSIGN ->
-            push_trace frame.pc "LEFT_SHIFTASSIGN";
+            push_trace "LEFT_SHIFTASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -1147,7 +1110,7 @@ let run instructions =
             frame.env <- update_variable name result frame.env;
             next ()
         | RIGHTSHIFTASSIGN ->
-            push_trace frame.pc "RIGHT_SHIFTASSIGN";
+            push_trace "RIGHT_SHIFTASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
@@ -1168,7 +1131,7 @@ let run instructions =
             frame.env <- update_variable name result frame.env;
             next ()
         | ASSERT -> (
-            push_trace frame.pc "ASSERT";
+            push_trace "ASSERT";
             let cond = pop1 stack in
             match cond with
             | VBool true -> next ()
@@ -1195,7 +1158,8 @@ let run instructions =
         | CLOSURE func_name ->
             Stack.push (VClosure func_name) stack;
             next ()
-    done
+    done;
+    flush_buffer ()
   with RuntimeError msg ->
     print_trace msg;
     exit 1

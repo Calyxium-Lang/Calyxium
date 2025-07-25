@@ -3,12 +3,12 @@ let b: float = input("Enter value b: ")
 let op: byte = input("Enter operator: ")
 
 let safeDiv(a: float, b: float): unit {
-    if b == 0.0 then println("Can't divide by zero") else println(a / b)
+    if b == 0.0 then print("Can't divide by zero\n") else print(a / b)
 }
 
 match op with
-    | '+' -> println(a + b)
-    | '-' -> println(a - b)
-    | '*' -> println(a * b)
+    | '+' -> print(a + b)
+    | '-' -> print(a - b)
+    | '*' -> print(a * b)
     | '/' -> safeDiv(a, b)
-    | _ -> println("Operator not supported")
+    | _ -> print("Operator not supported")

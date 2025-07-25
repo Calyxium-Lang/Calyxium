@@ -2,4 +2,4 @@ let swap(a: string, x: int): (int, string) {
     return (x, a)
 }
 
-println(swap("Hello", 5))
+print(swap("Hello", 5))
