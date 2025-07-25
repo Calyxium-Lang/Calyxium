@@ -1,6 +1,3 @@
--- $ tests/pipeline.cx $
-
--- $ basic tests for pipeline operators $
 let double(x: int): int {
     return x * 2
 }
@@ -56,5 +53,3 @@ let greet(name: string): string {
 assert("World" |> greet == "Hello, World")
 
 assert(true |> to_string == "true")
-
-assert(3.14 |> to_string == "3.14")

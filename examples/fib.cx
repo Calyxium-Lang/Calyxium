@@ -2,8 +2,7 @@ let fib(n: int): int {
     let rec aux(n: int, a: int, b: int): int {
         if n == 0 then a else aux(n - 1, b, a + b)
     }
-    aux(n, 0, 1)
+    return aux(n, 0, 1)
 }
 
--- this is the max value until I add lazy eval
 print(fib(91))

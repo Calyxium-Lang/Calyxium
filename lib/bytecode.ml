@@ -108,17 +108,6 @@ let rec compile_stmt = function
         |> List.concat
       in
       List.concat expr_codes @ store_codes
-  | IfStmt { condition; then_branch; else_branch } ->
-      let condition = compile_expr condition in
-      let then_branch = compile_stmt then_branch in
-      let else_branch =
-        match else_branch with Some branch -> compile_stmt branch | None -> []
-      in
-      let then_jump_label = List.length then_branch + 1 in
-      let else_jump_label = List.length else_branch + 1 in
-      condition
-      @ [ JUMP_IF_FALSE (then_jump_label + 1) ]
-      @ then_branch @ [ JUMP else_jump_label ] @ else_branch
   | ForStmt { init; condition; increment; body } -> (
       match condition with
       | BoolExpr { value = false } -> []

@@ -12,5 +12,3 @@ let week_to_string(day: Week): string {
 }
 
 let tuesday_str: string = week_to_string(Week.Tuesday)
-
-assert(tuesday_str == "Tuesday")

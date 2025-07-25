@@ -46,13 +46,11 @@ assert(parity(4) == "even")
 assert(parity(5) == "odd")
 
 let check(n: int): string {
-    if (n > 10) {
+    if n > 10 then
         match n with
             | 42 -> "magic"
             | _ -> "big"
-    } else {
-        return "small"
-    }
+    else "small"
 }
 
 assert(check(5) == "small")
@@ -84,11 +82,9 @@ assert(sign(0) == "non-positive")
 assert(sign(-3) == "non-positive")
 
 let nested(n: int): string {
-    if (n > 0) {
-        if n > 10 then "big positive" else "small positive"
-    } else {
-        return "non-positive"
-    }
+    if n > 0 then
+        if n > 10 then "big positive" else "small positive" 
+    else "non-positive"
 }
 
 assert(nested(5) == "small positive")

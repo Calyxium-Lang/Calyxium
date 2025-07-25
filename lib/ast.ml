@@ -1,12 +1,3 @@
-type location = {
-  start_line : int;
-  start_col : int;
-  end_line : int;
-  end_col : int;
-}
-
-type 'a located = { value : 'a; loc : location }
-
 module rec Type : sig
   type t =
     | SymbolType of { value : string }
@@ -45,7 +36,6 @@ and Stmt : sig
         return_type : Type.t;
         body : t list;
       }
-    | IfStmt of { condition : Expr.t; then_branch : t; else_branch : t option }
     | ForStmt of {
         init : t option;
         condition : Expr.t;
@@ -78,7 +68,6 @@ end = struct
         return_type : Type.t;
         body : t list;
       }
-    | IfStmt of { condition : Expr.t; then_branch : t; else_branch : t option }
     | ForStmt of {
         init : t option;
         condition : Expr.t;
