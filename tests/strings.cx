@@ -27,5 +27,6 @@ assert(interp == "number is 5")
 
 let empty: string = ""
 assert(length(empty) == 0)
+
 let concat: string = "foo" ^ "bar" ^ "baz"
 assert(concat == "foobarbaz")
