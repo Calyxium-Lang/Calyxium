@@ -20,7 +20,7 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Return For Use Module True False Enum Int64Type FloatType StringType ByteType BoolType UnitType
+%token Recursive If Then Else Let Match With For Use Module True False Enum Int64Type FloatType StringType ByteType BoolType UnitType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
@@ -150,8 +150,8 @@ expr:
   | BitWiseNOT expr %prec NotPrec { Expr.UnaryExpr { operator = Token.BitWiseNOT; operand = $2 } }
   | expr Pipeline expr { Expr.PipelineExpr { left = $1; right = $3 } }
   | Match expr With case_list { Expr.MatchExpr { expr = $2; cases = $4; } }
-  | Return expr { Expr.ReturnExpr $2 }
-  | If expr Then expr Else expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; } }
+  | If expr Then expr Else expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = Some $6; } }
+  | If expr Then expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = None; } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }

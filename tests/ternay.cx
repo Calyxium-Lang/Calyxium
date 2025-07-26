@@ -14,3 +14,10 @@ assert(check == "yes")
 
 let nested: int = (a == 10) ? ((b == 20) ? 100 : 200) : 300
 assert(nested == 100)
+
+let complex: string = (a > b) ? ((b < 30) ? "A" : "B") : ((a < 5) ? "C" : "D")
+assert(complex == "D")
+
+let condition: bool = true
+let result: string = (condition) ? "Condition is true" : "Condition is false"
+assert(result == "Condition is true")

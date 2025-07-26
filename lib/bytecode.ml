@@ -16,6 +16,7 @@ let builtins =
     ("length", fun args -> args @ [ LENGTH ]);
     ("input", fun args -> args @ [ INPUT ]);
     ("assert", fun args -> args @ [ ASSERT ]);
+    ("panic", fun args -> args @ [ PANIC ]);
   ]
 
 let opcode_of_binop = function
@@ -214,7 +215,9 @@ and compile_expr = function
   | IfExpr { condition; then_branch; else_branch } ->
       let condition_code = compile_expr condition in
       let then_code = compile_expr then_branch in
-      let else_code = compile_expr else_branch in
+      let else_code =
+        match else_branch with Some expr -> compile_expr expr | None -> []
+      in
       let then_jump = List.length then_code + 2 in
       let else_jump = List.length else_code + 1 in
       condition_code

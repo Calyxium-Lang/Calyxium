@@ -1,9 +1,9 @@
 let double(x: int): int {
-    return x * 2
+    x * 2
 }
 
 let sqr(x: int): int {
-    return x * x
+    x * x
 }
 
 3 |> double |> sqr |> print

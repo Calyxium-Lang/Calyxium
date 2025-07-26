@@ -3,7 +3,7 @@ let b: float = input("Enter value b: ")
 let op: byte = input("Enter operator: ")
 
 let safeDiv(a: float, b: float): unit {
-    if b == 0.0 then print("Can't divide by zero\n") else print(a / b)
+    if b == 0.0 then panic("Can't divide by zero\n") else print(a / b)
 }
 
 match op with

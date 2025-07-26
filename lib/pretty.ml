@@ -75,7 +75,7 @@ let rec string_of_expr = function
         | _ -> " else " ^ string_of_expr expr
       in
       Printf.sprintf "if %s %s%s" cond_str (format_then then_branch)
-        (format_else else_branch)
+        (match else_branch with Some expr -> format_else expr | None -> "")
   | Expr.MatchExpr { expr; cases } ->
       let expr_str = string_of_expr expr in
       let case_strs =

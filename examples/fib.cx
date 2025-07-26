@@ -2,7 +2,7 @@ let fib(n: int): int {
     let rec aux(n: int, a: int, b: int): int {
         if n == 0 then a else aux(n - 1, b, a + b)
     }
-    return aux(n, 0, 1)
+    aux(n, 0, 1)
 }
 
 print(fib(91))

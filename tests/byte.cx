@@ -16,3 +16,12 @@ let greeting: []byte = {'H', 'i'}
 assert(greeting[0] == 'H')
 assert(greeting[1] == 'i')
 assert(to_string(greeting) == "Hi")
+
+let empty: []byte = {}
+assert(length(empty) == 0)
+
+let byte_str: string = "Byte test"
+let byte_arr: []byte = to_bytes(byte_str)
+assert(length(byte_arr) == 9)
+assert(byte_arr[0] == 'B')
+assert(byte_arr[8] == 't')

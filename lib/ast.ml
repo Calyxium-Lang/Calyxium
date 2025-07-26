@@ -94,7 +94,7 @@ and Expr : sig
     | UnaryExpr of { operator : Token.t; operand : t }
     | ArrayExpr of { elements : t list }
     | IndexExpr of { array : t; index : t }
-    | IfExpr of { condition : t; then_branch : t; else_branch : t }
+    | IfExpr of { condition : t; then_branch : t; else_branch : t option }
     | ReturnExpr of t
     | DotExpr of { left : t; right : string }
     | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
@@ -115,7 +115,7 @@ end = struct
     | UnaryExpr of { operator : Token.t; operand : t }
     | ArrayExpr of { elements : t list }
     | IndexExpr of { array : t; index : t }
-    | IfExpr of { condition : t; then_branch : t; else_branch : t }
+    | IfExpr of { condition : t; then_branch : t; else_branch : t option }
     | ReturnExpr of t
     | DotExpr of { left : t; right : string }
     | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
