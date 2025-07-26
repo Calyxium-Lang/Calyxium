@@ -74,7 +74,6 @@ rule token = parse
   | "let"                    { at_line_start := false; Let }
   | "match"                  { at_line_start := false; Match }
   | "with"                   { at_line_start := false; With }
-  | "return"                 { at_line_start := false; Return }
   | "for"                    { at_line_start := false; For }
   | "use"                    { at_line_start := false; Use }
   | "mod"                    { at_line_start := false; Module }

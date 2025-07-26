@@ -1,1 +1,8 @@
 let x: int = ref 10
+
+x := 12
+-- prints 12
+print(x)
+
+-- prints 10
+print(!x)

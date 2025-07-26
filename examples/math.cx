@@ -6,19 +6,19 @@ let rec fact(n: int): float {
 }
 
 let pow(base: float, exp: float): float {
-    return base ** exp
+    base ** exp
 }
 
 let abs(x: float): float {
-    return (x <= 0.0) ? -x : x
+    (x <= 0.0) ? -x : x
 }
 
 let degToRad(deg: float): float {
-    return deg * pi / 180.0
+    deg * pi / 180.0
 }
 
 let radToDeg(rad: float): float {
-    return rad * 180.0 / pi
+    rad * 180.0 / pi
 }
 
 let sin(x: float, terms: int): float {
@@ -27,17 +27,15 @@ let sin(x: float, terms: int): float {
         let sign: int = ((n % 2) == 0) ? 1 : -1
         result += to_float(sign) * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1)
     }
-    return result
+    result
 }
 
 let csc(x: float, terms: int): float {
-    return 1.0 / sin(x, terms)
+    1.0 / sin(x, terms)
 }
 
 let arcsin(x: float, terms: int): float {
-    if (x < -1.0 || x > 1.0) {
-        println("Error: arcsin(x) is undefined for x < -1 or x > 1")
-    }
+    if (x < -1.0 || x > 1.0) then panic("Error: arcsin(x) is undefined for x < -1 or x > 1")
 
     let result: float = 0.0
     for (let n: int = 0; n < terms; n++) {
@@ -45,7 +43,7 @@ let arcsin(x: float, terms: int): float {
         let denom: float = pow(4.0, to_float(n)) * pow(fact(n), 2.0) * to_float(2 * n + 1)
         result += (num / denom) * pow(x, to_float(2 * n + 1))
     }
-    return result
+    result
 }
 
 let cos(x: float, terms: int): float {
@@ -54,23 +52,23 @@ let cos(x: float, terms: int): float {
         let sign: int = ((n % 2) == 0) ? 1 : -1
         result += to_float(sign) * pow(x, to_float(2 * n)) / fact(2 * n)
     }
-    return result
+    result
 }
 
 let sec(x: float, terms: int): float {
-    return 1.0 / cos(x, terms)
+    1.0 / cos(x, terms)
 }
 
 let arccos(x: float, terms: int): float {
-    return pi / 2.0 - arcsin(x, terms)
+    pi / 2.0 - arcsin(x, terms)
 }
 
 let tan(x: float, terms: int): float {
-    return sin(x, terms) / cos(x, terms)
+    sin(x, terms) / cos(x, terms)
 }
 
 let cot(x: float, terms: int): float {
-    return cos(x, terms) / sin(x, terms)
+    cos(x, terms) / sin(x, terms)
 }
 
 let arctan(x: float, terms: int): float {
@@ -78,29 +76,29 @@ let arctan(x: float, terms: int): float {
     for (let n: int = 0; n < terms; n++) {
         result += pow(-1.0, to_float(n)) * pow(x, to_float(2 * n + 1)) / to_float(2 * n + 1)
     }
-    return result
+    result
 }
 
 let wrapAngle(angle: float ): float {
-    return angle % (2.0 * pi)
+    angle % (2.0 * pi)
 }
 
 let sign(x: float): int {
-    return (x > 0.0) ? 1 : (x < 0.0) ? - 1 : 0
+    (x > 0.0) ? 1 : (x < 0.0) ? - 1 : 0
 }
 
 let floor(x: float): float {
     let i: int = to_int(x)
-    return (to_float(i) > x) ? to_float(i - 1) : to_float(i)
+    (to_float(i) > x) ? to_float(i - 1) : to_float(i)
 }
 
 let ceil(x: float): float {
     let i: int = to_int(x)
-    return (to_float(i) < x) ? to_float(i + 1) : to_float(i)
+    (to_float(i) < x) ? to_float(i + 1) : to_float(i)
 }
 
 let round(x: float): float {
-    return floor(x + 0.5)
+    floor(x + 0.5)
 }
 
-print(pi)
+print(round(5.6))

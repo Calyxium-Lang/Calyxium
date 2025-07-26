@@ -1137,6 +1137,27 @@ let run instructions =
             | VBool true -> next ()
             | VBool false -> runtime_error "Assertion failed"
             | _ -> runtime_error "ASSERT expects a boolean value")
+        | PANIC ->
+            push_trace "PANIC";
+            if Stack.is_empty stack then
+              runtime_error "PANIC attempted with empty stack"
+            else
+              let string_of_value = function
+                | VHeapRef id -> (
+                    match Gc.get_string id with
+                    | Some s -> s
+                    | None -> (
+                        match Gc.get_bytes id with
+                        | Some arr ->
+                            String.init (Array.length arr) (Array.get arr)
+                        | None ->
+                            runtime_error
+                              "PANIC: invalid heap reference for string"))
+                | _ -> runtime_error "PANIC expects a string message"
+              in
+              let value = pop1 stack in
+              Printf.eprintf "%s" (string_of_value value);
+              exit 1
         | LOAD_MODULE name ->
             let m =
               match Hashtbl.find_opt stdlib_modules name with

@@ -5,5 +5,4 @@ let fib(n: int): int {
     aux(n, 0, 1)
 }
 
--- this is the max value until I add lazy eval
 print(fib(91))

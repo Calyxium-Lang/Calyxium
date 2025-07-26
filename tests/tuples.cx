@@ -14,7 +14,7 @@ assert(pi == 3.14)
 assert(flag == true)
 
 let pair(x: int, y: int): (int, int) {
-    return (x, y)
+    (x, y)
 }
 
 let px, py: (int, int) = pair(10, 20)
@@ -29,3 +29,13 @@ assert(tp1[0] == 1)
 assert(tp1[1] == "a")
 assert(tp2[0] == true)
 assert(tp2[1] == 3.5)
+
+let nested_tuple: (int, (string, float)) = (42, ("nested", 2.718))
+let n1, n2: (int, (string, float)) = nested_tuple
+assert(n1 == 42)
+assert(n2 == ("nested", 2.718))
+
+let complex: (int, (string, (bool, float))) = (1, ("test", (true, 1.23)))
+let c1, c2: (int, (string, (bool, float))) = complex
+assert(c1 == 1)
+assert(c2 == ("test", (true, 1.23)))

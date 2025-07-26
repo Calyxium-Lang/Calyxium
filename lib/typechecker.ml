@@ -62,6 +62,9 @@ let builtins : (string * (Type.t list * Type.t) list) list =
     ("to_string", [ ([ Any ], SymbolType { value = "string" }) ]);
     ( "assert",
       [ ([ SymbolType { value = "bool" } ], SymbolType { value = "unit" }) ] );
+    ( "panic",
+      [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]
+    );
   ]
 
 let rec type_eq expected actual =
@@ -206,10 +209,13 @@ let rec check_stmt env func_env stmt =
         | BinaryExpr { left; right; _ } ->
             contains_recursive_call fname left
             || contains_recursive_call fname right
-        | IfExpr { condition; then_branch; else_branch } ->
+        | IfExpr { condition; then_branch; else_branch } -> (
             contains_recursive_call fname condition
             || contains_recursive_call fname then_branch
-            || contains_recursive_call fname else_branch
+            ||
+            match else_branch with
+            | Some e -> contains_recursive_call fname e
+            | None -> false)
         | ArrayExpr { elements } ->
             List.exists (contains_recursive_call fname) elements
         | IndexExpr { array; index } ->
@@ -224,13 +230,6 @@ let rec check_stmt env func_env stmt =
         | ExprStmt e -> contains_recursive_call fname e
         | BlockStmt { body } ->
             List.exists (contains_recursive_call_stmt fname) body
-        | IfStmt { condition; then_branch; else_branch } -> (
-            contains_recursive_call fname condition
-            || contains_recursive_call_stmt fname then_branch
-            ||
-            match else_branch with
-            | Some b -> contains_recursive_call_stmt fname b
-            | None -> false)
         | ForStmt { init; condition; increment; body } ->
             (match init with
             | Some s -> contains_recursive_call_stmt fname s
@@ -263,16 +262,6 @@ let rec check_stmt env func_env stmt =
           (function
             | ExprStmt e -> find_return_exprs env func_env e
             | BlockStmt { body } -> gather_return_types env func_env body
-            | IfStmt { condition = _; then_branch; else_branch } ->
-                let then_returns =
-                  gather_return_types env func_env [ then_branch ]
-                in
-                let else_returns =
-                  match else_branch with
-                  | Some b -> gather_return_types env func_env [ b ]
-                  | None -> []
-                in
-                then_returns @ else_returns
             | _ -> [])
           stmts
       in
@@ -308,20 +297,6 @@ let rec check_stmt env func_env stmt =
         List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
       in
       _final_env
-  | IfStmt { condition; then_branch; else_branch } ->
-      let ct = check_expr env func_env condition in
-      if not (type_eq ct (SymbolType { value = "bool" })) then
-        raise
-          (TypeError
-             ("Type error in `if` condition:\n" ^ "  Expected: bool\n"
-            ^ "  Found:    " ^ string_of_type ct));
-      let _ = check_stmt env func_env then_branch in
-      let _ =
-        match else_branch with
-        | Some b -> check_stmt env func_env b
-        | None -> env
-      in
-      env
   | ForStmt { init; condition; increment; body } ->
       let env =
         match init with
@@ -577,7 +552,11 @@ and check_expr env func_env expr =
              ("Type error in `if` expression condition:\n"
             ^ "  Expected: bool\n" ^ "  Found:    " ^ string_of_type ct));
       let t_then = check_expr env func_env then_branch in
-      let t_else = check_expr env func_env else_branch in
+      let t_else =
+        match else_branch with
+        | Some e -> check_expr env func_env e
+        | None -> t_then
+      in
       if not (type_eq t_then t_else) then
         raise
           (TypeError
@@ -714,8 +693,13 @@ and find_return_exprs env func_env expr =
   | ReturnExpr e -> [ check_expr env func_env e ]
   | IfExpr { condition; then_branch; else_branch } ->
       let _ = check_expr env func_env condition in
-      find_return_exprs env func_env then_branch
-      @ find_return_exprs env func_env else_branch
+      let returns_then = find_return_exprs env func_env then_branch in
+      let returns_else =
+        match else_branch with
+        | Some e -> find_return_exprs env func_env e
+        | None -> []
+      in
+      returns_then @ returns_else
   | BinaryExpr { left; operator = _; right } ->
       find_return_exprs env func_env left @ find_return_exprs env func_env right
   | CallExpr { callee; arguments } ->
@@ -741,11 +725,6 @@ and collect_functions stmts =
         in
         overload :: List.remove_assoc name acc
     | BlockStmt { body } -> List.fold_right collect_from_stmt body acc
-    | IfStmt { then_branch; else_branch; _ } -> (
-        let acc = collect_from_stmt then_branch acc in
-        match else_branch with
-        | Some else_stmt -> collect_from_stmt else_stmt acc
-        | None -> acc)
     | ForStmt { init; body; increment; _ } ->
         let acc =
           match init with Some s -> collect_from_stmt s acc | None -> acc

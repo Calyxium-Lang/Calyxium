@@ -20,7 +20,7 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Return For Use Module True False Enum Int64Type FloatType StringType ByteType BoolType UnitType
+%token Recursive If Then Else Let Match With For Use Module True False Enum Int64Type FloatType StringType ByteType BoolType UnitType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
@@ -52,7 +52,6 @@ stmt:
   | VarDeclStmt { $1 }
   | ImportStmt { $1 }
   | FunctionDeclStmt { $1 }
-  | IfStmt { $1 }
   | ForStmt { $1 }
   | ModuleStmt { $1 }
   | EnumStmt { $1 }
@@ -151,8 +150,8 @@ expr:
   | BitWiseNOT expr %prec NotPrec { Expr.UnaryExpr { operator = Token.BitWiseNOT; operand = $2 } }
   | expr Pipeline expr { Expr.PipelineExpr { left = $1; right = $3 } }
   | Match expr With case_list { Expr.MatchExpr { expr = $2; cases = $4; } }
-  | Return expr { Expr.ReturnExpr $2 }
-  | If expr Then expr Else expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = $6; } }
+  | If expr Then expr Else expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = Some $6; } }
+  | If expr Then expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = None; } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }
@@ -189,10 +188,6 @@ FunctionDeclStmt:
   | Let Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = $7; body = $9 } }
   | Let Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = $8; body = $10 } }
   | Let Ident LParen RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = $6; body = $8 } }
-
-IfStmt:
-  | If LParen expr RParen LBrace stmt_list RBrace Else LBrace stmt_list RBrace { Stmt.IfStmt { condition = $3; then_branch = Stmt.BlockStmt { body = $6 }; else_branch = Some (Stmt.BlockStmt { body = $10 }) } }
-  | If LParen expr RParen LBrace stmt_list RBrace { Stmt.IfStmt { condition = $3; then_branch = Stmt.BlockStmt { body = $6 }; else_branch = None } }
 
 ForStmt:
   | For LParen stmt_opt Semi expr_opt Semi stmt_opt RParen LBrace stmt_list RBrace { let default_condition = Expr.BoolExpr { value = true } in let increment_stmt = match $7 with | None -> (match $3 with | Some (Stmt.VarDeclarationStmt { identifier; _ }) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr identifier })) | Some (Stmt.ExprStmt (Expr.VarExpr var_name)) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr var_name })) | _ -> None) | Some (Stmt.ExprStmt expr) -> Some (Stmt.ExprStmt expr) | Some _ -> None in Stmt.ForStmt { init = $3; condition = Option.value ~default:default_condition $5; increment = increment_stmt; body = Stmt.BlockStmt { body = $10 } } }

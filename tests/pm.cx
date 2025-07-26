@@ -46,13 +46,11 @@ assert(parity(4) == "even")
 assert(parity(5) == "odd")
 
 let check(n: int): string {
-    if (n > 10) {
+    if n > 10 then
         match n with
             | 42 -> "magic"
             | _ -> "big"
-    } else {
-        return "small"
-    }
+    else "small"
 }
 
 assert(check(5) == "small")
@@ -84,11 +82,9 @@ assert(sign(0) == "non-positive")
 assert(sign(-3) == "non-positive")
 
 let nested(n: int): string {
-    if (n > 0) {
-        if n > 10 then "big positive" else "small positive"
-    } else {
-        return "non-positive"
-    }
+    if n > 0 then
+        if n > 10 then "big positive" else "small positive" 
+    else "non-positive"
 }
 
 assert(nested(5) == "small positive")
@@ -104,3 +100,37 @@ let fancy(n: int): string {
 assert(fancy(-1) == "negative")
 assert(fancy(0) == "zero")
 assert(fancy(5) == "positive")
+
+let complex_match(x: (int, string)): string {
+    match x with
+        | (0, "zero") -> "zero pair"
+        | (1, "one") -> "one pair"
+        | _ -> "other pair"
+}
+
+assert(complex_match((0, "zero")) == "zero pair")
+assert(complex_match((1, "one")) == "one pair")
+assert(complex_match((2, "two")) == "other pair")
+
+let nested_match(x: (int, (string, bool))): string {
+    match x with
+        | (0, ("zero", true)) -> "zero true"
+        | (1, ("one", false)) -> "one false"
+        | _ -> "other"
+}
+
+assert(nested_match((0, ("zero", true))) == "zero true")
+assert(nested_match((1, ("one", false))) == "one false")
+assert(nested_match((2, ("two", true))) == "other")
+
+let then_branch(n: int): string {
+    if n > 0 then
+        match n with
+            | 1 -> "one"
+            | 2 -> "two"
+            | _ -> "many"
+}
+
+assert(then_branch(1) == "one")
+assert(then_branch(2) == "two")
+assert(then_branch(3) == "many")

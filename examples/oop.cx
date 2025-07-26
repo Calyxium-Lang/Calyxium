@@ -1,5 +1,27 @@
-enum Week {
-    Monday, Tuesday, wednesday, thursday, Friday, Saturday, Sunday
+-- enum Week {
+--     Monday, Tuesday, wednesday, thursday, Friday, Saturday, Sunday
+-- }
+
+-- print(Week.Monday)
+
+
+-- class Animals {
+--     let speak(): string {
+--         "..."
+--     }
+-- }
+
+-- class Dog extends Aniamls {
+--     let speak(): string {
+--         "Woof!"
+--     }
+-- }
+
+struct Person {
+    let name: string = "John Doe"
+    let age: int = 30
 }
 
-print(Week.Monday)
+-- $ creates an instance of Person and prints its name $
+
+print(Person.name)

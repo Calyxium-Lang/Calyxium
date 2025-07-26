@@ -1,3 +1,12 @@
-use Math.sin
+let fancy(n: int): string {
+    if n < 0 then "negative"
+    else
+        match n with
+        | 0 -> "zero"
+        | _ -> "positive"
+}
 
-print(sin(0.5))
+let nested(n: int): string {
+    if n > 0 then
+        if n > 10 then "big positive" else "small positive" else "non-positive"
+}
