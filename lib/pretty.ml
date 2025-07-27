@@ -4,31 +4,56 @@ let indent_level = ref 0
 let indent () = String.make (!indent_level * 4) ' '
 
 let token_to_string = function
-  | Token.Less -> "<"
-  | Token.Greater -> ">"
-  | Token.Assign -> "="
-  | Token.Plus -> "+"
-  | Token.Minus -> "-"
-  | Token.Star -> "*"
-  | Token.Slash -> "/"
-  | Token.Mod -> "%"
   | Token.Eq -> "=="
   | Token.Neq -> "!="
   | Token.Leq -> "<="
   | Token.Geq -> ">="
   | Token.LogicalAnd -> "&&"
   | Token.LogicalOr -> "||"
-  | Token.Not -> "!"
-  | Token.Comma -> ","
-  | Token.Semi -> ";"
-  | Token.Colon -> ":"
-  | Token.Dot -> "."
+  | Token.Pow -> "**"
+  | Token.Inc -> "++"
+  | Token.Dec -> "--"
+  | Token.MapsTo -> "->"
+  | Token.PlusAssign -> "+="
+  | Token.MinusAssign -> "-="
+  | Token.StarAssign -> "*="
+  | Token.SlashAssign -> "/="
+  | Token.BitWiseANDAssign -> "&="
+  | Token.BitWiseORAssign -> "$="
+  | Token.BitWiseXORAssign -> "`="
+  | Token.Pipeline -> "|>"
+  | Token.LeftShiftAssign -> "<<="
+  | Token.RightShiftAssign -> ">>="
+  | Token.Plus -> "+"
+  | Token.Minus -> "-"
+  | Token.Star -> "*"
+  | Token.Slash -> "/"
+  | Token.Mod -> "%"
+  | Token.Carot -> "^"
+  | Token.Assign -> "="
+  | Token.Less -> "<"
+  | Token.Greater -> ">"
   | Token.LParen -> "("
   | Token.RParen -> ")"
-  | Token.LBrace -> "{"
-  | Token.RBrace -> "}"
   | Token.RBracket -> "]"
   | Token.LBracket -> "["
+  | Token.LBrace -> "{"
+  | Token.RBrace -> "}"
+  | Token.Dot -> "."
+  | Token.Colon -> ":"
+  | Token.Semi -> ";"
+  | Token.Comma -> ","
+  | Token.Not -> "!"
+  | Token.Pipe -> "|"
+  | Token.UnderScore -> "_"
+  | Token.Question -> "?"
+  | Token.BitWiseOR -> "`"
+  | Token.BitWiseAND -> "&"
+  | Token.BitWiseNOT -> "~"
+  | Token.BitWiseXOR -> "$"
+  | Token.LeftShift -> "<<"
+  | Token.RightShift -> ">>"
+  | Token.RightShiftLogical -> ">>>"
   | _ -> "<unknown>"
 
 let rec string_of_type t =
@@ -39,6 +64,7 @@ let rec string_of_type t =
   | Type.FunctionType (params, ret) ->
       let params_str = String.concat ", " (List.map string_of_type params) in
       Printf.sprintf "(%s) -> %s" params_str (string_of_type ret)
+  | Type.ArrayType { element_type } -> "[]" ^ string_of_type element_type
   | _ -> "<type>"
 
 let string_of_parameter (param : Stmt.parameter) =
@@ -47,7 +73,9 @@ let string_of_parameter (param : Stmt.parameter) =
 let rec string_of_expr = function
   | Expr.Int64Expr { value } -> Int64.to_string value
   | Expr.FloatExpr { value } -> string_of_float value
-  | Expr.StringExpr { value } -> Printf.sprintf "\"%s\"" value
+  | Expr.StringExpr { value } ->
+      let escaped = String.escaped value in
+      Printf.sprintf "\"%s\"" escaped
   | Expr.BoolExpr { value } -> string_of_bool value
   | Expr.ByteExpr { value } -> Printf.sprintf "'%c'" value
   | Expr.VarExpr name -> name
@@ -93,10 +121,31 @@ let rec string_of_expr = function
           cases
       in
       Printf.sprintf "match %s with\n%s" expr_str (String.concat "\n" case_strs)
+  | Expr.ArrayExpr { elements } ->
+      let elems = elements |> List.map string_of_expr |> String.concat ", " in
+      "{ " ^ elems ^ " }"
+  | Expr.CallExpr { callee; arguments } ->
+      let callee_str = string_of_expr callee in
+      let args_str =
+        arguments |> List.map string_of_expr |> String.concat ", "
+      in
+      Printf.sprintf "%s(%s)" callee_str args_str
+  | Expr.UnaryExpr { operator; operand } ->
+      let op_str = token_to_string operator in
+      let operand_str = string_of_expr operand in
+      Printf.sprintf "%s%s" op_str operand_str
   | _ -> raise (Failure "Unsupported expression type")
 
 let rec string_of_stmt = function
   | Stmt.ExprStmt expr -> indent () ^ string_of_expr expr
+  | Stmt.VarDeclarationStmt { identifier; explicit_type; assigned_value } ->
+      let type_str = string_of_type explicit_type in
+      let value_str =
+        match assigned_value with
+        | Some v -> " = " ^ string_of_expr v
+        | None -> ""
+      in
+      indent () ^ Printf.sprintf "let %s: %s%s" identifier type_str value_str
   | Stmt.FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
       let rec_keyword = if is_rec then "rec " else "" in
       let params_str =
@@ -120,6 +169,12 @@ let rec string_of_stmt = function
       decr indent_level;
       let footer = indent () ^ "}" in
       String.concat "\n" [ header; body_str; footer ]
+  | Stmt.EnumStmt { name; members } ->
+      let members_str = String.concat ", " members in
+      let header = Printf.sprintf "enum %s {" name in
+      let body = indent () ^ "    " ^ members_str in
+      let footer = indent () ^ "}" in
+      String.concat "\n" [ indent () ^ header; body; footer ]
   | _ -> raise (Failure "Unsupported statement type")
 
 let string_of_program (stmts : Stmt.t list) : string =

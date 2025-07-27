@@ -1,6 +1,7 @@
--- $Id: tests/byte.cx $
+-- Id: tests/byte.cx
 
--- $ basic test for bytes $
+-- basic test for bytes
+
 let a: byte = 'A'
 assert(a == 'A')
 

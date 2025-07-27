@@ -1,3 +1,7 @@
+--  Id: tests/pipeline.cx 
+
+-- basic pipeline test
+
 let double(x: int): int {
     x * 2
 }

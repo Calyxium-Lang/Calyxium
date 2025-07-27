@@ -1,6 +1,7 @@
--- $Id: tests/pemdas.cx $
+-- Id: tests/pemdas.cx
 
--- $ basic order of operations test $
+-- basic order of operations test
+
 assert(1 + 2 * 3 == 7)
 assert((1 + 2) * 3 == 9)
 assert(10 / 2 + 3 == 8)

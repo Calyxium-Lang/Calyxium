@@ -2,3 +2,10 @@
  (name calyxium)
  (public_name calyxium)
  (libraries calyxium_stdlib calyxiumlib))
+
+; (executable
+;  (name calyxium_js)
+;  (libraries js_of_ocaml calyxiumlib calyxium_stdlib)
+;  (preprocess
+;   (pps js_of_ocaml-ppx))
+;  (modes js))

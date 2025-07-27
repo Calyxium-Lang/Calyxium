@@ -221,7 +221,6 @@ let rec check_stmt env func_env stmt =
         | IndexExpr { array; index } ->
             contains_recursive_call fname array
             || contains_recursive_call fname index
-        | ReturnExpr e -> contains_recursive_call fname e
         | _ -> false
       in
       let rec contains_recursive_call_stmt fname stmt =
@@ -564,7 +563,6 @@ and check_expr env func_env expr =
             ^ string_of_type t_then ^ "\n" ^ "  Else branch: "
             ^ string_of_type t_else));
       t_then
-  | ReturnExpr expr -> check_expr env func_env expr
   | DotExpr { left; right } -> (
       let _ = check_expr env func_env left in
       match left with
@@ -690,7 +688,6 @@ and check_expr env func_env expr =
 and find_return_exprs env func_env expr =
   let open Expr in
   match expr with
-  | ReturnExpr e -> [ check_expr env func_env e ]
   | IfExpr { condition; then_branch; else_branch } ->
       let _ = check_expr env func_env condition in
       let returns_then = find_return_exprs env func_env then_branch in

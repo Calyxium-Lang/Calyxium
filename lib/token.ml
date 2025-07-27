@@ -37,8 +37,10 @@ type t =
   | Pipe
   | UnderScore
   | Function
+  | Question
   | Recursive
   | If
+  | Then
   | Else
   | Let
   | Match
@@ -51,14 +53,14 @@ type t =
   | False
   | Enum
   | Ref
-  | IntType
+  | Int64Type
   | FloatType
   | StringType
   | ByteType
   | BoolType
   | UnitType
-  | Identifier of string
-  | Int of int64
+  | Ident of string
+  | Int64 of int64
   | Float of float
   | String of string
   | Byte of char

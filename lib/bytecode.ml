@@ -182,10 +182,6 @@ and compile_expr = function
           let left_code = compile_expr left in
           let right_code = compile_expr right in
           left_code @ right_code @ [ opcode_of_binop operator ])
-  | ReturnExpr (CallExpr { callee = VarExpr name; arguments }) ->
-      let args_bytecode = List.concat (List.map compile_expr arguments) in
-      args_bytecode @ [ TAIL_CALL name ]
-  | ReturnExpr expr -> compile_expr expr @ [ RETURN ]
   | CallExpr { callee; arguments } -> (
       let args_bytecode = List.concat (List.map compile_expr arguments) in
       match callee with

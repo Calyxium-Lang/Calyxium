@@ -1,6 +1,7 @@
--- $Id: tests/ternay.cx $
+-- Id: tests/ternay.cx
 
--- $ basic tests for ternay $
+-- basic tests for ternay
+
 let a, b: int = 10, 20
 
 let max: int = (a > b) ? a : b

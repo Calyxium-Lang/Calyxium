@@ -1,11 +1,12 @@
--- $Id: tests/enum.cx $
+-- Id: tests/enum.cx
 
--- $ basic tests for enum $
+-- basic tests for enum
+
 enum Week {
     Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
 }
 
-let week_names: []string = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
+let week_names: []string = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" }
 
 let week_to_string(day: Week): string {
     week_names[day]

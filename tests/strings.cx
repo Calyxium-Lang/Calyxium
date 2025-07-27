@@ -1,6 +1,7 @@
--- $Id: tests/strings.cx $
+-- Id: tests/strings.cx
 
--- $ basic operations for string $
+-- basic operations for string
+
 let a, b: string = "Hello", "world"
 
 let c: string = a ^ " " ^ b

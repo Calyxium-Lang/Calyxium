@@ -4,7 +4,7 @@
   let at_line_start = ref true
 }
 
-let whitespace = [' ' '\t']
+let whitespace = [' ' '\t' '\r']
 let newline = '\n'
 let identifier = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 let digits = ['0'-'9']+

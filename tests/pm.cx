@@ -1,6 +1,7 @@
--- $Id: tests/pm.cx $
+-- Id: tests/pm.cx
 
--- $ basic tests for pattern matching $
+-- basic tests for pattern matching
+
 enum Colors {
     Red, Blue, Green
 }

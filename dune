@@ -6,6 +6,6 @@
    (:standard -safe-string -strict-formats)))
  (release
   (ocamlopt_flags
-   (:standard -O2 -compact -unbox-closures))
+   (:standard -O3 -compact -unbox-closures -noassert -nodynlink))
   (flags
    (:standard -safe-string -strict-formats))))

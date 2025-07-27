@@ -1,6 +1,7 @@
--- $Id: tests/tuples.cx $
+-- Id: tests/tuples.cx
 
--- $ basic tests for tuples $
+-- basic tests for tuples
+
 let t1: (int, int) = (1, 2)
 let t2: (string, float, bool) = ("hello", 3.14, true)
 
@@ -39,3 +40,15 @@ let complex: (int, (string, (bool, float))) = (1, ("test", (true, 1.23)))
 let c1, c2: (int, (string, (bool, float))) = complex
 assert(c1 == 1)
 assert(c2 == ("test", (true, 1.23)))
+
+let if_return(x: int, y: int): (int, int) {
+    if x == 0 then (1, 2) else (x, y)
+}
+
+let e1, e2: (int, int) = if_return(5, 1)
+assert(e1 == 5)
+assert(e2 == 1)
+
+let f1, f2: (int, int) = if_return(0, 1)
+assert(f1 == 1)
+assert(f2 == 2)

@@ -95,7 +95,6 @@ and Expr : sig
     | ArrayExpr of { elements : t list }
     | IndexExpr of { array : t; index : t }
     | IfExpr of { condition : t; then_branch : t; else_branch : t option }
-    | ReturnExpr of t
     | DotExpr of { left : t; right : string }
     | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
     | TupleExpr of t list
@@ -116,7 +115,6 @@ end = struct
     | ArrayExpr of { elements : t list }
     | IndexExpr of { array : t; index : t }
     | IfExpr of { condition : t; then_branch : t; else_branch : t option }
-    | ReturnExpr of t
     | DotExpr of { left : t; right : string }
     | TernaryExpr of { cond : t; onTrue : t; onFalse : t }
     | TupleExpr of t list
