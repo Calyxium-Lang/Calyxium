@@ -20,11 +20,14 @@
   uint64
   init
   formatter
-  pretty)
+  pretty
+  toml_config)
  (foreign_stubs
   (language c)
   (names uint32 uint64))
- (libraries calyxium_stdlib unix))
+ (libraries calyxium_stdlib unix)
+ (preprocess
+  (pps ppx_deriving.show)))
 
 (ocamllex lexer)
 

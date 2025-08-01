@@ -21,7 +21,7 @@
 %nonassoc LowPrec
 
 %token Recursive If Then Else Let Match With For Use Module True False Enum Int64Type FloatType StringType ByteType BoolType UnitType
-%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline
+%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
 %token BitWiseANDAssign BitWiseORAssign BitWiseXORAssign
@@ -152,6 +152,8 @@ expr:
   | Match expr With case_list { Expr.MatchExpr { expr = $2; cases = $4; } }
   | If expr Then expr Else expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = Some $6; } }
   | If expr Then expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = None; } }
+  | LBrace expr Range RBrace { Expr.RangeExpr { start = Some $2; end_ = None } }
+  | LBrace expr Range expr RBrace { Expr.RangeExpr { start = Some $2; end_ = Some $4 } }
 
 expr_list:
   | expr Comma expr_list { $1 :: $3 }

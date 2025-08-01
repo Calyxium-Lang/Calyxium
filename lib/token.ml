@@ -81,4 +81,5 @@ type t =
   | LeftShiftAssign
   | RightShiftAssign
   | Pipeline
+  | Range
   | EOF

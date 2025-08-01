@@ -7,7 +7,7 @@ exception RuntimeError of string
 type trace_entry = { instr : string }
 
 type frame = {
-  code : opcode array;
+  mutable code : opcode array;
   mutable pc : int;
   mutable env : (string * (value * bool)) list;
 }
@@ -228,6 +228,8 @@ let safe_shift_left a b =
     if expected <> a then runtime_error "Integer overflow in shift left"
     else res
 
+let rec force v = match v with VThunk f -> force (f ()) | v -> v
+
 let reset_vm_state () =
   Stack.clear stack;
   global_env := [];
@@ -282,105 +284,135 @@ let run instructions =
                ^ " values on the stack")
             else
               let items = pop_n_rev [] n in
-              Stack.push (VTuple items) stack;
+              Stack.push
+                (VThunk (fun () -> VTuple (List.map force items)))
+                stack;
               next ()
         | LOAD_VAR name ->
             push_trace ("LOAD_VAR " ^ name);
-            Stack.push (get_var frame.env name) stack;
+            let v = get_var frame.env name in
+            Stack.push (force v) stack;
             next ()
         | PLUS ->
             push_trace "PLUS";
             let a, b = pop2_safe stack in
-            (match (a, b) with
-            | VFloat a, VFloat b ->
-                let res = a +. b in
-                if
-                  classify_float res = FP_nan
-                  || classify_float res = FP_infinite
-                then runtime_error "Float overflow in addition"
-                else Stack.push (VFloat res) stack
-            | VInt64 a, VInt64 b ->
-                let res = safe_add a b in
-                Stack.push (VInt64 res) stack
-            | _ -> runtime_error "PLUS expects numbers");
+            Stack.push
+              (VThunk
+                 (fun () ->
+                   match (force a, force b) with
+                   | VFloat a, VFloat b ->
+                       let res = a +. b in
+                       if
+                         classify_float res = FP_nan
+                         || classify_float res = FP_infinite
+                       then runtime_error "Float overflow in addition"
+                       else VFloat res
+                   | VInt64 a, VInt64 b -> VInt64 (safe_add a b)
+                   | _ -> runtime_error "PLUS expects numbers"))
+              stack;
             next ()
         | MINUS ->
             push_trace "MINUS";
             let a, b = pop2_safe stack in
-            (match (a, b) with
-            | VFloat a, VFloat b ->
-                let res = a -. b in
-                if
-                  classify_float res = FP_nan
-                  || classify_float res = FP_infinite
-                then runtime_error "Float overflow in subtraction"
-                else Stack.push (VFloat res) stack
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (safe_sub a b)) stack
-            | _ -> runtime_error "MINUS expects numbers");
+            Stack.push
+              (VThunk
+                 (fun () ->
+                   match (force a, force b) with
+                   | VFloat a, VFloat b ->
+                       let res = a -. b in
+                       if
+                         classify_float res = FP_nan
+                         || classify_float res = FP_infinite
+                       then runtime_error "Float overflow in subtraction"
+                       else VFloat res
+                   | VInt64 a, VInt64 b -> VInt64 (safe_sub a b)
+                   | _ -> runtime_error "MINUS expects numbers"))
+              stack;
             next ()
         | STAR ->
             push_trace "STAR";
             let a, b = pop2_safe stack in
-            (match (a, b) with
-            | VFloat a, VFloat b ->
-                let res = a *. b in
-                if
-                  classify_float res = FP_nan
-                  || classify_float res = FP_infinite
-                then runtime_error "Float overflow in multiplication"
-                else Stack.push (VFloat res) stack
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (safe_mul a b)) stack
-            | _ -> runtime_error "STAR expects numbers");
+            Stack.push
+              (VThunk
+                 (fun () ->
+                   match (force a, force b) with
+                   | VFloat a, VFloat b ->
+                       let res = a *. b in
+                       if
+                         classify_float res = FP_nan
+                         || classify_float res = FP_infinite
+                       then runtime_error "Float overflow in multiplication"
+                       else VFloat res
+                   | VInt64 a, VInt64 b -> VInt64 (safe_mul a b)
+                   | _ -> runtime_error "STAR expects numbers"))
+              stack;
             next ()
         | SLASH ->
             push_trace "SLASH";
             let a, b = pop2_safe stack in
-            (match (a, b) with
-            | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
-            | VInt64 _, VInt64 0L -> runtime_error "Division by zero"
-            | VFloat a, VFloat b ->
-                let res = a /. b in
-                if
-                  classify_float res = FP_nan
-                  || classify_float res = FP_infinite
-                then runtime_error "Float overflow in division"
-                else Stack.push (VFloat res) stack
-            | VInt64 a, VInt64 b ->
-                if a = Int64.min_int && b = -1L then
-                  runtime_error "Integer overflow in division"
-                else Stack.push (VInt64 (Int64.div a b)) stack
-            | _ -> runtime_error "SLASH expects numbers");
+            Stack.push
+              (VThunk
+                 (fun () ->
+                   match (force a, force b) with
+                   | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
+                   | VInt64 _, VInt64 0L -> runtime_error "Division by zero"
+                   | VFloat a, VFloat b ->
+                       let res = a /. b in
+                       if
+                         classify_float res = FP_nan
+                         || classify_float res = FP_infinite
+                       then runtime_error "Float overflow in division"
+                       else VFloat res
+                   | VInt64 a, VInt64 b ->
+                       if a = Int64.min_int && b = -1L then
+                         runtime_error "Integer overflow in division"
+                       else VInt64 (Int64.div a b)
+                   | _ -> runtime_error "SLASH expects numbers"))
+              stack;
             next ()
         | MOD ->
             push_trace "MOD";
             let a, b = pop2_safe stack in
-            (match (a, b) with
-            | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
-            | VInt64 _, VInt64 0L -> runtime_error "Modulo by zero"
-            | VFloat a, VFloat b -> Stack.push (VFloat (mod_float a b)) stack
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.rem a b)) stack
-            | _ -> runtime_error "MOD expects numbers");
+            Stack.push
+              (VThunk
+                 (fun () ->
+                   match (force a, force b) with
+                   | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
+                   | VInt64 _, VInt64 0L -> runtime_error "Modulo by zero"
+                   | VFloat a, VFloat b -> VFloat (mod_float a b)
+                   | VInt64 a, VInt64 b -> VInt64 (Int64.rem a b)
+                   | _ -> runtime_error "MOD expects numbers"))
+              stack;
             next ()
         | POW ->
             push_trace "POW";
             let a, b = pop2_safe stack in
-            (match (a, b) with
-            | VFloat a, VFloat b -> Stack.push (VFloat (a ** b)) stack
-            | VInt64 a, VInt64 b -> (
-                if b < 0L then runtime_error "POW expects non-negative exponent"
-                else
-                  try Stack.push (VInt64 (int64_pow a b)) stack
-                  with _ -> runtime_error "POW overflow")
-            | _ -> runtime_error "POW expects numbers");
+            Stack.push
+              (VThunk
+                 (fun () ->
+                   match (force a, force b) with
+                   | VFloat a, VFloat b -> VFloat (a ** b)
+                   | VInt64 a, VInt64 b -> (
+                       if b < 0L then
+                         runtime_error "POW expects non-negative exponent"
+                       else
+                         try VInt64 (int64_pow a b)
+                         with _ -> runtime_error "POW overflow")
+                   | _ -> runtime_error "POW expects numbers"))
+              stack;
             next ()
         | CONCAT ->
             push_trace "CONCAT";
             let a, b = pop2_safe stack in
-            let result =
-              get_string_from_stack_value a ^ get_string_from_stack_value b
-            in
-            let v = Gc.alloc_string_with_gc stack frame.env result in
-            Stack.push v stack;
+            Stack.push
+              (VThunk
+                 (fun () ->
+                   let result =
+                     get_string_from_stack_value (force a)
+                     ^ get_string_from_stack_value (force b)
+                   in
+                   Gc.alloc_string_with_gc stack frame.env result))
+              stack;
             next ()
         | JUMP_IF_FALSE offset -> (
             push_trace ("JUMP_IF_FALSE " ^ string_of_int offset);
@@ -395,6 +427,7 @@ let run instructions =
         | LESS ->
             push_trace "LESS";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a < b)
@@ -406,6 +439,7 @@ let run instructions =
         | GREATER ->
             push_trace "GREATER";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a > b)
@@ -417,6 +451,7 @@ let run instructions =
         | LESS_EQUAL ->
             push_trace "LESS_EQUAL";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a <= b)
@@ -428,6 +463,7 @@ let run instructions =
         | GREATER_EQUAL ->
             push_trace "GREATER_EQUAL";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a >= b)
@@ -439,18 +475,21 @@ let run instructions =
         | NOT_EQUAL ->
             push_trace "NOT_EQUAL";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             let result = not_equal_value a b in
             Stack.push (VBool result) stack;
             next ()
         | EQUAL ->
             push_trace "EQUAL";
             let b, a = pop2_safe stack in
+            let a, b = (force a, force b) in
             let result = equal_value a b in
             Stack.push (VBool result) stack;
             next ()
         | AND ->
             push_trace "AND";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
@@ -462,6 +501,7 @@ let run instructions =
         | OR ->
             push_trace "OR";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
@@ -472,7 +512,7 @@ let run instructions =
             next ()
         | NOT ->
             push_trace "NOT";
-            let v = pop1 stack in
+            let v = force (pop1 stack) in
             let bool_val =
               match v with
               | VFloat f -> f <> 0.0
@@ -483,7 +523,7 @@ let run instructions =
             next ()
         | INC ->
             push_trace "INC";
-            let v = pop1 stack in
+            let v = force (pop1 stack) in
             let result =
               match v with
               | VFloat f ->
@@ -500,7 +540,7 @@ let run instructions =
             next ()
         | DEC ->
             push_trace "DEC";
-            let v = pop1 stack in
+            let v = force (pop1 stack) in
             let result =
               match v with
               | VFloat f ->
@@ -534,7 +574,9 @@ let run instructions =
                ^ " elements on stack")
             else
               let items = pop_n_rev [] length in
-              Stack.push (VArray items) stack;
+              Stack.push
+                (VThunk (fun () -> VArray (List.map force items)))
+                stack;
               next ()
         | LOAD_INDEX ->
             push_trace "LOAD_INDEX";
@@ -542,12 +584,14 @@ let run instructions =
               runtime_error
                 "LOAD_INDEX requires two values on the stack (collection, \
                  index)";
+            let index_val = pop1 stack in
+            let collection_val = pop1 stack in
             let index =
-              match pop1 stack with
+              match force index_val with
               | VInt64 i -> Int64.to_int i
               | _ -> runtime_error "Expected int for index in LOAD_INDEX"
             in
-            let collection = pop1 stack in
+            let collection = force collection_val in
             let item =
               match collection with
               | VArray items ->
@@ -578,13 +622,28 @@ let run instructions =
                       else VByte arr.(index)
                   | _ ->
                       runtime_error
-                        "Expected array, tuple, string, or bytes for LOAD_INDEX"
-                  )
+                        "Expected array, tuple, string, bytes, or range for \
+                         LOAD_INDEX")
+              | VRange id -> (
+                  match Gc.find_heap_obj id with
+                  | Gc.HRange { current; step; end_ } -> (
+                      let elem =
+                        Int64.add current (Int64.mul step (Int64.of_int index))
+                      in
+                      match end_ with
+                      | Some e
+                        when (step >= 0L && elem > e) || (step < 0L && elem < e)
+                        ->
+                          runtime_error
+                            "Index out of bounds in LOAD_INDEX for range"
+                      | _ -> VInt64 elem)
+                  | _ -> runtime_error "Expected range for VRange")
               | _ ->
                   runtime_error
-                    "Expected array, tuple, string, or bytes for LOAD_INDEX"
+                    "Expected array, tuple, string, bytes, or range for \
+                     LOAD_INDEX"
             in
-            Stack.push item stack;
+            Stack.push (VThunk (fun () -> item)) stack;
             next ()
         | FUNCTION _ ->
             let rec skip_function pc =
@@ -609,8 +668,12 @@ let run instructions =
                 ^ string_of_int (Stack.length stack));
 
             let args = pop_n [] arg_count in
+            let thunk_args =
+              List.map (fun v -> VThunk (fun () -> force v)) args
+            in
             let local_env =
-              List.combine param_names (List.map (fun v -> (v, true)) args)
+              List.combine param_names
+                (List.map (fun v -> (v, true)) thunk_args)
             in
 
             let roots = Gc.get_stack_roots stack in
@@ -642,8 +705,10 @@ let run instructions =
             let skip_header = 1 + arg_count in
             let body = List.drop skip_header function_body in
             let code = Array.of_list body in
-            ignore (pop1 frame_stack);
-            Stack.push { code; pc = 0; env = local_env } frame_stack
+            let frame = Stack.top frame_stack in
+            frame.code <- code;
+            frame.pc <- 0;
+            frame.env <- local_env
         | RETURN ->
             push_trace "RETURN";
             let return_value =
@@ -657,13 +722,15 @@ let run instructions =
               runtime_error ("STORE_VAR '" ^ name ^ "' failed: stack is empty")
             else
               let value = pop1 stack in
+              let lazy_value = VThunk (fun () -> force value) in
               if List.mem_assoc name frame.env then (
                 frame.env <-
-                  (name, (value, true)) :: List.remove_assoc name frame.env;
+                  (name, (lazy_value, true)) :: List.remove_assoc name frame.env;
                 next ())
               else (
                 global_env :=
-                  (name, (value, true)) :: List.remove_assoc name !global_env;
+                  (name, (lazy_value, true))
+                  :: List.remove_assoc name !global_env;
                 next ())
         | PRINT ->
             push_trace "PRINT";
@@ -705,8 +772,10 @@ let run instructions =
                 | VModule _ -> "<module>"
                 | VNative _ -> "<native function>"
                 | VClosure name -> "<function " ^ name ^ ">"
+                | VThunk _ -> "<thunk>"
+                | VRange _ -> "<range>"
               in
-              let value = pop1 stack in
+              let value = force (pop1 stack) in
               safe_push_output (string_of_value value);
               next ()
         | INPUT -> (
@@ -736,7 +805,7 @@ let run instructions =
               | None -> runtime_error "Invalid prompt ID for INPUT")
         | NEG ->
             push_trace "NEG";
-            let v = pop1 stack in
+            let v = force (pop1 stack) in
             (match v with
             | VFloat f ->
                 let res = -.f in
@@ -849,8 +918,8 @@ let run instructions =
             next ()
         | PLUSASSIGN ->
             push_trace "PLUSASSIGN";
-            let value = pop1 stack in
-            let var = pop1 stack in
+            let value = force (pop1 stack) in
+            let var = force (pop1 stack) in
             let name =
               match var with
               | VHeapRef id -> (
@@ -861,7 +930,7 @@ let run instructions =
                         "PLUSASSIGN: invalid variable name reference")
               | _ -> runtime_error "PLUSASSIGN: expected variable name"
             in
-            let old_value = get_var frame.env name in
+            let old_value = force (get_var frame.env name) in
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf +. newf)
@@ -873,8 +942,8 @@ let run instructions =
             next ()
         | MINUSASSIGN ->
             push_trace "MINUSASSIGN";
-            let value = pop1 stack in
-            let var = pop1 stack in
+            let value = force (pop1 stack) in
+            let var = force (pop1 stack) in
             let name =
               match var with
               | VHeapRef id -> (
@@ -885,7 +954,7 @@ let run instructions =
                         "MINUSASSIGN: invalid variable name reference")
               | _ -> runtime_error "MINUSASSIGN: expected variable name"
             in
-            let old_value = get_var frame.env name in
+            let old_value = force (get_var frame.env name) in
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf -. newf)
@@ -896,8 +965,8 @@ let run instructions =
             next ()
         | STARASSIGN ->
             push_trace "STARASSIGN";
-            let value = pop1 stack in
-            let var = pop1 stack in
+            let value = force (pop1 stack) in
+            let var = force (pop1 stack) in
             let name =
               match var with
               | VHeapRef id -> (
@@ -908,7 +977,7 @@ let run instructions =
                         "STARASSIGN: invalid variable name reference")
               | _ -> runtime_error "STARASSIGN: expected variable name"
             in
-            let old_value = get_var frame.env name in
+            let old_value = force (get_var frame.env name) in
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf *. newf)
@@ -919,8 +988,8 @@ let run instructions =
             next ()
         | SLASHASSIGN ->
             push_trace "SLASHASSIGN";
-            let value = pop1 stack in
-            let var = pop1 stack in
+            let value = force (pop1 stack) in
+            let var = force (pop1 stack) in
             let name =
               match var with
               | VHeapRef id -> (
@@ -931,7 +1000,7 @@ let run instructions =
                         "SLASHASSIGN: invalid variable name reference")
               | _ -> runtime_error "SLASHASSIGN: expected variable name"
             in
-            let old_value = get_var frame.env name in
+            let old_value = force (get_var frame.env name) in
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf ->
@@ -977,7 +1046,7 @@ let run instructions =
               next ()
         | BITWISENOT ->
             push_trace "BITWISE_NOT";
-            let v = pop1 stack in
+            let v = force (pop1 stack) in
             (match v with
             | VInt64 i -> Stack.push (VInt64 (Int64.lognot i)) stack
             | _ -> runtime_error "BITWISE_NOT expects an int64");
@@ -985,6 +1054,7 @@ let run instructions =
         | BITWISEAND ->
             push_trace "BITWISE_AND";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             (match (a, b) with
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logand a b)) stack
             | _ -> runtime_error "BITWISE_AND expects int64 operands");
@@ -992,6 +1062,7 @@ let run instructions =
         | BITWISEOR ->
             push_trace "BITWISE_OR";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             (match (a, b) with
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logor a b)) stack
             | _ -> runtime_error "BITWISE_OR expects int64 operands");
@@ -999,6 +1070,7 @@ let run instructions =
         | BITWISEXOR ->
             push_trace "BITWISE_XOR";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             (match (a, b) with
             | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logxor a b)) stack
             | _ -> runtime_error "BITWISE_XOR expects int64 operands");
@@ -1006,6 +1078,7 @@ let run instructions =
         | LEFTSHIFT ->
             push_trace "LEFTSHIFT";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             (match (a, b) with
             | VInt64 a, VInt64 b ->
                 Stack.push (VInt64 (safe_shift_left a b)) stack
@@ -1014,6 +1087,7 @@ let run instructions =
         | RIGHTSHIFT ->
             push_trace "RIGHT_SHIFT";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             (match (a, b) with
             | VInt64 a, VInt64 b ->
                 Stack.push (VInt64 (Int64.shift_right a (Int64.to_int b))) stack
@@ -1022,6 +1096,7 @@ let run instructions =
         | RIGHTSHIFTLOGICAL ->
             push_trace "RIGHT_SHIFT_LOGICAL";
             let a, b = pop2_safe stack in
+            let a, b = (force a, force b) in
             (match (a, b) with
             | VInt64 a, VInt64 b ->
                 let shifted = Int64.shift_right_logical a (Int64.to_int b) in
@@ -1132,7 +1207,7 @@ let run instructions =
             next ()
         | ASSERT -> (
             push_trace "ASSERT";
-            let cond = pop1 stack in
+            let cond = force (pop1 stack) in
             match cond with
             | VBool true -> next ()
             | VBool false -> runtime_error "Assertion failed"
@@ -1178,6 +1253,21 @@ let run instructions =
             | _ -> failwith "LOAD_FIELD expects a module or object")
         | CLOSURE func_name ->
             Stack.push (VClosure func_name) stack;
+            next ()
+        | MAKE_RANGE ->
+            let v = Stack.pop stack in
+            let start =
+              match v with
+              | VInt64 x -> x
+              | _ -> runtime_error "MAKE_RANGE expects int64"
+            in
+            let range_val = Gc.alloc_range start 1L None in
+            let id =
+              match range_val with
+              | VHeapRef id -> id
+              | _ -> runtime_error "alloc_range must return VHeapRef"
+            in
+            Stack.push (VRange id) stack;
             next ()
     done;
     flush_buffer ()

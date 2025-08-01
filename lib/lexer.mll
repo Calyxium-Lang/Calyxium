@@ -35,6 +35,7 @@ rule token = parse
   | "|>"                     { at_line_start := false; Pipeline }
   | "<<="                    { at_line_start := false; LeftShiftAssign }
   | ">>="                    { at_line_start := false; RightShiftAssign }
+  | ".."                     { at_line_start := false; Range }
 
   | "+"                      { at_line_start := false; Plus }
   | "-"                      { at_line_start := false; Minus }

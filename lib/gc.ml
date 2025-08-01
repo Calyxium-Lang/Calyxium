@@ -7,6 +7,7 @@ type heap_obj =
   | HArray of float array
   | HBytes of char array
   | HClosure of string * opcode list * (string * (value * bool)) list
+  | HRange of { current : int64; step : int64; end_ : int64 option }
 
 and value =
   | VFloat of float
@@ -20,6 +21,8 @@ and value =
   | VModule of (string, value) Hashtbl.t
   | VNative of (value list -> value)
   | VClosure of string
+  | VThunk of (unit -> value)
+  | VRange of int
 
 type generation = {
   objs : (int, heap_obj) Hashtbl.t;
@@ -65,6 +68,7 @@ let get_value id =
   | Some (HArray floats) ->
       Some (VArray (Array.to_list (Array.map (fun f -> VFloat f) floats)))
   | Some (HClosure (name, _, _)) -> Some (VClosure name)
+  | Some (HRange _) -> Some (VRange id)
   | None -> None
 
 let get_array id =
@@ -80,7 +84,7 @@ let mark_value v =
   Stack.push v stack;
   while not (Stack.is_empty stack) do
     match Stack.pop stack with
-    | VHeapRef id -> (
+    | VHeapRef id | VRange id -> (
         try
           ignore (Hashtbl.find young_gen.objs id);
           mark id young_gen
@@ -164,6 +168,11 @@ let alloc_array_with_gc stack env arr =
   let roots = get_stack_roots stack in
   maybe_collect_gc roots env;
   alloc_in_young (HArray arr)
+
+let alloc_range current step end_ =
+  let id = alloc_id () in
+  Hashtbl.add young_gen.objs id (HRange { current; step; end_ });
+  VHeapRef id
 
 let reset_heap () =
   Hashtbl.clear young_gen.objs;

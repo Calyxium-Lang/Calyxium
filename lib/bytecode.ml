@@ -285,3 +285,19 @@ and compile_expr = function
         | instr :: rest -> instr :: patch_jumps (idx + 1) rest
       in
       patch_jumps 0 full_code
+  | RangeExpr { start; end_ } -> (
+      match (start, end_) with
+      | Some (Int64Expr { value = s }), Some (Int64Expr { value = e }) ->
+          let count = Int64.to_int (Int64.add (Int64.sub e s) 1L) in
+          let range_elements =
+            List.init count (fun i -> LOAD_INT64 (Int64.add s (Int64.of_int i)))
+          in
+          range_elements @ [ LOAD_ARRAY count ]
+      | Some (Int64Expr { value = s }), None -> [ LOAD_INT64 s; MAKE_RANGE ]
+      | None, Some (Int64Expr { value = e }) ->
+          let count = Int64.to_int (Int64.add e 1L) in
+          let range_elements =
+            List.init count (fun i -> LOAD_INT64 (Int64.of_int i))
+          in
+          range_elements @ [ LOAD_ARRAY count ]
+      | _ -> failwith "Range bounds must be integer literals for now")

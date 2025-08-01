@@ -5,6 +5,7 @@ type heap_obj =
   | HArray of float array
   | HBytes of char array
   | HClosure of string * opcode list * (string * (value * bool)) list
+  | HRange of { current : int64; step : int64; end_ : int64 option }
 
 and value =
   | VFloat of float
@@ -18,6 +19,8 @@ and value =
   | VModule of (string, value) Hashtbl.t
   | VNative of (value list -> value)
   | VClosure of string
+  | VThunk of (unit -> value)
+  | VRange of int
 
 val allocation_count : int ref
 val allocation_threshold : int ref
@@ -41,3 +44,5 @@ val alloc_bytes_with_gc :
 
 val alloc_array_with_gc :
   value Stack.t -> (string * (value * bool)) list -> float array -> value
+
+val alloc_range : int64 -> int64 -> int64 option -> value

@@ -100,6 +100,7 @@ and Expr : sig
     | TupleExpr of t list
     | PipelineExpr of { left : t; right : t }
     | MatchExpr of { expr : t; cases : (t option * Stmt.t list) list }
+    | RangeExpr of { start : t option; end_ : t option }
 end = struct
   type t =
     | Int64Expr of { value : int64 }
@@ -120,4 +121,5 @@ end = struct
     | TupleExpr of t list
     | PipelineExpr of { left : t; right : t }
     | MatchExpr of { expr : t; cases : (t option * Stmt.t list) list }
+    | RangeExpr of { start : t option; end_ : t option }
 end

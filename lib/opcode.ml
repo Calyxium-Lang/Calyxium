@@ -66,3 +66,4 @@ type opcode =
   | LOAD_FIELD of string
   | CLOSURE of string
   | PANIC
+  | MAKE_RANGE

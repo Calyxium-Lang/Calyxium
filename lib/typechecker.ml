@@ -684,6 +684,38 @@ and check_expr env func_env expr =
                     ^ string_of_type t)))
             rest;
           first)
+  | RangeExpr { start; end_ } -> (
+      match (start, end_) with
+      | Some s, Some e ->
+          let t_s = check_expr env func_env s in
+          let t_e = check_expr env func_env e in
+          if
+            (not (type_eq t_s (SymbolType { value = "int" })))
+            || not (type_eq t_e (SymbolType { value = "int" }))
+          then
+            raise
+              (TypeError
+                 ("Range expression requires integer bounds:\n" ^ "  Found: "
+                ^ string_of_type t_s ^ " and " ^ string_of_type t_e));
+          ArrayType { element_type = SymbolType { value = "int" } }
+      | Some s, None ->
+          let t_s = check_expr env func_env s in
+          if not (type_eq t_s (SymbolType { value = "int" })) then
+            raise
+              (TypeError
+                 ("Open-ended range `{x..}` requires integer start:\n"
+                ^ "  Found: " ^ string_of_type t_s));
+          ArrayType { element_type = SymbolType { value = "int" } }
+      | None, Some e ->
+          let t_e = check_expr env func_env e in
+          if not (type_eq t_e (SymbolType { value = "int" })) then
+            raise
+              (TypeError
+                 ("Open-start range `{..x}` requires integer end:\n"
+                ^ "  Found: " ^ string_of_type t_e));
+          ArrayType { element_type = SymbolType { value = "int" } }
+      | None, None ->
+          raise (TypeError "Invalid range expression: both bounds missing"))
 
 and find_return_exprs env func_env expr =
   let open Expr in

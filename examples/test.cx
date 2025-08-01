@@ -1,12 +1,2 @@
-let fancy(n: int): string {
-    if n < 0 then "negative"
-    else
-        match n with
-        | 0 -> "zero"
-        | _ -> "positive"
-}
-
-let nested(n: int): string {
-    if n > 0 then
-        if n > 10 then "big positive" else "small positive" else "non-positive"
-}
+let x: []int = {1..}
+print(x[199])

@@ -10,6 +10,13 @@ open Calyxiumlib.Help
 open Calyxiumlib.Bytegen
 open Calyxiumlib.Formatter
 
+let rec ensure_dir_exists_rec path =
+  if Sys.file_exists path then ()
+  else
+    let parent = Filename.dirname path in
+    if parent <> path then ensure_dir_exists_rec parent;
+    Unix.mkdir path 0o755
+
 let parse_emit_flag flags file =
   let rec find = function
     | "--emit-bytecode" :: path :: _
@@ -81,6 +88,42 @@ let split_flags_and_files args =
   in
   aux [] [] args
 
+let check_file file =
+  let in_channel = open_in file in
+  let lexbuf = Lexing.from_channel in_channel in
+  try
+    let ast = program token lexbuf in
+    close_in in_channel;
+    ignore (typecheck_program [ ast ]);
+    Printf.printf "%sTypecheck successful:%s %s\n" green reset file
+  with
+  | TypeError msg ->
+      close_in in_channel;
+      Printf.eprintf "%sTypecheck error in %s:%s %s\n" red file reset msg;
+      exit 1
+  | LexerError (msg, pos) ->
+      close_in in_channel;
+      print_error ~file ~msg ~line:pos.pos_lnum
+        ~col:(pos.pos_cnum - pos.pos_bol + 1)
+        ~source:(get_line file pos.pos_lnum);
+      exit 1
+  | Parsing.Parse_error ->
+      close_in in_channel;
+      let pos = Lexing.lexeme_start_p lexbuf in
+      print_error ~file ~msg:"Syntax Error" ~line:pos.pos_lnum
+        ~col:(pos.pos_cnum - pos.pos_bol + 1)
+        ~source:(get_line file pos.pos_lnum);
+      exit 1
+  | Failure msg ->
+      close_in in_channel;
+      Printf.eprintf "%s%s%s\n" red msg reset;
+      exit 1
+  | e ->
+      close_in in_channel;
+      Printf.eprintf "Unexpected error: %s%s%s\n" red (Printexc.to_string e)
+        reset;
+      exit 1
+
 let () =
   let argv = Array.to_list Sys.argv in
   let args = List.tl argv in
@@ -116,6 +159,15 @@ let () =
                  paths)
       in
       List.iter format_file cx_files
+  | "check" :: files ->
+      if files = [] then (
+        prerr_endline "No files provided for type checking.";
+        exit 1);
+      List.iter check_file files
+  | "new" :: name :: _ -> Calyxiumlib.Toml_config.create_project name
+  | "new" :: [] ->
+      prerr_endline "Please provide a project name. Usage: calyxium new <name>";
+      exit 1
   | _ -> (
       let flags, files = split_flags_and_files args in
       match (flags, files) with
@@ -126,6 +178,34 @@ let () =
       | "--run-bytecode" :: _, bytecode_file :: _ ->
           let bytecode = load_bytecode_from_file bytecode_file in
           ignore (run bytecode)
+      | [], [] ->
+          if Sys.file_exists "calyxium.toml" then (
+            match Calyxiumlib.Toml_config.parse_file "calyxium.toml" with
+            | Some { run = { main; emit; run = run_flag }; _ } ->
+                let bytecode =
+                  let in_channel = open_in main in
+                  let lexbuf = Lexing.from_channel in_channel in
+                  let ast = program token lexbuf in
+                  close_in in_channel;
+                  let _ = typecheck_program [ ast ] in
+                  compile_stmt ast
+                in
+                (match emit with
+                | Some path ->
+                    ensure_dir_exists_rec (Filename.dirname path);
+                    save_bytecode_to_file path bytecode;
+                    Printf.printf "Bytecode saved to %s\n" path
+                | None -> ());
+                if run_flag then (
+                  init_stdlib ();
+                  ignore (run bytecode))
+            | None ->
+                prerr_endline "Invalid or incomplete calyxium.toml file.";
+                exit 1)
+          else (
+            prerr_endline "No input files or calyxium.toml provided.\n";
+            print_endline usage;
+            exit 1)
       | _, [] ->
           prerr_endline "No input files provided.";
           exit 1
