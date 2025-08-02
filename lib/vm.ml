@@ -515,11 +515,10 @@ let run instructions =
             let v = force (pop1 stack) in
             let bool_val =
               match v with
-              | VFloat f -> f <> 0.0
-              | VInt64 i -> i <> 0L
+              | VBool b -> b
               | _ -> runtime_error "NOT expects float or int64"
             in
-            Stack.push (VFloat (if not bool_val then 1.0 else 0.0)) stack;
+            Stack.push (VBool (not bool_val)) stack;
             next ()
         | INC ->
             push_trace "INC";
@@ -822,7 +821,7 @@ let run instructions =
             next ()
         | FLOAT ->
             push_trace "FLOAT";
-            let v = pop1 stack in
+            let v = force (pop1 stack) in
             let float_val =
               match v with
               | VFloat f -> f
@@ -841,12 +840,13 @@ let run instructions =
             Stack.push (VFloat float_val) stack;
             next ()
         | INT ->
-            push_trace "INT";
-            let v = pop1 stack in
+            push_trace "TO_INT";
+            let v = force (pop1 stack) in
             let int_val =
               match v with
               | VInt64 i -> i
               | VFloat f -> Int64.of_float f
+              | VByte c -> Int64.of_int (Char.code c)
               | VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> (
@@ -860,8 +860,8 @@ let run instructions =
             Stack.push (VInt64 int_val) stack;
             next ()
         | STRING ->
-            push_trace "STRING";
-            let v = pop1 stack in
+            push_trace "TO_STRING";
+            let v = force (pop1 stack) in
             let str_val =
               match v with
               | VHeapRef id -> (
@@ -892,7 +892,7 @@ let run instructions =
             let new_str_ref = Gc.alloc_string_with_gc stack frame.env str_val in
             Stack.push new_str_ref stack;
             next ()
-        | BYTE ->
+        | BYTES ->
             push_trace "TO_BYTES";
             let v = pop1 stack in
             let str_val =
@@ -916,6 +916,45 @@ let run instructions =
             in
             Stack.push new_bytes_ref stack;
             next ()
+        | BYTE -> (
+            push_trace "TO_BYTE";
+            let v = force (pop1 stack) in
+            match v with
+            | VInt64 i ->
+                Stack.push
+                  (VByte (Char.chr (Int64.to_int (Int64.logand i 0xFFL))))
+                  stack;
+                next ()
+            | VByte c ->
+                Stack.push (VByte c) stack;
+                next ()
+            | VHeapRef id -> (
+                match Gc.get_string id with
+                | Some s ->
+                    if String.length s = 1 then Stack.push (VByte s.[0]) stack
+                    else runtime_error "BYTE: heap string length must be 1"
+                | None ->
+                    runtime_error "BYTE: invalid heap reference for string")
+            | VFloat f ->
+                Stack.push (VByte (Char.chr (int_of_float f land 0xFF))) stack;
+                next ()
+            | VArray vs ->
+                if List.for_all (function VInt64 _ -> true | _ -> false) vs
+                then (
+                  let byte_arr =
+                    Array.of_list
+                      (List.map
+                         (function
+                           | VInt64 i ->
+                               Char.chr (Int64.to_int (Int64.logand i 0xFFL))
+                           | _ -> assert false)
+                         vs)
+                  in
+                  let vbyte_arr = Array.map (fun c -> VByte c) byte_arr in
+                  Stack.push (VArray (Array.to_list vbyte_arr)) stack;
+                  next ())
+                else runtime_error "BYTE: array contains non-integer elements"
+            | _ -> runtime_error "BYTE: unsupported type for byte conversion")
         | PLUSASSIGN ->
             push_trace "PLUSASSIGN";
             let value = force (pop1 stack) in

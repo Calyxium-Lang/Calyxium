@@ -12,7 +12,8 @@ let builtins =
     ("to_float", fun args -> args @ [ FLOAT ]);
     ("to_int", fun args -> args @ [ INT ]);
     ("to_string", fun args -> args @ [ STRING ]);
-    ("to_bytes", fun args -> args @ [ BYTE ]);
+    ("to_bytes", fun args -> args @ [ BYTES ]);
+    ("to_byte", fun args -> args @ [ BYTE ]);
     ("length", fun args -> args @ [ LENGTH ]);
     ("input", fun args -> args @ [ INPUT ]);
     ("assert", fun args -> args @ [ ASSERT ]);

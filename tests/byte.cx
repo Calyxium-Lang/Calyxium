@@ -26,3 +26,29 @@ let byte_arr: []byte = to_bytes(byte_str)
 assert(length(byte_arr) == 9)
 assert(byte_arr[0] == 'B')
 assert(byte_arr[8] == 't')
+
+assert(to_int('0') == 48)
+assert(to_int('9') == 57)
+
+assert(to_int('A') == 65)
+assert(to_int('Z') == 90)
+
+assert(to_int('a') == 97)
+assert(to_int('z') == 122)
+
+assert(to_int('!') == 33)
+assert(to_int('@') == 64)
+assert(to_int('#') == 35)
+assert(to_int('$') == 36)
+assert(to_int('%') == 37)
+assert(to_int('&') == 38)
+
+assert(to_int(' ') == 32)
+assert(to_int('\n') == 10)
+assert(to_int('\t') == 9)
+
+assert(to_byte(10) == '\n')
+
+let ascii_vals = {33, 34, 35, 36, 37, 38, 39}
+let ascii_str = to_string(to_byte(ascii_vals))
+assert(ascii_str == "!\"#$%&'")

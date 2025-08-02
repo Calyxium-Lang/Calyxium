@@ -79,6 +79,7 @@ parameter_list:
 
 parameter:
   | Ident Colon type_expr { { Stmt.name = $1; param_type = $3 } }
+  | Ident { { Stmt.name = $1; param_type = Type.Infer } }
 
 type_expr:
   | Int64Type { Type.SymbolType { value = "int" } }
@@ -185,11 +186,16 @@ ModuleStmt:
 VarDeclStmt:
   | Let Ident Colon type_expr Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
   | Let ident_list Colon type_expr Assign expr_list { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4; } }
+  | Let Ident Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $4; explicit_type = Type.Infer } }
+  | Let ident_list Assign expr_list { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $4; explicit_type = Type.Infer } }
   
 FunctionDeclStmt:
   | Let Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = $7; body = $9 } }
   | Let Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = $8; body = $10 } }
   | Let Ident LParen RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = $6; body = $8 } }
+  // | Let Ident LParen parameter_list RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = Type.Infer; body = $7 } }
+  // | Let Recursive Ident LParen parameter_list RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = Type.Infer; body = $8 } }
+  // | Let Ident LParen RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = Type.Infer; body = $6 } }
 
 ForStmt:
   | For LParen stmt_opt Semi expr_opt Semi stmt_opt RParen LBrace stmt_list RBrace { let default_condition = Expr.BoolExpr { value = true } in let increment_stmt = match $7 with | None -> (match $3 with | Some (Stmt.VarDeclarationStmt { identifier; _ }) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr identifier })) | Some (Stmt.ExprStmt (Expr.VarExpr var_name)) -> Some (Stmt.ExprStmt (Expr.UnaryExpr { operator = Token.Inc; operand = Expr.VarExpr var_name })) | _ -> None) | Some (Stmt.ExprStmt expr) -> Some (Stmt.ExprStmt expr) | Some _ -> None in Stmt.ForStmt { init = $3; condition = Option.value ~default:default_condition $5; increment = increment_stmt; body = Stmt.BlockStmt { body = $10 } } }

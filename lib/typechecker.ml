@@ -12,6 +12,7 @@ let float_type = SymbolType { value = "float" }
 
 let rec string_of_type = function
   | Any -> "any"
+  | Infer -> "infer"
   | SymbolType { value } -> value
   | ArrayType { element_type } -> "[" ^ string_of_type element_type ^ "]"
   | TupleType types ->
@@ -65,6 +66,13 @@ let builtins : (string * (Type.t list * Type.t) list) list =
     ( "panic",
       [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]
     );
+    ( "to_byte",
+      [
+        ( [ ArrayType { element_type = SymbolType { value = "int" } } ],
+          SymbolType { value = "byte" } );
+        ([ SymbolType { value = "int" } ], SymbolType { value = "byte" });
+        ([ SymbolType { value = "string" } ], SymbolType { value = "byte" });
+      ] );
   ]
 
 let rec type_eq expected actual =
@@ -90,14 +98,27 @@ let rec check_stmt env func_env stmt =
       match assigned_value with
       | Some expr ->
           let expr_type = check_expr env func_env expr in
-          if not (type_eq expr_type explicit_type) then
+          let final_type =
+            match explicit_type with
+            | Infer -> expr_type
+            | _ ->
+                if not (type_eq expr_type explicit_type) then
+                  raise
+                    (TypeError
+                       ("Type error in declaration of `" ^ identifier
+                      ^ "`: expected "
+                       ^ string_of_type explicit_type
+                       ^ ", but got " ^ string_of_type expr_type));
+                explicit_type
+          in
+          (identifier, final_type) :: env
+      | None ->
+          if explicit_type = Infer then
             raise
               (TypeError
-                 ("Type error in declaration of `" ^ identifier ^ "`: expected "
-                 ^ string_of_type explicit_type
-                 ^ ", but got " ^ string_of_type expr_type));
-          (identifier, explicit_type) :: env
-      | None -> (identifier, explicit_type) :: env)
+                 ("Missing type annotation and initializer for `" ^ identifier
+                ^ "`"));
+          (identifier, explicit_type) :: env)
   | MultiVarDeclarationStmt { identifier; assigned_value; explicit_type } -> (
       let values =
         match assigned_value with
@@ -145,6 +166,14 @@ let rec check_stmt env func_env stmt =
           (TypeError
              ("Tuple destructure mismatch: expected " ^ string_of_int id_count
             ^ " values, but got " ^ string_of_int val_count));
+      let inferred_types =
+        List.mapi
+          (fun i ident ->
+            let expr = List.nth values i in
+            let inferred = check_expr env func_env expr in
+            (ident, inferred))
+          identifier
+      in
       match explicit_type with
       | TupleType declared_types ->
           let type_count = List.length declared_types in
@@ -155,37 +184,35 @@ let rec check_stmt env func_env stmt =
                 ^ " elements, but destructure has " ^ string_of_int id_count
                 ^ " identifiers"));
           List.iteri
-            (fun i ident ->
-              let expr = List.nth values i in
-              let expected_type = List.nth declared_types i in
-              let actual_type = check_expr env func_env expr in
-              if not (type_eq actual_type expected_type) then
+            (fun i (ident, inferred) ->
+              let expected = List.nth declared_types i in
+              if not (type_eq inferred expected) then
                 raise
                   (TypeError
                      ("Type mismatch in destructure of `" ^ ident
-                    ^ "`: expected "
-                     ^ string_of_type expected_type
-                     ^ ", but got " ^ string_of_type actual_type)))
-            identifier;
+                    ^ "`: expected " ^ string_of_type expected ^ ", but got "
+                    ^ string_of_type inferred)))
+            inferred_types;
           List.fold_left2
             (fun acc_env ident ty -> (ident, ty) :: acc_env)
             env identifier declared_types
+      | Infer ->
+          List.fold_left
+            (fun acc_env (ident, ty) -> (ident, ty) :: acc_env)
+            env inferred_types
       | _ ->
-          List.iteri
-            (fun i ident ->
-              let expr = List.nth values i in
-              let actual_type = check_expr env func_env expr in
-              if not (type_eq actual_type explicit_type) then
+          List.iter
+            (fun (_, inferred) ->
+              if not (type_eq inferred explicit_type) then
                 raise
                   (TypeError
-                     ("Type mismatch in destructure of `" ^ ident
-                    ^ "`: expected "
+                     ("Type mismatch in destructure: expected "
                      ^ string_of_type explicit_type
-                     ^ ", but got " ^ string_of_type actual_type)))
-            identifier;
+                     ^ ", but got " ^ string_of_type inferred)))
+            inferred_types;
           List.fold_left
-            (fun acc_env ident -> (ident, explicit_type) :: acc_env)
-            env identifier)
+            (fun acc_env (ident, _) -> (ident, explicit_type) :: acc_env)
+            env inferred_types)
   | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
       let local_funcs = collect_functions body in
       let param_types = List.map (fun p -> p.param_type) parameters in

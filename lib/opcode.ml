@@ -43,6 +43,7 @@ type opcode =
   | FLOAT
   | INT
   | STRING
+  | BYTES
   | BYTE
   | PLUSASSIGN
   | MINUSASSIGN

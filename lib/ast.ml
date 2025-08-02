@@ -5,6 +5,7 @@ module rec Type : sig
     | TupleType of t list
     | FunctionType of t list * t
     | Any
+    | Infer
 end = struct
   type t =
     | SymbolType of { value : string }
@@ -12,6 +13,7 @@ end = struct
     | TupleType of t list
     | FunctionType of t list * t
     | Any
+    | Infer
 end
 
 and Stmt : sig

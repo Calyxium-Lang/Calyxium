@@ -1,2 +1,13 @@
-let x: []int = {1..}
-print(x[199])
+let map = {("hi", "string")}
+
+let get_value(key: string): string {
+    let rec find(i: int, key: string): string {
+        if i >= length(map) then "fallback if not found" else 
+            match (to_string(map[i][0]) == key) with
+            | true -> to_string(map[i][1])
+            | false -> find(i + 1, key)
+    }
+    find(0, key)
+}
+
+print(get_value("h"))
