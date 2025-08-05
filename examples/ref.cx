@@ -1,8 +1,8 @@
-let x: int = ref 10
+let rec loop(i: int): unit {
+    if !(i >= 5) then {
+        print("Hello, world\n")
+        loop(i + 1)
+    }
+}
 
-x := 12
--- prints 12
-print(x)
-
--- prints 10
-print(!x)
+loop(0)

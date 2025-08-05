@@ -1,0 +1,48 @@
+-- Id: tests/struct.cx
+
+-- basic test for structs
+
+struct Person {
+    let name = "John Doe"
+    let age = 30
+}
+
+assert(Person.name ^ "\n" == "John Doe\n")
+assert(to_string(Person.age) ^ "\n" == "30\n")
+
+struct Car {
+    let make = "Tesla"
+    let model = "Model S"
+    let year = 2023
+}
+
+assert(Car.make ^ " " ^ Car.model ^ "\n" == "Tesla Model S\n")
+assert(to_string(Car.year) ^ "\n" == "2023\n")
+
+
+struct Ascii {
+    let ascii_vals = [33, 34, 35]
+}
+
+let ascii_str = to_string(to_byte(Ascii.ascii_vals))
+assert(ascii_str == "!\"#")
+
+struct Config {
+    let debug = true
+    let max_connections = 100
+    let version = "1.0.0"
+}
+
+assert(to_string(Config.debug) == "true")
+assert(to_string(Config.max_connections) == "100")
+assert(Config.version == "1.0.0")
+
+struct Mixed {
+    let flag = false
+    let count = 42
+    let message = "Hello"
+}
+
+assert(to_string(Mixed.flag) == "false")
+assert(to_string(Mixed.count) == "42")
+assert(Mixed.message == "Hello")

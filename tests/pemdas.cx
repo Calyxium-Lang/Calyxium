@@ -22,7 +22,7 @@ assert((1 << 2) + 3 == 7)
 assert(1 << (2 + 1) == 8)
 assert(~0 == -1)
 
-let x: int = 5
+let x = 5
 x += 3
 assert(x == 8)
 x *= 2

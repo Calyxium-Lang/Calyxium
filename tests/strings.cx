@@ -2,32 +2,32 @@
 
 -- basic operations for string
 
-let a, b: string = "Hello", "world"
+let a, b = "Hello", "world"
 
-let c: string = a ^ " " ^ b
+let c = a ^ " " ^ b
 assert(c == "Hello world")
 
-let len: int = length(c)
+let len = length(c)
 assert(len == 11)
 
-let c_byte: []byte = to_bytes(c)
-let first: byte = c_byte[0]
+let c_byte = to_bytes(c)
+let first = c_byte[0]
 assert(first == 'H')
 
-let same: bool = "test" == "test"
-let diff: bool = "foo" != "bar"
+let same = "test" == "test"
+let diff = "foo" != "bar"
 assert(same)
 assert(diff)
 
-let esc: string = "line1\nline2"
+let esc = "line1\nline2"
 assert(length(esc) == 11)
 
-let n: int = 5
-let interp: string = "number is " ^ to_string(n)
+let n = 5
+let interp = "number is " ^ to_string(n)
 assert(interp == "number is 5")
 
-let empty: string = ""
+let empty = ""
 assert(length(empty) == 0)
 
-let concat: string = "foo" ^ "bar" ^ "baz"
+let concat = "foo" ^ "bar" ^ "baz"
 assert(concat == "foobarbaz")

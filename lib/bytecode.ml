@@ -3,8 +3,17 @@ open Token
 open Ast.Expr
 open Ast.Stmt
 
-let function_table : (string, opcode list) Hashtbl.t = Hashtbl.create 10
+type function_info = {
+  return_type : Ast.Type.t;
+  params : Ast.Stmt.parameter list;
+  bytecode : opcode list;
+}
+
+let function_table : (string, function_info) Hashtbl.t = Hashtbl.create 10
 let enum_tbl : (string, (string * int) list) Hashtbl.t = Hashtbl.create 10
+
+let struct_tbl : (string, (string * Ast.Expr.t) list) Hashtbl.t =
+  Hashtbl.create 10
 
 let builtins =
   [
@@ -56,20 +65,19 @@ let opcode_of_binop = function
 let rec compile_stmt = function
   | ExprStmt expr -> compile_expr expr
   | BlockStmt { body } -> List.flatten (List.map compile_stmt body)
-  | FunctionDeclStmt { name; is_rec = _; parameters; body; _ } ->
-      let start_bytecode = [ FUNCTION name ] in
-      let param_bytecodes =
-        List.map
-          (fun (param : parameter) -> [ STORE_VAR param.name ])
+  | FunctionDeclStmt { name; is_rec = _; parameters; body; return_type } ->
+      let param_stores =
+        List.rev_map
+          (fun (param : parameter) -> STORE_VAR param.name)
           parameters
       in
+      let start_bytecode = [ FUNCTION name ] @ param_stores in
       let function_body = compile_stmt (BlockStmt { body }) in
       let full_function_bytecode =
-        start_bytecode
-        @ List.concat param_bytecodes
-        @ function_body @ [ RETURN ]
+        start_bytecode @ function_body @ [ RETURN ]
       in
-      Hashtbl.replace function_table name full_function_bytecode;
+      Hashtbl.replace function_table name
+        { return_type; params = parameters; bytecode = full_function_bytecode };
       []
   | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
       let expr_bytecode =
@@ -110,37 +118,6 @@ let rec compile_stmt = function
         |> List.concat
       in
       List.concat expr_codes @ store_codes
-  | ForStmt { init; condition; increment; body } -> (
-      match condition with
-      | BoolExpr { value = false } -> []
-      | _ ->
-          let init_code =
-            match init with Some stmt -> compile_stmt stmt | None -> []
-          in
-          let condition_code = compile_expr condition in
-          let body_code = compile_stmt body in
-          let increment_code =
-            match increment with Some stmt -> compile_stmt stmt | None -> []
-          in
-
-          let init_len = List.length init_code in
-          let cond_len = List.length condition_code in
-          let body_len = List.length body_code in
-          let incr_len = List.length increment_code in
-
-          let jump_back = -(cond_len + body_len + incr_len + 1) in
-          let jump_to_end = init_len + body_len + incr_len + 1 in
-
-          let baseOpcodes =
-            init_code @ condition_code
-            @ [
-                JUMP_IF_FALSE
-                  (if incr_len = 0 then jump_to_end + 1 else jump_to_end);
-              ]
-            @ body_code @ increment_code @ [ JUMP jump_back ]
-          in
-
-          if incr_len = 0 then baseOpcodes else baseOpcodes @ [ POP ])
   | ImportStmt { module_name } ->
       let mod_name, field_name =
         match List.rev module_name with
@@ -148,11 +125,31 @@ let rec compile_stmt = function
         | [] -> failwith "Invalid module path"
       in
       [ LOAD_MODULE mod_name; LOAD_FIELD field_name; STORE_VAR field_name ]
+  | ModuleStmt _ -> failwith "Modules not implemented."
   | EnumStmt { name; members } ->
       let numbered_members = List.mapi (fun i m -> (m, i)) members in
       Hashtbl.replace enum_tbl name numbered_members;
       []
-  | _ -> failwith ""
+  | StructStmt { name; fields } ->
+      let rec register_struct prefix fields =
+        let full_name = String.concat "." prefix in
+        let actual_fields =
+          List.fold_left
+            (fun acc stmt ->
+              match stmt with
+              | VarDeclarationStmt { identifier; assigned_value = Some v; _ } ->
+                  (identifier, v) :: acc
+              | StructStmt { name = nested_name; fields = nested_fields } ->
+                  let nested_full = prefix @ [ nested_name ] in
+                  register_struct nested_full nested_fields;
+                  acc
+              | _ -> failwith ("Invalid field in struct `" ^ full_name ^ "`"))
+            [] fields
+        in
+        Hashtbl.replace struct_tbl full_name (List.rev actual_fields)
+      in
+      register_struct [ name ] fields;
+      []
 
 and compile_expr = function
   | Int64Expr { value } -> [ LOAD_INT64 value ]
@@ -239,17 +236,26 @@ and compile_expr = function
       | _ -> failwith "Right-hand side of pipeline must be a function name")
   | DotExpr { left; right } -> (
       match left with
-      | VarExpr enum_name -> (
-          match Hashtbl.find_opt enum_tbl enum_name with
-          | Some members -> (
-              match List.assoc_opt right members with
-              | Some value -> [ LOAD_INT64 (Int64.of_int value) ]
+      | VarExpr struct_name -> (
+          match Hashtbl.find_opt struct_tbl struct_name with
+          | Some fields -> (
+              match List.assoc_opt right fields with
+              | Some value_expr -> compile_expr value_expr
               | None ->
                   failwith
-                    ("Unknown enum member `" ^ right ^ "` for enum `"
-                   ^ enum_name ^ "`"))
-          | None -> failwith ("Unknown enum type `" ^ enum_name ^ "`"))
-      | _ -> failwith "DotExpr left must be enum name")
+                    ("Unknown field `" ^ right ^ "` in struct `" ^ struct_name
+                   ^ "`"))
+          | None -> (
+              match Hashtbl.find_opt enum_tbl struct_name with
+              | Some members -> (
+                  match List.assoc_opt right members with
+                  | Some value -> [ LOAD_INT64 (Int64.of_int value) ]
+                  | None ->
+                      failwith
+                        ("Unknown enum member `" ^ right ^ "` in enum `"
+                       ^ struct_name ^ "`"))
+              | None -> failwith ("Unknown type `" ^ struct_name ^ "`")))
+      | _ -> failwith "DotExpr left must be a struct or enum name")
   | MatchExpr { expr; cases } ->
       let expr_bytecode = compile_expr expr in
       let compiled_cases = ref [] in
@@ -302,3 +308,4 @@ and compile_expr = function
           in
           range_elements @ [ LOAD_ARRAY count ]
       | _ -> failwith "Range bounds must be integer literals for now")
+  | BlockExpr { body } -> List.flatten (List.map compile_stmt body)

@@ -1,0 +1,7 @@
+type Result[T] =
+    | Ok(T)
+    | Error(string)
+
+let safeDiv(a: float, b: float): Result[float] {
+    if b == 0.0 then Error("Can't divide by zero") else Ok(a / b)
+}

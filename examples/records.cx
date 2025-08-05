@@ -1,0 +1,41 @@
+type Complex = {
+    number: int,
+    name: string,
+    verified: bool,
+    score: float
+}
+
+let complex: Complex = {
+    number = 1,
+    name = "Bob",
+    verified = true,
+    score = 1.23
+}
+
+let number, name, verified, score = complex
+
+-- Prints "Bob"
+print(name)
+
+-- nested records
+type Meta = {
+    verified: bool,
+    score: float
+}
+
+type Complex = {
+    number: int,
+    name: string,
+    meta: Meta
+}
+
+let complex: Complex = {
+    number = 1,
+    name = "Stacy",
+    meta = { verified = false, score = 10.5 }
+}
+
+let number, name, meta: { verified, score } = complex
+
+-- false
+print(verified)

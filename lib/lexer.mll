@@ -8,7 +8,10 @@ let whitespace = [' ' '\t' '\r']
 let newline = '\n'
 let identifier = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
 let digits = ['0'-'9']+
-let floats = digits '.' digits+
+let sign = ['+' '-']
+let float1 = digits '.' digits ['e' 'E'] sign? digits
+let float2 = digits '.' digits
+let float3 = digits ['e' 'E'] sign? digits
 
 rule token = parse
   | whitespace               { token lexbuf }
@@ -75,12 +78,12 @@ rule token = parse
   | "let"                    { at_line_start := false; Let }
   | "match"                  { at_line_start := false; Match }
   | "with"                   { at_line_start := false; With }
-  | "for"                    { at_line_start := false; For }
   | "use"                    { at_line_start := false; Use }
   | "mod"                    { at_line_start := false; Module }
   | "true"                   { at_line_start := false; True }
   | "false"                  { at_line_start := false; False }
   | "enum"                   { at_line_start := false; Enum }
+  | "struct"                 { at_line_start := false; Struct }
 
   | "int"                    { at_line_start := false; Int64Type }
   | "float"                  { at_line_start := false; FloatType }
@@ -89,7 +92,9 @@ rule token = parse
   | "bool"                   { at_line_start := false; BoolType }
   | "unit"                   { at_line_start := false; UnitType }
 
-  | floats as f              { at_line_start := false; Float (float_of_string f) }
+  | float1 as f              { at_line_start := false; Float (float_of_string f) }
+  | float2 as f              { at_line_start := false; Float (float_of_string f) }
+  | float3 as f              { at_line_start := false; Float (float_of_string f) }
   | digits as d              { at_line_start := false; Int64 (Int64.of_string d) }
   | identifier as id         { at_line_start := false; Ident id }
 

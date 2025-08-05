@@ -20,6 +20,11 @@ let rec string_of_type = function
   | FunctionType (params, ret) ->
       let params_str = String.concat " * " (List.map string_of_type params) in
       Printf.sprintf "(%s -> %s)" params_str (string_of_type ret)
+  | StructType fields ->
+      let field_strs =
+        List.map (fun (name, ty) -> name ^ ": " ^ string_of_type ty) fields
+      in
+      "struct { " ^ String.concat "; " field_strs ^ " }"
 
 let built_in_modules : (string * (string * Type.t) list) list =
   [
@@ -256,15 +261,6 @@ let rec check_stmt env func_env stmt =
         | ExprStmt e -> contains_recursive_call fname e
         | BlockStmt { body } ->
             List.exists (contains_recursive_call_stmt fname) body
-        | ForStmt { init; condition; increment; body } ->
-            (match init with
-            | Some s -> contains_recursive_call_stmt fname s
-            | None -> false)
-            || contains_recursive_call fname condition
-            || (match increment with
-               | Some s -> contains_recursive_call_stmt fname s
-               | None -> false)
-            || contains_recursive_call_stmt fname body
         | _ -> false
       in
       let has_recursive_call =
@@ -323,21 +319,6 @@ let rec check_stmt env func_env stmt =
         List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
       in
       _final_env
-  | ForStmt { init; condition; increment; body } ->
-      let env =
-        match init with
-        | Some stmt -> check_stmt env func_env stmt
-        | None -> env
-      in
-      let ct = check_expr env func_env condition in
-      if not (type_eq ct (SymbolType { value = "bool" })) then
-        raise
-          (TypeError
-             ("Type error in `for` loop condition:\n" ^ "  Expected: bool\n"
-            ^ "  Found:    " ^ string_of_type ct));
-      let _ = Option.map (check_stmt env func_env) increment in
-      let _ = check_stmt env func_env body in
-      env
   | ImportStmt { module_name = mod_parts } -> (
       match mod_parts with
       | [ mod_name; symbol ] -> (
@@ -378,6 +359,26 @@ let rec check_stmt env func_env stmt =
           (List.mapi (fun i m -> (i, m)) members)
       in
       (name, enum_type) :: new_env
+  | StructStmt { name; fields } ->
+      let struct_env =
+        List.fold_left
+          (fun acc_env field_stmt ->
+            match field_stmt with
+            | VarDeclarationStmt _ -> check_stmt acc_env func_env field_stmt
+            | _ ->
+                raise
+                  (TypeError
+                     ("Invalid statement in struct `" ^ name
+                    ^ "`: only variable delcarations are allowed")))
+          [] fields
+      in
+      let struct_type =
+        let fields_as_types =
+          List.rev_map (fun (id, ty) -> (id, ty)) struct_env
+        in
+        StructType fields_as_types
+      in
+      (name, struct_type) :: env
 
 and check_expr env func_env expr =
   match expr with
@@ -591,22 +592,46 @@ and check_expr env func_env expr =
             ^ string_of_type t_else));
       t_then
   | DotExpr { left; right } -> (
-      let _ = check_expr env func_env left in
+      let left_type = check_expr env func_env left in
       match left with
-      | VarExpr enum_name -> (
-          match List.assoc_opt (enum_name ^ "." ^ right) env with
+      | VarExpr name -> (
+          match List.assoc_opt (name ^ "." ^ right) env with
           | Some member_type -> member_type
-          | None ->
+          | None -> (
+              match List.assoc_opt name env with
+              | Some (StructType fields) -> (
+                  match List.assoc_opt right fields with
+                  | Some ty -> ty
+                  | None ->
+                      raise
+                        (TypeError
+                           ("Unknown struct field:\n" ^ "  `" ^ right
+                          ^ "` is not a field of struct `" ^ name ^ "`")))
+              | Some _ ->
+                  raise
+                    (TypeError
+                       ("Cannot access `" ^ right ^ "` on non-struct value `"
+                      ^ name ^ "`"))
+              | None ->
+                  raise
+                    (TypeError
+                       ("Unknown enum or struct:\n" ^ "  `" ^ name
+                      ^ "` is not defined"))))
+      | _ -> (
+          match left_type with
+          | StructType fields -> (
+              match List.assoc_opt right fields with
+              | Some ty -> ty
+              | None ->
+                  raise
+                    (TypeError
+                       ("Unknown struct field:\n" ^ "  `" ^ right
+                      ^ "` is not a field of the struct")))
+          | _ ->
               raise
                 (TypeError
-                   ("Unknown enum member:\n" ^ "  `" ^ right
-                  ^ "` is not a member of enum `" ^ enum_name ^ "`")))
-      | _ ->
-          raise
-            (TypeError
-               ("Dot access error:\n"
-              ^ "  Only enum member access (e.g., `Color.Red`) is supported at \
-                 this time")))
+                   ("Dot access error:\n" ^ "  Cannot access field `" ^ right
+                  ^ "` on non-struct or non-enum expression"))))
   | TernaryExpr { cond; onTrue; onFalse } ->
       let ct = check_expr env func_env cond in
       if not (type_eq ct (SymbolType { value = "bool" })) then
@@ -743,6 +768,21 @@ and check_expr env func_env expr =
           ArrayType { element_type = SymbolType { value = "int" } }
       | None, None ->
           raise (TypeError "Invalid range expression: both bounds missing"))
+  | BlockExpr { body } ->
+      let rec check_stmts env func_env stmts =
+        match stmts with
+        | [] -> (env, Type.SymbolType { value = "unit" })
+        | [ last_stmt ] -> (
+            let env' = check_stmt env func_env last_stmt in
+            match last_stmt with
+            | Stmt.ExprStmt expr -> (env', check_expr env' func_env expr)
+            | _ -> (env', Type.SymbolType { value = "unit" }))
+        | hd :: tl ->
+            let env' = check_stmt env func_env hd in
+            check_stmts env' func_env tl
+      in
+      let _env_after, block_type = check_stmts env func_env body in
+      block_type
 
 and find_return_exprs env func_env expr =
   let open Expr in
@@ -781,15 +821,6 @@ and collect_functions stmts =
         in
         overload :: List.remove_assoc name acc
     | BlockStmt { body } -> List.fold_right collect_from_stmt body acc
-    | ForStmt { init; body; increment; _ } ->
-        let acc =
-          match init with Some s -> collect_from_stmt s acc | None -> acc
-        in
-        let acc =
-          match increment with Some s -> collect_from_stmt s acc | None -> acc
-        in
-        collect_from_stmt body acc
-    | ModuleStmt { block; _ } -> List.fold_right collect_from_stmt block acc
     | _ -> acc
   in
   List.fold_right collect_from_stmt stmts builtins

@@ -4,6 +4,7 @@ module rec Type : sig
     | ArrayType of { element_type : t }
     | TupleType of t list
     | FunctionType of t list * t
+    | StructType of (string * t) list
     | Any
     | Infer
 end = struct
@@ -12,6 +13,7 @@ end = struct
     | ArrayType of { element_type : t }
     | TupleType of t list
     | FunctionType of t list * t
+    | StructType of (string * t) list
     | Any
     | Infer
 end
@@ -38,16 +40,11 @@ and Stmt : sig
         return_type : Type.t;
         body : t list;
       }
-    | ForStmt of {
-        init : t option;
-        condition : Expr.t;
-        increment : t option;
-        body : t;
-      }
     | ImportStmt of { module_name : string list }
     | ModuleStmt of { module_name : string; block : t list }
     | ExprStmt of Expr.t
     | EnumStmt of { name : string; members : string list }
+    | StructStmt of { name : string; fields : t list }
 end = struct
   type parameter = { name : string; param_type : Type.t }
 
@@ -70,16 +67,11 @@ end = struct
         return_type : Type.t;
         body : t list;
       }
-    | ForStmt of {
-        init : t option;
-        condition : Expr.t;
-        increment : t option;
-        body : t;
-      }
     | ImportStmt of { module_name : string list }
     | ModuleStmt of { module_name : string; block : t list }
     | ExprStmt of Expr.t
     | EnumStmt of { name : string; members : string list }
+    | StructStmt of { name : string; fields : t list }
 end
 
 and Expr : sig
@@ -103,6 +95,7 @@ and Expr : sig
     | PipelineExpr of { left : t; right : t }
     | MatchExpr of { expr : t; cases : (t option * Stmt.t list) list }
     | RangeExpr of { start : t option; end_ : t option }
+    | BlockExpr of { body : Stmt.t list }
 end = struct
   type t =
     | Int64Expr of { value : int64 }
@@ -124,4 +117,5 @@ end = struct
     | PipelineExpr of { left : t; right : t }
     | MatchExpr of { expr : t; cases : (t option * Stmt.t list) list }
     | RangeExpr of { start : t option; end_ : t option }
+    | BlockExpr of { body : Stmt.t list }
 end

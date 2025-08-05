@@ -3,7 +3,7 @@ open Bytecode
 
 type program_image = {
   entry : opcode list;
-  functions : (string * opcode list) list;
+  functions : (string * Bytecode.function_info) list;
 }
 
 let save_bytecode_to_file filename entry =

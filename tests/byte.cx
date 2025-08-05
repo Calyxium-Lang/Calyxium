@@ -2,27 +2,27 @@
 
 -- basic test for bytes
 
-let a: byte = 'A'
+let a = 'A'
 assert(a == 'A')
 
-let arr: []byte = {'H', 'e', 'l', 'l', 'o'}
+let arr = ['H', 'e', 'l', 'l', 'o']
 assert(arr[0] == 'H')
 assert(arr[4] == 'o')
 
-let c: byte = 'c'
-let d: byte = 'c'
+let c = 'c'
+let d = 'c'
 assert(c == d)
 
-let greeting: []byte = {'H', 'i'}
+let greeting = ['H', 'i']
 assert(greeting[0] == 'H')
 assert(greeting[1] == 'i')
 assert(to_string(greeting) == "Hi")
 
-let empty: []byte = {}
+let empty = []
 assert(length(empty) == 0)
 
-let byte_str: string = "Byte test"
-let byte_arr: []byte = to_bytes(byte_str)
+let byte_str = "Byte test"
+let byte_arr = to_bytes(byte_str)
 assert(length(byte_arr) == 9)
 assert(byte_arr[0] == 'B')
 assert(byte_arr[8] == 't')
@@ -49,6 +49,6 @@ assert(to_int('\t') == 9)
 
 assert(to_byte(10) == '\n')
 
-let ascii_vals = {33, 34, 35, 36, 37, 38, 39}
+let ascii_vals = [33, 34, 35, 36, 37, 38, 39]
 let ascii_str = to_string(to_byte(ascii_vals))
 assert(ascii_str == "!\"#$%&'")

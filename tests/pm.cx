@@ -6,7 +6,7 @@ enum Colors {
     Red, Blue, Green
 }
 
-let c: Colors = Colors.Green
+let c = Colors.Green
 
 let result(): string {
     match c with

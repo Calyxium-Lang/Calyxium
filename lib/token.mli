@@ -46,7 +46,6 @@ type t =
   | Match
   | With
   | Return
-  | For
   | Use
   | Module
   | True

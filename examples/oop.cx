@@ -18,10 +18,26 @@
 -- }
 
 struct Person {
-    let name: string = "John Doe"
-    let age: int = 30
+    let name = "John Doe"
+    let age = 30
 }
 
--- $ creates an instance of Person and prints its name $
+print(Person.name ^ "\n")
+print(to_string(Person.age) ^ "\n")
 
-print(Person.name)
+struct Car {
+    let make = "Tesla"
+    let model = "Model S"
+    let year = 2023
+}
+
+print(Car.make ^ " " ^ Car.model ^ "\n")
+print(to_string(Car.year) ^ "\n")
+
+
+struct Ascii {
+    let ascii_vals = [33, 34, 35]
+}
+
+let ascii_str = to_string(to_byte(Ascii.ascii_vals))
+print(ascii_str)

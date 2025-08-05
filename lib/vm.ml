@@ -657,7 +657,11 @@ let run instructions =
         | CALL function_name ->
             push_trace ("CALL " ^ function_name);
             let function_body = resolve_function_body function_name in
-            let param_names = extract_param_names function_body in
+            let param_names =
+              List.map
+                (fun (p : Ast.Stmt.parameter) -> p.name)
+                function_body.params
+            in
             let arg_count = List.length param_names in
 
             if Stack.length stack < arg_count then
@@ -679,7 +683,7 @@ let run instructions =
             Gc.maybe_collect_gc roots local_env;
 
             let skip_header = 1 + arg_count in
-            let body = List.drop skip_header function_body in
+            let body = List.drop skip_header function_body.bytecode in
             let code = Array.of_list body in
 
             frame.pc <- frame.pc + 1;
@@ -687,7 +691,11 @@ let run instructions =
         | TAIL_CALL function_name ->
             push_trace ("TAIL_CALL " ^ function_name);
             let function_body = resolve_function_body function_name in
-            let param_names = extract_param_names function_body in
+            let param_names =
+              List.map
+                (fun (p : Ast.Stmt.parameter) -> p.name)
+                function_body.params
+            in
             let arg_count = List.length param_names in
 
             if Stack.length stack < arg_count then
@@ -702,7 +710,7 @@ let run instructions =
             in
 
             let skip_header = 1 + arg_count in
-            let body = List.drop skip_header function_body in
+            let body = List.drop skip_header function_body.bytecode in
             let code = Array.of_list body in
             let frame = Stack.top frame_stack in
             frame.code <- code;
@@ -745,7 +753,7 @@ let run instructions =
                     if Float.is_nan f then "NaN"
                     else if Float.is_infinite f then
                       if f > 0.0 then "inf" else "-inf"
-                    else Printf.sprintf "%.12f" f
+                    else Printf.sprintf "%g" f
                 | VInt64 i -> Int64.to_string i
                 | VHeapRef id -> (
                     match Gc.get_string id with
@@ -880,7 +888,23 @@ let run instructions =
                   then
                     String.init (List.length vs) (fun i ->
                         match List.nth vs i with VByte c -> c | _ -> '\000')
-                  else runtime_error "STRING: array is not []byte"
+                  else if
+                    List.for_all (function VFloat _ -> true | _ -> false) vs
+                  then
+                    String.concat ""
+                      (List.map
+                         (function VFloat f -> string_of_float f | _ -> "")
+                         vs)
+                  else if
+                    List.for_all (function VInt64 _ -> true | _ -> false) vs
+                  then
+                    String.concat ""
+                      (List.map
+                         (function VInt64 i -> Int64.to_string i | _ -> "")
+                         vs)
+                  else
+                    runtime_error
+                      "STRING: array is not []byte, []float or []int64"
               | VInt64 i -> Int64.to_string i
               | VFloat f -> string_of_float f
               | VBool b -> if b then "true" else "false"
