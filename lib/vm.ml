@@ -178,6 +178,8 @@ let rec equal_value a b =
   | VUnit, VUnit -> true
   | VTuple l1, VTuple l2 ->
       List.length l1 = List.length l2 && List.for_all2 equal_value l1 l2
+  | VArray l1, VArray l2 ->
+      List.length l1 = List.length l2 && List.for_all2 equal_value l1 l2
   | _ -> false
 
 let rec not_equal_value a b =
@@ -274,7 +276,7 @@ let run instructions =
             next ()
         | LOAD_UNIT _ ->
             push_trace "LOAD_UNIT";
-            Stack.push (VFloat nan) stack;
+            Stack.push VUnit stack;
             next ()
         | LOAD_TUPLE n ->
             push_trace ("LOAD_TUPLE " ^ string_of_int n);
@@ -1332,6 +1334,47 @@ let run instructions =
             in
             Stack.push (VRange id) stack;
             next ()
+        | ARRAYCONCAT -> (
+            push_trace "ARRAYCONCAT";
+            if Stack.length stack < 2 then
+              runtime_error "ARRAYCONCAT requires two arrays on the stack"
+            else
+              let right = force (pop1 stack) in
+              let left = force (pop1 stack) in
+              match (left, right) with
+              | VArray l1, VArray l2 ->
+                  Stack.push (VArray (l1 @ l2)) stack;
+                  next ()
+              | _ -> runtime_error "ARRAYCONCAT expects two arrays")
+        | SLICE -> (
+            let v_end = force (pop1 stack) in
+            let v_start = force (pop1 stack) in
+            let v_arr = force (pop1 stack) in
+            match v_arr with
+            | VArray elements ->
+                let len = List.length elements in
+                let s =
+                  match v_start with
+                  | VInt64 s -> max 0 (Int64.to_int s)
+                  | VUnit -> 0
+                  | _ -> runtime_error "SLICE: start index must be int or unit"
+                in
+                let e =
+                  match v_end with
+                  | VInt64 e -> min len (Int64.to_int e)
+                  | VUnit -> len
+                  | _ -> runtime_error "SLICE: end index must be int or unit"
+                in
+                let slice =
+                  if s > e then []
+                  else
+                    elements |> List.to_seq |> Seq.drop s
+                    |> Seq.take (e - s)
+                    |> List.of_seq
+                in
+                Stack.push (VArray slice) stack;
+                next ()
+            | _ -> runtime_error "SLICE expects array as first argument")
     done;
     flush_buffer ()
   with RuntimeError msg ->

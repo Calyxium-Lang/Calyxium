@@ -12,6 +12,24 @@
 
 -- print(get_value("hi"))
 
--- use Math.pi
--- print(to_string(pi) ^ "\n")
--- print(1e10)
+let bubble_sort(arr: []int): []int {
+    let rec pass(xs: []int, i: int, acc: []int, ch: bool): (bool, []int) {
+        if i + 1 >= length(xs) then (ch, acc @ (if i < length(xs) then [xs[i]] else []))
+        else {
+            let a = xs[i]
+            let b = xs[i + 1]
+            pass(xs, if a > b then i + 2 else i + 1, acc @ (if a > b then [b, a] else [a]), ch || a > b)
+        }
+    }
+
+    let rec sort(xs: []int): []int {
+        let ch, xs' = pass(xs, 0, [], false)
+        if ch then sort(xs') else xs'
+    }
+
+    sort(arr)
+}
+
+let in = [ 5, 2, 9, 1, 3 ]
+let sorted = bubble_sort(in)
+print(sorted)

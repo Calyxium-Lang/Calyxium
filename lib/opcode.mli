@@ -68,3 +68,5 @@ type opcode =
   | CLOSURE of string
   | PANIC
   | MAKE_RANGE
+  | ARRAYCONCAT
+  | SLICE

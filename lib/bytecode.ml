@@ -60,6 +60,7 @@ let opcode_of_binop = function
   | BitWiseXORAssign -> BITWISEXORASSIGN
   | LeftShiftAssign -> LEFTSHIFTASSIGN
   | RightShiftAssign -> RIGHTSHIFTASSIGN
+  | ArrConcat -> ARRAYCONCAT
   | _ -> failwith "Unsupported operator"
 
 let rec compile_stmt = function
@@ -309,3 +310,12 @@ and compile_expr = function
           range_elements @ [ LOAD_ARRAY count ]
       | _ -> failwith "Range bounds must be integer literals for now")
   | BlockExpr { body } -> List.flatten (List.map compile_stmt body)
+  | SliceExpr { array; start; end_ } ->
+      let array_code = compile_expr array in
+      let start_code =
+        match start with Some s -> compile_expr s | None -> [ LOAD_UNIT () ]
+      in
+      let end_code =
+        match end_ with Some e -> compile_expr e | None -> [ LOAD_UNIT () ]
+      in
+      array_code @ start_code @ end_code @ [ SLICE ]

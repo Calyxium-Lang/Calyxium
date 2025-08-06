@@ -783,6 +783,31 @@ and check_expr env func_env expr =
       in
       let _env_after, block_type = check_stmts env func_env body in
       block_type
+  | Expr.SliceExpr { array; start; end_ } -> (
+      let array_type = check_expr env func_env array in
+      match array_type with
+      | Type.ArrayType _ ->
+          let () =
+            match start with
+            | Some s -> (
+                let s_ty = check_expr env func_env s in
+                match s_ty with
+                | Type.SymbolType { value = "int" } -> ()
+                | _ -> raise (TypeError "Slice start index must be of type int")
+                )
+            | None -> ()
+          in
+          let () =
+            match end_ with
+            | Some e -> (
+                let e_ty = check_expr env func_env e in
+                match e_ty with
+                | Type.SymbolType { value = "int" } -> ()
+                | _ -> raise (TypeError "Slice end index must be of type int"))
+            | None -> ()
+          in
+          array_type
+      | _ -> raise (TypeError "Attempted to slice a non-array value"))
 
 and find_return_exprs env func_env expr =
   let open Expr in

@@ -96,6 +96,7 @@ and Expr : sig
     | MatchExpr of { expr : t; cases : (t option * Stmt.t list) list }
     | RangeExpr of { start : t option; end_ : t option }
     | BlockExpr of { body : Stmt.t list }
+    | SliceExpr of { array : t; start : t option; end_ : t option }
 end = struct
   type t =
     | Int64Expr of { value : int64 }
@@ -118,4 +119,5 @@ end = struct
     | MatchExpr of { expr : t; cases : (t option * Stmt.t list) list }
     | RangeExpr of { start : t option; end_ : t option }
     | BlockExpr of { body : Stmt.t list }
+    | SliceExpr of { array : t; start : t option; end_ : t option }
 end

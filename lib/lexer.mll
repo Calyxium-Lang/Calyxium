@@ -6,7 +6,7 @@
 
 let whitespace = [' ' '\t' '\r']
 let newline = '\n'
-let identifier = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let identifier = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
 let digits = ['0'-'9']+
 let sign = ['+' '-']
 let float1 = digits '.' digits ['e' 'E'] sign? digits
@@ -46,6 +46,7 @@ rule token = parse
   | "/"                      { at_line_start := false; Slash }
   | "%"                      { at_line_start := false; Mod }
   | "^"                      { at_line_start := false; Carot }
+  | "@"                      { at_line_start := false; ArrConcat }
   | "="                      { at_line_start := false; Assign }
   | ">"                      { at_line_start := false; Greater }
   | "<"                      { at_line_start := false; Less }

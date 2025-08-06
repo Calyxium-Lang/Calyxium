@@ -20,6 +20,7 @@ type t =
   | Slash
   | Mod
   | Carot
+  | ArrConcat
   | Assign
   | Greater
   | Less

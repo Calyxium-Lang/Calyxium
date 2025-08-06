@@ -13,7 +13,7 @@
 %left Pipeline
 %left Plus Minus
 %left Star Slash Mod
-%right Pow Carot
+%right Pow Carot ArrConcat
 %nonassoc UnaryMinus NotPrec
 %left Dot
 %nonassoc Inc Dec
@@ -21,12 +21,12 @@
 %nonassoc LowPrec
 
 %token Recursive If Then Else Let Match With Use Module True False Enum Struct Int64Type FloatType StringType ByteType BoolType UnitType
-%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range
+%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range DoubleColon
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
 %token BitWiseANDAssign BitWiseORAssign BitWiseXORAssign
 %token LeftShiftAssign RightShiftAssign
-%token Plus Minus Star Slash Mod Carot Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore Question
+%token Plus Minus Star Slash Mod Carot ArrConcat Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore Question
 %token <string> Ident
 %token <int64> Int64
 %token <float> Float
@@ -148,6 +148,11 @@ expr:
   | If expr Then block_expr { Expr.IfExpr { condition = $2; then_branch = $4; else_branch = None; } }
   | LBracket expr Range RBracket { Expr.RangeExpr { start = Some $2; end_ = None } }
   | LBracket expr Range expr RBracket { Expr.RangeExpr { start = Some $2; end_ = Some $4 } }
+  | expr ArrConcat expr { Expr.BinaryExpr { left = $1; operator = Token.ArrConcat; right = $3 } }
+  | expr LBracket expr Colon expr RBracket { Expr.SliceExpr { array = $1; start = Some $3; end_ = Some $5 } }
+  | expr LBracket expr Colon RBracket { Expr.SliceExpr { array = $1; start = Some $3; end_ = None } }
+  | expr LBracket Colon expr RBracket { Expr.SliceExpr { array = $1; start = None; end_ = Some $4 } }
+  | expr LBracket Colon RBracket { Expr.SliceExpr { array = $1; start = None; end_ = None } }
 
 block_expr:
   | expr { $1 }
