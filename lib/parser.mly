@@ -26,7 +26,7 @@
 %token LeftShift RightShift RightShiftLogical
 %token BitWiseANDAssign BitWiseORAssign BitWiseXORAssign
 %token LeftShiftAssign RightShiftAssign
-%token Plus Minus Star Slash Mod Carot ArrConcat Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe UnderScore Question
+%token Plus Minus Star Slash Mod Carot ArrConcat Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe DeRef UnderScore Question
 %token <string> Ident
 %token <int64> Int64
 %token <float> Float

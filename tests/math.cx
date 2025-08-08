@@ -367,7 +367,7 @@ assert(lcm(4, 6) == 12)
 
 assert(isPrime(2))
 assert(isPrime(13))
-assert(!isPrime(21))
+assert(not isPrime(21))
 
 assert(primesUpTo(10, 2) == "2 3 5 7 ")
 

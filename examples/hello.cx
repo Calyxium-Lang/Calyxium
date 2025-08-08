@@ -2,6 +2,11 @@ let println(n: string): unit {
     print(n ^ "\n")
 }
 
-for (;;) {
-    println("Hello")
+let rec loop(cond: bool): unit {
+    if cond then {
+        println("Hello, world!")
+        loop(cond)
+    }
 }
+
+loop(true)

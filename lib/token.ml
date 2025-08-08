@@ -36,6 +36,7 @@ type t =
   | Comma
   | Not
   | Pipe
+  | DeRef
   | UnderScore
   | Function
   | Question

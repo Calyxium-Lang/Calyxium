@@ -1,0 +1,35 @@
+let head(lst: []float): float {
+    lst[0]
+}
+
+let tail(lst: []float): []float {
+    lst[1:]
+}
+
+let prepend(elem: float, lst: []float): []float { 
+    [elem] @ lst
+}
+
+let rec reverse(lst: []float, acc: []float): []float {
+    if length(lst) == 0 then acc
+    else reverse(tail(lst), prepend(head(lst), acc))
+}
+
+let array_to_float(int_array: []int): []float {
+    let rec convert(i: int, acc: []float, arr: []int): []float {
+        if i >= length(arr) then reverse(acc, [])
+        else {
+            let f = to_float(arr[i])
+            convert(i + 1, prepend(f, acc), arr)
+        }
+    }
+    convert(0, [], int_array)
+}
+
+print(array_to_float([ 1, 2 ]) == [ 1.0, 2.0 ])
+
+let x = [1..5]
+match x with
+| [single] -> print("one")
+| x :: y :: rest -> print(x)
+| [] -> print("empty array")

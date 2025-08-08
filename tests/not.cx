@@ -2,40 +2,40 @@
 
 -- basic tests for not
 
-assert(!true == false)
-assert(!false == true)
-assert(!(1 == 2) == true)
-assert(!(1 < 2) == false)
-assert(!(0 >= 0) == false)
+assert(not true == false)
+assert(not false == true)
+assert(not (1 == 2) == true)
+assert(not (1 < 2) == false)
+assert(not (0 >= 0) == false)
 
 let negate_eq(x: int, y: int): bool {
-    !(x == y)
+    not (x == y)
 }
 
 assert(negate_eq(1, 1) == false)
 assert(negate_eq(1, 2) == true)
 
 let logic(a: int): string {
-    if !(a > 0) then "non-positive" else "positive"
+    if not (a > 0) then "non-positive" else "positive"
 }
 
 assert(logic(0) == "non-positive")
 assert(logic(-5) == "non-positive")
 assert(logic(10) == "positive")
 
-assert(!!true == true)
-assert(!!false == false)
-assert(!!!true == false)
-assert(!!!!true == true)
+assert(not not true == true)
+assert(not not false == false)
+assert(not not not true == false)
+assert(not not not not true == true)
 
-assert(!(true && false) == true)
-assert(!(true || false) == false)
-assert(!((1 < 2) && (3 > 2)) == false)
-assert(!((1 == 2) || (2 == 2)) == false)
-assert(!((5 <= 10) && !(10 < 5)) == false)
+assert(not (true && false) == true)
+assert(not (true || false) == false)
+assert(not ((1 < 2) && (3 > 2)) == false)
+assert(not ((1 == 2) || (2 == 2)) == false)
+assert(not ((5 <= 10) && not (10 < 5)) == false)
 
 let describe(x: int): string {
-    if !(x == 0) then "non-zero" else "zero"
+    if not (x == 0) then "non-zero" else "zero"
 }
 
 assert(describe(0) == "zero")
@@ -43,7 +43,7 @@ assert(describe(5) == "non-zero")
 assert(describe(-1) == "non-zero")
 
 let deep_not(b: bool): bool {
-    !!!!b
+    not not not not b
 }
 
 assert(deep_not(true) == true)

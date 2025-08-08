@@ -17,7 +17,7 @@
 --     }
 -- }
 
-struct Person {
+type Person {
     let name = "John Doe"
     let age = 30
 }
