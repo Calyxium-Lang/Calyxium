@@ -25,7 +25,7 @@
  (foreign_stubs
   (language c)
   (names uint32 uint64))
- (libraries calyxium_stdlib unix))
+ (libraries calyxium_stdlib unix zarith))
 
 (ocamllex lexer)
 

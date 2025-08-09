@@ -133,14 +133,6 @@ let extract_param_names = function
       collect [] rest
   | _ -> runtime_error "Malformed function body during parameter extraction"
 
-let rec int64_pow base exp =
-  if exp < 0L then invalid_arg "int64_pow: negative exponent"
-  else if exp = 0L then Int64.one
-  else if Int64.rem exp 2L = 0L then
-    let half = int64_pow base (Int64.div exp 2L) in
-    Int64.mul half half
-  else Int64.mul base (int64_pow base (Int64.sub exp 1L))
-
 let update_variable name result env =
   let updated = ref false in
   let new_env =
@@ -172,7 +164,7 @@ let rec equal_value a b =
       | Some sa, Some sb -> sa = sb
       | _ -> id1 = id2)
   | VFloat f1, VFloat f2 -> f1 = f2
-  | VInt64 i1, VInt64 i2 -> i1 = i2
+  | VInt i1, VInt i2 -> i1 = i2
   | VBool b1, VBool b2 -> b1 = b2
   | VByte c1, VByte c2 -> c1 = c2
   | VUnit, VUnit -> true
@@ -189,7 +181,7 @@ let rec not_equal_value a b =
       | Some sa, Some sb -> sa <> sb
       | _ -> id1 = id2)
   | VFloat f1, VFloat f2 -> f1 <> f2
-  | VInt64 i1, VInt64 i2 -> i1 <> i2
+  | VInt i1, VInt i2 -> i1 <> i2
   | VBool b1, VBool b2 -> b1 <> b2
   | VByte c1, VByte c2 -> c1 <> c2
   | VUnit, VUnit -> true
@@ -198,37 +190,14 @@ let rec not_equal_value a b =
   | _ -> false
 
 let string_to_bytes s = Array.init (String.length s) (String.get s)
-
-let safe_add a b =
-  let res = Int64.add a b in
-  if (a > 0L && b > 0L && res < 0L) || (a < 0L && b < 0L && res > 0L) then
-    runtime_error "Integer overflow in addition"
-  else res
-
-let safe_sub a b =
-  let res = Int64.sub a b in
-  if
-    (b > 0L && a < Int64.add Int64.min_int b)
-    || (b < 0L && a > Int64.add Int64.max_int b)
-  then runtime_error "Integer overflow in subtraction"
-  else res
-
-let safe_mul a b =
-  if a = 0L || b = 0L then 0L
-  else
-    let res = Int64.mul a b in
-    if Int64.div res a <> b then
-      runtime_error "Integer overflow in multiplication"
-    else res
+let safe_add a b = Z.add a b
+let safe_sub a b = Z.sub a b
+let safe_mul a b = Z.mul a b
 
 let safe_shift_left a b =
-  if b < 0L || b > 63L then runtime_error "Invalid shift amount"
-  else
-    let b_int = Int64.to_int b in
-    let res = Int64.shift_left a b_int in
-    let expected = Int64.shift_right_logical res b_int in
-    if expected <> a then runtime_error "Integer overflow in shift left"
-    else res
+  if Z.sign b < 0 || Z.gt b (Z.of_int 63) then
+    runtime_error "Invalid shift amount"
+  else Z.shift_left a (Z.to_int b)
 
 let rec force v = match v with VThunk f -> force (f ()) | v -> v
 
@@ -253,9 +222,9 @@ let run instructions =
         let instr = frame.code.(frame.pc) in
         let next () = frame.pc <- frame.pc + 1 in
         match instr with
-        | LOAD_INT64 v ->
-            push_trace ("LOAD_INT64 " ^ Int64.to_string v);
-            Stack.push (VInt64 v) stack;
+        | LOAD_INT v ->
+            push_trace ("LOAD_INT " ^ Z.to_string v);
+            Stack.push (VInt v) stack;
             next ()
         | LOAD_FLOAT v ->
             push_trace ("LOAD_FLOAT " ^ string_of_float v);
@@ -309,7 +278,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in addition"
                        else VFloat res
-                   | VInt64 a, VInt64 b -> VInt64 (safe_add a b)
+                   | VInt a, VInt b -> VInt (safe_add a b)
                    | _ -> runtime_error "PLUS expects numbers"))
               stack;
             next ()
@@ -327,7 +296,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in subtraction"
                        else VFloat res
-                   | VInt64 a, VInt64 b -> VInt64 (safe_sub a b)
+                   | VInt a, VInt b -> VInt (safe_sub a b)
                    | _ -> runtime_error "MINUS expects numbers"))
               stack;
             next ()
@@ -345,7 +314,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in multiplication"
                        else VFloat res
-                   | VInt64 a, VInt64 b -> VInt64 (safe_mul a b)
+                   | VInt a, VInt b -> VInt (safe_mul a b)
                    | _ -> runtime_error "STAR expects numbers"))
               stack;
             next ()
@@ -357,7 +326,8 @@ let run instructions =
                  (fun () ->
                    match (force a, force b) with
                    | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
-                   | VInt64 _, VInt64 0L -> runtime_error "Division by zero"
+                   | VInt _, VInt z when Z.equal z Z.zero ->
+                       runtime_error "Division by zero"
                    | VFloat a, VFloat b ->
                        let res = a /. b in
                        if
@@ -365,10 +335,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in division"
                        else VFloat res
-                   | VInt64 a, VInt64 b ->
-                       if a = Int64.min_int && b = -1L then
-                         runtime_error "Integer overflow in division"
-                       else VInt64 (Int64.div a b)
+                   | VInt a, VInt b -> VInt (Z.div a b)
                    | _ -> runtime_error "SLASH expects numbers"))
               stack;
             next ()
@@ -380,9 +347,10 @@ let run instructions =
                  (fun () ->
                    match (force a, force b) with
                    | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
-                   | VInt64 _, VInt64 0L -> runtime_error "Modulo by zero"
+                   | VInt _, VInt z when Z.equal z Z.zero ->
+                       runtime_error "Modulo by zero"
                    | VFloat a, VFloat b -> VFloat (mod_float a b)
-                   | VInt64 a, VInt64 b -> VInt64 (Int64.rem a b)
+                   | VInt a, VInt b -> VInt (Z.rem a b)
                    | _ -> runtime_error "MOD expects numbers"))
               stack;
             next ()
@@ -394,12 +362,10 @@ let run instructions =
                  (fun () ->
                    match (force a, force b) with
                    | VFloat a, VFloat b -> VFloat (a ** b)
-                   | VInt64 a, VInt64 b -> (
-                       if b < 0L then
+                   | VInt a, VInt b ->
+                       if Z.sign b < 0 then
                          runtime_error "POW expects non-negative exponent"
-                       else
-                         try VInt64 (int64_pow a b)
-                         with _ -> runtime_error "POW overflow")
+                       else VInt (Z.pow a (Z.to_int b))
                    | _ -> runtime_error "POW expects numbers"))
               stack;
             next ()
@@ -419,8 +385,10 @@ let run instructions =
         | JUMP_IF_FALSE offset -> (
             push_trace ("JUMP_IF_FALSE " ^ string_of_int offset);
             match Stack.pop_opt stack with
-            | Some (VFloat 0.0) | Some (VInt64 0L) | Some (VBool false) ->
+            | Some (VFloat 0.0) -> frame.pc <- frame.pc + offset
+            | Some (VInt z) when Z.equal z (Z.of_int64 0L) ->
                 frame.pc <- frame.pc + offset
+            | Some (VBool false) -> frame.pc <- frame.pc + offset
             | Some _ -> next ()
             | None -> runtime_error "JUMP_IF_FALSE with empty stack")
         | JUMP n ->
@@ -433,8 +401,8 @@ let run instructions =
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a < b)
-              | VInt64 a, VInt64 b -> VBool (Int64.compare a b < 0)
-              | _ -> runtime_error "LESS expects two floats or int64"
+              | VInt a, VInt b -> VBool (Z.compare a b < 0)
+              | _ -> runtime_error "LESS expects two floats or int"
             in
             Stack.push result stack;
             next ()
@@ -445,8 +413,8 @@ let run instructions =
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a > b)
-              | VInt64 a, VInt64 b -> VBool (Int64.compare a b > 0)
-              | _ -> runtime_error "GREATER expects two floats or int64"
+              | VInt a, VInt b -> VBool (Z.compare a b > 0)
+              | _ -> runtime_error "GREATER expects two floats or int"
             in
             Stack.push result stack;
             next ()
@@ -457,8 +425,8 @@ let run instructions =
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a <= b)
-              | VInt64 a, VInt64 b -> VBool (Int64.compare a b <= 0)
-              | _ -> runtime_error "LESS_EQUAL expects two floats or int64"
+              | VInt a, VInt b -> VBool (Z.compare a b <= 0)
+              | _ -> runtime_error "LESS_EQUAL expects two floats or int"
             in
             Stack.push result stack;
             next ()
@@ -469,8 +437,8 @@ let run instructions =
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a >= b)
-              | VInt64 a, VInt64 b -> VBool (Int64.compare a b >= 0)
-              | _ -> runtime_error "GREATER_EQUAL expects two floats or int64"
+              | VInt a, VInt b -> VBool (Z.compare a b >= 0)
+              | _ -> runtime_error "GREATER_EQUAL expects two floats or int"
             in
             Stack.push result stack;
             next ()
@@ -495,8 +463,8 @@ let run instructions =
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
-              | VInt64 i -> i <> 0L
-              | _ -> runtime_error "AND expects bool, float, or int64"
+              | VInt i -> i <> Z.of_int64 0L
+              | _ -> runtime_error "AND expects bool, float, or int"
             in
             Stack.push (VBool (bool_val a && bool_val b)) stack;
             next ()
@@ -507,8 +475,8 @@ let run instructions =
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
-              | VInt64 i -> i <> 0L
-              | _ -> runtime_error "OR expects bool, float, or int64"
+              | VInt i -> i <> Z.of_int64 0L
+              | _ -> runtime_error "OR expects bool, float, or int"
             in
             Stack.push (VBool (bool_val a || bool_val b)) stack;
             next ()
@@ -518,7 +486,7 @@ let run instructions =
             let bool_val =
               match v with
               | VBool b -> b
-              | _ -> runtime_error "NOT expects float or int64"
+              | _ -> runtime_error "NOT expects float or int"
             in
             Stack.push (VBool (not bool_val)) stack;
             next ()
@@ -534,8 +502,8 @@ let run instructions =
                     || classify_float res = FP_infinite
                   then runtime_error "Float overflow in increment"
                   else VFloat res
-              | VInt64 i -> VInt64 (safe_add i 1L)
-              | _ -> runtime_error "INC expects float or int64"
+              | VInt i -> VInt (safe_add i (Z.of_int64 1L))
+              | _ -> runtime_error "INC expects float or int"
             in
             Stack.push result stack;
             next ()
@@ -551,8 +519,8 @@ let run instructions =
                     || classify_float res = FP_infinite
                   then runtime_error "Float overflow in decrement"
                   else VFloat res
-              | VInt64 i -> VInt64 (safe_sub i 1L)
-              | _ -> runtime_error "DEC expects float or int64"
+              | VInt i -> VInt (safe_sub i (Z.of_int64 1L))
+              | _ -> runtime_error "DEC expects float or int"
             in
             Stack.push result stack;
             next ()
@@ -589,7 +557,7 @@ let run instructions =
             let collection_val = pop1 stack in
             let index =
               match force index_val with
-              | VInt64 i -> Int64.to_int i
+              | VInt i -> Z.to_int i
               | _ -> runtime_error "Expected int for index in LOAD_INDEX"
             in
             let collection = force collection_val in
@@ -628,16 +596,14 @@ let run instructions =
               | VRange id -> (
                   match Gc.find_heap_obj id with
                   | Gc.HRange { current; step; end_ } -> (
-                      let elem =
-                        Int64.add current (Int64.mul step (Int64.of_int index))
-                      in
+                      let elem = Z.add current (Z.mul step (Z.of_int index)) in
                       match end_ with
                       | Some e
-                        when (step >= 0L && elem > e) || (step < 0L && elem < e)
-                        ->
+                        when (step >= Z.of_int64 0L && elem > e)
+                             || (step < Z.of_int64 0L && elem < e) ->
                           runtime_error
                             "Index out of bounds in LOAD_INDEX for range"
-                      | _ -> VInt64 elem)
+                      | _ -> VInt elem)
                   | _ -> runtime_error "Expected range for VRange")
               | _ ->
                   runtime_error
@@ -673,12 +639,8 @@ let run instructions =
                 ^ string_of_int (Stack.length stack));
 
             let args = pop_n [] arg_count in
-            let thunk_args =
-              List.map (fun v -> VThunk (fun () -> force v)) args
-            in
             let local_env =
-              List.combine param_names
-                (List.map (fun v -> (v, true)) thunk_args)
+              List.combine param_names (List.map (fun v -> (v, true)) args)
             in
 
             let roots = Gc.get_stack_roots stack in
@@ -706,9 +668,9 @@ let run instructions =
                ^ string_of_int arg_count ^ " arguments, but stack has only "
                 ^ string_of_int (Stack.length stack));
 
-            let args = pop_n [] arg_count in
+            let raw_args = pop_n [] arg_count in
             let local_env =
-              List.combine param_names (List.map (fun v -> (v, true)) args)
+              List.combine param_names (List.map (fun v -> (v, true)) raw_args)
             in
 
             let skip_header = 1 + arg_count in
@@ -721,7 +683,9 @@ let run instructions =
         | RETURN ->
             push_trace "RETURN";
             let return_value =
-              match Stack.pop_opt stack with Some v -> v | None -> VFloat nan
+              match Stack.pop_opt stack with
+              | Some v -> force v
+              | None -> VFloat nan
             in
             ignore (pop1 frame_stack);
             Stack.push return_value stack
@@ -756,7 +720,7 @@ let run instructions =
                     else if Float.is_infinite f then
                       if f > 0.0 then "inf" else "-inf"
                     else Printf.sprintf "%g" f
-                | VInt64 i -> Int64.to_string i
+                | VInt i -> Z.to_string i
                 | VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> s
@@ -823,10 +787,7 @@ let run instructions =
                   || classify_float res = FP_infinite
                 then runtime_error "Float overflow in negation"
                 else Stack.push (VFloat res) stack
-            | VInt64 i ->
-                if i = Int64.min_int then
-                  runtime_error "Integer overflow in negation"
-                else Stack.push (VInt64 (Int64.neg i)) stack
+            | VInt i -> Stack.push (VInt (Z.neg i)) stack
             | _ -> runtime_error "NEG expects a float or int");
             next ()
         | FLOAT ->
@@ -835,7 +796,7 @@ let run instructions =
             let float_val =
               match v with
               | VFloat f -> f
-              | VInt64 i -> Int64.to_float i
+              | VInt i -> Z.to_float i
               | VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> (
@@ -854,20 +815,20 @@ let run instructions =
             let v = force (pop1 stack) in
             let int_val =
               match v with
-              | VInt64 i -> i
-              | VFloat f -> Int64.of_float f
-              | VByte c -> Int64.of_int (Char.code c)
+              | VInt i -> i
+              | VFloat f -> Z.of_float f
+              | VByte c -> Z.of_int (Char.code c)
               | VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> (
-                      try Int64.of_string s
+                      try Z.of_string s
                       with Failure _ ->
                         runtime_error ("INT: invalid int string: " ^ s))
                   | None ->
                       runtime_error "INT: invalid heap reference for string")
               | _ -> runtime_error "INT: unsupported type for int conversion"
             in
-            Stack.push (VInt64 int_val) stack;
+            Stack.push (VInt int_val) stack;
             next ()
         | STRING ->
             push_trace "TO_STRING";
@@ -898,16 +859,16 @@ let run instructions =
                          (function VFloat f -> string_of_float f | _ -> "")
                          vs)
                   else if
-                    List.for_all (function VInt64 _ -> true | _ -> false) vs
+                    List.for_all (function VInt _ -> true | _ -> false) vs
                   then
                     String.concat ""
                       (List.map
-                         (function VInt64 i -> Int64.to_string i | _ -> "")
+                         (function VInt i -> Z.to_string i | _ -> "")
                          vs)
                   else
                     runtime_error
-                      "STRING: array is not []byte, []float or []int64"
-              | VInt64 i -> Int64.to_string i
+                      "STRING: array is not []byte, []float or []int"
+              | VInt i -> Z.to_string i
               | VFloat f -> string_of_float f
               | VBool b -> if b then "true" else "false"
               | VByte c -> String.make 1 c
@@ -929,7 +890,7 @@ let run instructions =
                   | None ->
                       runtime_error
                         "TO_BYTES: invalid heap reference for string")
-              | VInt64 i -> Int64.to_string i
+              | VInt i -> Z.to_string i
               | VFloat f -> string_of_float f
               | VBool b -> if b then "true" else "false"
               | VByte c -> String.make 1 c
@@ -946,9 +907,9 @@ let run instructions =
             push_trace "TO_BYTE";
             let v = force (pop1 stack) in
             match v with
-            | VInt64 i ->
+            | VInt i ->
                 Stack.push
-                  (VByte (Char.chr (Int64.to_int (Int64.logand i 0xFFL))))
+                  (VByte (Char.chr (Z.to_int (Z.logand i (Z.of_int64 0xFFL)))))
                   stack;
                 next ()
             | VByte c ->
@@ -965,14 +926,14 @@ let run instructions =
                 Stack.push (VByte (Char.chr (int_of_float f land 0xFF))) stack;
                 next ()
             | VArray vs ->
-                if List.for_all (function VInt64 _ -> true | _ -> false) vs
-                then (
+                if List.for_all (function VInt _ -> true | _ -> false) vs then (
                   let byte_arr =
                     Array.of_list
                       (List.map
                          (function
-                           | VInt64 i ->
-                               Char.chr (Int64.to_int (Int64.logand i 0xFFL))
+                           | VInt i ->
+                               Char.chr
+                                 (Z.to_int (Z.logand i (Z.of_int64 0xFFL)))
                            | _ -> assert false)
                          vs)
                   in
@@ -999,7 +960,7 @@ let run instructions =
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf +. newf)
-              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.add oldi newi)
+              | VInt oldi, VInt newi -> VInt (Z.add oldi newi)
               | _ -> runtime_error "PLUSASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1023,7 +984,7 @@ let run instructions =
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf -. newf)
-              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.sub oldi newi)
+              | VInt oldi, VInt newi -> VInt (Z.sub oldi newi)
               | _ -> runtime_error "MINUSASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1046,7 +1007,7 @@ let run instructions =
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf *. newf)
-              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.mul oldi newi)
+              | VInt oldi, VInt newi -> VInt (Z.mul oldi newi)
               | _ -> runtime_error "STARASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1072,10 +1033,10 @@ let run instructions =
                   if newf = 0.0 then
                     runtime_error "SLASHASSIGN: division by zero";
                   VFloat (oldf /. newf)
-              | VInt64 oldi, VInt64 newi ->
-                  if newi = 0L then
+              | VInt oldi, VInt newi ->
+                  if newi = Z.of_int64 0L then
                     runtime_error "SLASHASSIGN: division by zero";
-                  VInt64 (Int64.div oldi newi)
+                  VInt (Z.div oldi newi)
               | _ -> runtime_error "SLASHASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1095,78 +1056,66 @@ let run instructions =
                 match v with
                 | VHeapRef id -> (
                     match Gc.find_heap_obj id with
-                    | Gc.HString s -> Int64.of_int (String.length s)
-                    | Gc.HBytes bytes_arr ->
-                        Int64.of_int (Array.length bytes_arr)
+                    | Gc.HString s -> Z.of_int (String.length s)
+                    | Gc.HBytes bytes_arr -> Z.of_int (Array.length bytes_arr)
                     | _ ->
                         runtime_error
                           "LENGTH: heap reference is not a string or bytes")
-                | VArray items -> Int64.of_int (List.length items)
-                | VTuple items -> Int64.of_int (List.length items)
+                | VArray items -> Z.of_int (List.length items)
+                | VTuple items -> Z.of_int (List.length items)
                 | _ ->
                     runtime_error
                       "LENGTH expects a string, bytes, array, or tuple"
               in
-              Stack.push (VInt64 length) stack;
+              Stack.push (VInt length) stack;
               next ()
         | BITWISENOT ->
             push_trace "BITWISE_NOT";
             let v = force (pop1 stack) in
             (match v with
-            | VInt64 i -> Stack.push (VInt64 (Int64.lognot i)) stack
-            | _ -> runtime_error "BITWISE_NOT expects an int64");
+            | VInt i -> Stack.push (VInt (Z.lognot i)) stack
+            | _ -> runtime_error "BITWISE_NOT expects an int");
             next ()
         | BITWISEAND ->
             push_trace "BITWISE_AND";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logand a b)) stack
-            | _ -> runtime_error "BITWISE_AND expects int64 operands");
+            | VInt a, VInt b -> Stack.push (VInt (Z.logand a b)) stack
+            | _ -> runtime_error "BITWISE_AND expects int operands");
             next ()
         | BITWISEOR ->
             push_trace "BITWISE_OR";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logor a b)) stack
-            | _ -> runtime_error "BITWISE_OR expects int64 operands");
+            | VInt a, VInt b -> Stack.push (VInt (Z.logor a b)) stack
+            | _ -> runtime_error "BITWISE_OR expects int operands");
             next ()
         | BITWISEXOR ->
             push_trace "BITWISE_XOR";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt64 a, VInt64 b -> Stack.push (VInt64 (Int64.logxor a b)) stack
-            | _ -> runtime_error "BITWISE_XOR expects int64 operands");
+            | VInt a, VInt b -> Stack.push (VInt (Z.logxor a b)) stack
+            | _ -> runtime_error "BITWISE_XOR expects int operands");
             next ()
         | LEFTSHIFT ->
             push_trace "LEFTSHIFT";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt64 a, VInt64 b ->
-                Stack.push (VInt64 (safe_shift_left a b)) stack
-            | _ -> runtime_error "LEFTSHIFT expects int64 operands");
+            | VInt a, VInt b -> Stack.push (VInt (safe_shift_left a b)) stack
+            | _ -> runtime_error "LEFTSHIFT expects int operands");
             next ()
         | RIGHTSHIFT ->
             push_trace "RIGHT_SHIFT";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt64 a, VInt64 b ->
-                Stack.push (VInt64 (Int64.shift_right a (Int64.to_int b))) stack
-            | _ -> runtime_error "RIGHT_SHIFT expects int64 operands");
-            next ()
-        | RIGHTSHIFTLOGICAL ->
-            push_trace "RIGHT_SHIFT_LOGICAL";
-            let a, b = pop2_safe stack in
-            let a, b = (force a, force b) in
-            (match (a, b) with
-            | VInt64 a, VInt64 b ->
-                let shifted = Int64.shift_right_logical a (Int64.to_int b) in
-                Stack.push (VInt64 shifted) stack
-            | _ -> runtime_error "RIGHT_SHIFT_LOGICAL expects int64 operands");
+            | VInt a, VInt b ->
+                Stack.push (VInt (Z.shift_right a (Z.to_int b))) stack
+            | _ -> runtime_error "RIGHT_SHIFT expects int operands");
             next ()
         | BITWISEANDASSIGN ->
             push_trace "BITWISE_ANDASSIGN";
@@ -1183,7 +1132,7 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logand oldi newi)
+              | VInt oldi, VInt newi -> VInt (Z.logand oldi newi)
               | _ -> runtime_error "BITWISE_ANDASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1203,7 +1152,7 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logor oldi newi)
+              | VInt oldi, VInt newi -> VInt (Z.logor oldi newi)
               | _ -> runtime_error "BITWISE_ORASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1223,7 +1172,7 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt64 oldi, VInt64 newi -> VInt64 (Int64.logxor oldi newi)
+              | VInt oldi, VInt newi -> VInt (Z.logxor oldi newi)
               | _ -> runtime_error "BITWISE_XORASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1243,8 +1192,7 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt64 oldi, VInt64 newi ->
-                  VInt64 (Int64.shift_left oldi (Int64.to_int newi))
+              | VInt oldi, VInt newi -> VInt (Z.shift_left oldi (Z.to_int newi))
               | _ -> runtime_error "LEFT_SHIFTASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1264,8 +1212,8 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt64 oldi, VInt64 newi ->
-                  VInt64 (Int64.shift_right oldi (Int64.to_int newi))
+              | VInt oldi, VInt newi ->
+                  VInt (Z.shift_right oldi (Z.to_int newi))
               | _ -> runtime_error "RIGHT_SHIFTASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1323,10 +1271,10 @@ let run instructions =
             let v = Stack.pop stack in
             let start =
               match v with
-              | VInt64 x -> x
-              | _ -> runtime_error "MAKE_RANGE expects int64"
+              | VInt x -> x
+              | _ -> runtime_error "MAKE_RANGE expects int"
             in
-            let range_val = Gc.alloc_range start 1L None in
+            let range_val = Gc.alloc_range start (Z.of_int64 1L) None in
             let id =
               match range_val with
               | VHeapRef id -> id
@@ -1355,13 +1303,13 @@ let run instructions =
                 let len = List.length elements in
                 let s =
                   match v_start with
-                  | VInt64 s -> max 0 (Int64.to_int s)
+                  | VInt s -> max 0 (Z.to_int s)
                   | VUnit -> 0
                   | _ -> runtime_error "SLICE: start index must be int or unit"
                 in
                 let e =
                   match v_end with
-                  | VInt64 e -> min len (Int64.to_int e)
+                  | VInt e -> min len (Z.to_int e)
                   | VUnit -> len
                   | _ -> runtime_error "SLICE: end index must be int or unit"
                 in

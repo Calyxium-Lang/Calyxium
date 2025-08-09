@@ -7,11 +7,11 @@ type heap_obj =
   | HArray of float array
   | HBytes of char array
   | HClosure of string * opcode list * (string * (value * bool)) list
-  | HRange of { current : int64; step : int64; end_ : int64 option }
+  | HRange of { current : Z.t; step : Z.t; end_ : Z.t option }
 
 and value =
   | VFloat of float
-  | VInt64 of int64
+  | VInt of Z.t
   | VBool of bool
   | VByte of char
   | VHeapRef of int

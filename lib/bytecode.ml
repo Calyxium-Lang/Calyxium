@@ -54,7 +54,6 @@ let opcode_of_binop = function
   | BitWiseXOR -> BITWISEXOR
   | LeftShift -> LEFTSHIFT
   | RightShift -> RIGHTSHIFT
-  | RightShiftLogical -> RIGHTSHIFTLOGICAL
   | BitWiseANDAssign -> BITWISEANDASSIGN
   | BitWiseORAssign -> BITWISEORASSIGN
   | BitWiseXORAssign -> BITWISEXORASSIGN
@@ -84,7 +83,7 @@ let rec compile_stmt = function
       let expr_bytecode =
         match assigned_value with
         | Some expr -> compile_expr expr
-        | None -> [ LOAD_INT64 0L ]
+        | None -> [ LOAD_INT (Z.of_int64 0L) ]
       in
       expr_bytecode @ [ STORE_VAR identifier ]
   | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
@@ -95,8 +94,7 @@ let rec compile_stmt = function
       in
       let index_exprs expr =
         List.init (List.length identifier) (fun i ->
-            IndexExpr
-              { array = expr; index = Int64Expr { value = Int64.of_int i } })
+            IndexExpr { array = expr; index = IntExpr { value = Z.of_int i } })
       in
       let values =
         match assigned_value with
@@ -153,7 +151,7 @@ let rec compile_stmt = function
       []
 
 and compile_expr = function
-  | Int64Expr { value } -> [ LOAD_INT64 value ]
+  | IntExpr { value } -> [ LOAD_INT value ]
   | FloatExpr { value } -> [ LOAD_FLOAT value ]
   | StringExpr { value } -> [ LOAD_STRING value ]
   | ByteExpr { value } -> [ LOAD_BYTE value ]
@@ -250,7 +248,7 @@ and compile_expr = function
               match Hashtbl.find_opt enum_tbl struct_name with
               | Some members -> (
                   match List.assoc_opt right members with
-                  | Some value -> [ LOAD_INT64 (Int64.of_int value) ]
+                  | Some value -> [ LOAD_INT (Z.of_int value) ]
                   | None ->
                       failwith
                         ("Unknown enum member `" ^ right ^ "` in enum `"
@@ -295,17 +293,17 @@ and compile_expr = function
       patch_jumps 0 full_code
   | RangeExpr { start; end_ } -> (
       match (start, end_) with
-      | Some (Int64Expr { value = s }), Some (Int64Expr { value = e }) ->
-          let count = Int64.to_int (Int64.add (Int64.sub e s) 1L) in
+      | Some (IntExpr { value = s }), Some (IntExpr { value = e }) ->
+          let count = Z.to_int (Z.add (Z.sub e s) (Z.of_int 1)) in
           let range_elements =
-            List.init count (fun i -> LOAD_INT64 (Int64.add s (Int64.of_int i)))
+            List.init count (fun i -> LOAD_INT (Z.add s (Z.of_int i)))
           in
           range_elements @ [ LOAD_ARRAY count ]
-      | Some (Int64Expr { value = s }), None -> [ LOAD_INT64 s; MAKE_RANGE ]
-      | None, Some (Int64Expr { value = e }) ->
-          let count = Int64.to_int (Int64.add e 1L) in
+      | Some (IntExpr { value = s }), None -> [ LOAD_INT s; MAKE_RANGE ]
+      | None, Some (IntExpr { value = e }) ->
+          let count = Z.to_int (Z.add e (Z.of_int 1)) in
           let range_elements =
-            List.init count (fun i -> LOAD_INT64 (Int64.of_int i))
+            List.init count (fun i -> LOAD_INT (Z.of_int i))
           in
           range_elements @ [ LOAD_ARRAY count ]
       | _ -> failwith "Range bounds must be integer literals for now")

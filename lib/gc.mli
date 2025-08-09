@@ -5,11 +5,11 @@ type heap_obj =
   | HArray of float array
   | HBytes of char array
   | HClosure of string * opcode list * (string * (value * bool)) list
-  | HRange of { current : int64; step : int64; end_ : int64 option }
+  | HRange of { current : Z.t; step : Z.t; end_ : Z.t option }
 
 and value =
   | VFloat of float
-  | VInt64 of int64
+  | VInt of Z.t
   | VBool of bool
   | VByte of char
   | VHeapRef of int
@@ -45,4 +45,4 @@ val alloc_bytes_with_gc :
 val alloc_array_with_gc :
   value Stack.t -> (string * (value * bool)) list -> float array -> value
 
-val alloc_range : int64 -> int64 -> int64 option -> value
+val alloc_range : Z.t -> Z.t -> Z.t option -> value

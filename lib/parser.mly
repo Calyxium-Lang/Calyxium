@@ -20,7 +20,7 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Use Module True False Enum Struct Int64Type FloatType StringType ByteType BoolType UnitType
+%token Recursive If Then Else Let Match With Use Module True False Enum Struct IntType FloatType StringType ByteType BoolType UnitType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range DoubleColon
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
@@ -28,7 +28,7 @@
 %token LeftShiftAssign RightShiftAssign
 %token Plus Minus Star Slash Mod Carot ArrConcat Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe DeRef UnderScore Question
 %token <string> Ident
-%token <int64> Int64
+%token <Z.t> Int
 %token <float> Float
 %token <string> String
 %token <char> Byte
@@ -74,7 +74,7 @@ parameter:
   | Ident { { Stmt.name = $1; param_type = Type.Infer } }
 
 type_expr:
-  | Int64Type { Type.SymbolType { value = "int" } }
+  | IntType { Type.SymbolType { value = "int" } }
   | FloatType { Type.SymbolType { value = "float" } }
   | StringType { Type.SymbolType { value = "string" } }
   | ByteType { Type.SymbolType { value = "byte" } }
@@ -115,7 +115,7 @@ expr:
   | expr Dec { Expr.UnaryExpr { operator = Token.Dec; operand = $1 } }
   | Ident LParen argument_list RParen { Expr.CallExpr { callee = Expr.VarExpr $1; arguments = $3 } }
   | Minus expr %prec UnaryMinus { Expr.UnaryExpr { operator = Token.Minus; operand = $2 } }
-  | Int64 { Expr.Int64Expr { value = $1 } }
+  | Int { Expr.IntExpr { value = $1 } }
   | Float { Expr.FloatExpr { value = $1 } }
   | String { Expr.StringExpr { value = $1 } }
   | Byte { Expr.ByteExpr { value = $1 } }

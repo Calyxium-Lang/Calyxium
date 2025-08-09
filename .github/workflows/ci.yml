@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: "3.x"
 
-      - run: opam install dune
+      - run: opam install dune zarith
 
       - run: opam exec -- dune build
 

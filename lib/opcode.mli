@@ -1,5 +1,5 @@
 type opcode =
-  | LOAD_INT64 of int64
+  | LOAD_INT of Z.t
   | LOAD_FLOAT of float
   | LOAD_STRING of string
   | LOAD_BYTE of char
@@ -56,7 +56,6 @@ type opcode =
   | BITWISENOT
   | LEFTSHIFT
   | RIGHTSHIFT
-  | RIGHTSHIFTLOGICAL
   | BITWISEANDASSIGN
   | BITWISEORASSIGN
   | BITWISEXORASSIGN

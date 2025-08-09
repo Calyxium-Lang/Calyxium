@@ -76,7 +76,7 @@ end
 
 and Expr : sig
   type t =
-    | Int64Expr of { value : int64 }
+    | IntExpr of { value : Z.t }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
     | ByteExpr of { value : char }
@@ -99,7 +99,7 @@ and Expr : sig
     | SliceExpr of { array : t; start : t option; end_ : t option }
 end = struct
   type t =
-    | Int64Expr of { value : int64 }
+    | IntExpr of { value : Z.t }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
     | ByteExpr of { value : char }

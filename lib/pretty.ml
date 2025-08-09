@@ -71,7 +71,7 @@ let string_of_parameter (param : Stmt.parameter) =
   Printf.sprintf "%s: %s" param.name (string_of_type param.param_type)
 
 let rec string_of_expr = function
-  | Expr.Int64Expr { value } -> Int64.to_string value
+  | Expr.IntExpr { value } -> Z.to_string value
   | Expr.FloatExpr { value } -> string_of_float value
   | Expr.StringExpr { value } ->
       let escaped = String.escaped value in

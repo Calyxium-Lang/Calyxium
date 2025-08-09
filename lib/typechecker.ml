@@ -136,7 +136,7 @@ let rec check_stmt env func_env stmt =
                     IndexExpr
                       {
                         array = VarExpr name;
-                        index = Int64Expr { value = Int64.of_int i };
+                        index = IntExpr { value = Z.of_int i };
                       })
                   element_types
             | Some t ->
@@ -152,10 +152,7 @@ let rec check_stmt env func_env stmt =
                 List.mapi
                   (fun i _ ->
                     IndexExpr
-                      {
-                        array = expr;
-                        index = Int64Expr { value = Int64.of_int i };
-                      })
+                      { array = expr; index = IntExpr { value = Z.of_int i } })
                   element_types
             | _ ->
                 raise
@@ -382,7 +379,7 @@ let rec check_stmt env func_env stmt =
 
 and check_expr env func_env expr =
   match expr with
-  | Int64Expr _ -> SymbolType { value = "int" }
+  | IntExpr _ -> SymbolType { value = "int" }
   | FloatExpr _ -> SymbolType { value = "float" }
   | StringExpr _ -> SymbolType { value = "string" }
   | BoolExpr _ -> SymbolType { value = "bool" }
@@ -550,8 +547,8 @@ and check_expr env func_env expr =
       | ArrayType { element_type } -> element_type
       | TupleType element_types -> (
           match index with
-          | Int64Expr { value } ->
-              let idx = Int64.to_int value in
+          | IntExpr { value } ->
+              let idx = Z.to_int value in
               if idx < 0 || idx >= List.length element_types then
                 raise
                   (TypeError
