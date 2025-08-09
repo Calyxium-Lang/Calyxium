@@ -190,9 +190,6 @@ let rec not_equal_value a b =
   | _ -> false
 
 let string_to_bytes s = Array.init (String.length s) (String.get s)
-let safe_add a b = Z.add a b
-let safe_sub a b = Z.sub a b
-let safe_mul a b = Z.mul a b
 
 let safe_shift_left a b =
   if Z.sign b < 0 || Z.gt b (Z.of_int 63) then
@@ -278,7 +275,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in addition"
                        else VFloat res
-                   | VInt a, VInt b -> VInt (safe_add a b)
+                   | VInt a, VInt b -> VInt (Z.add a b)
                    | _ -> runtime_error "PLUS expects numbers"))
               stack;
             next ()
@@ -296,7 +293,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in subtraction"
                        else VFloat res
-                   | VInt a, VInt b -> VInt (safe_sub a b)
+                   | VInt a, VInt b -> VInt (Z.sub a b)
                    | _ -> runtime_error "MINUS expects numbers"))
               stack;
             next ()
@@ -314,7 +311,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in multiplication"
                        else VFloat res
-                   | VInt a, VInt b -> VInt (safe_mul a b)
+                   | VInt a, VInt b -> VInt (Z.mul a b)
                    | _ -> runtime_error "STAR expects numbers"))
               stack;
             next ()
@@ -386,7 +383,7 @@ let run instructions =
             push_trace ("JUMP_IF_FALSE " ^ string_of_int offset);
             match Stack.pop_opt stack with
             | Some (VFloat 0.0) -> frame.pc <- frame.pc + offset
-            | Some (VInt z) when Z.equal z (Z.of_int64 0L) ->
+            | Some (VInt z) when Z.equal z Z.zero ->
                 frame.pc <- frame.pc + offset
             | Some (VBool false) -> frame.pc <- frame.pc + offset
             | Some _ -> next ()
@@ -463,7 +460,7 @@ let run instructions =
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
-              | VInt i -> i <> Z.of_int64 0L
+              | VInt i -> i <> Z.zero
               | _ -> runtime_error "AND expects bool, float, or int"
             in
             Stack.push (VBool (bool_val a && bool_val b)) stack;
@@ -475,7 +472,7 @@ let run instructions =
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
-              | VInt i -> i <> Z.of_int64 0L
+              | VInt i -> i <> Z.zero
               | _ -> runtime_error "OR expects bool, float, or int"
             in
             Stack.push (VBool (bool_val a || bool_val b)) stack;
@@ -502,7 +499,7 @@ let run instructions =
                     || classify_float res = FP_infinite
                   then runtime_error "Float overflow in increment"
                   else VFloat res
-              | VInt i -> VInt (safe_add i (Z.of_int64 1L))
+              | VInt i -> VInt (Z.add i Z.one)
               | _ -> runtime_error "INC expects float or int"
             in
             Stack.push result stack;
@@ -519,7 +516,7 @@ let run instructions =
                     || classify_float res = FP_infinite
                   then runtime_error "Float overflow in decrement"
                   else VFloat res
-              | VInt i -> VInt (safe_sub i (Z.of_int64 1L))
+              | VInt i -> VInt (Z.sub i Z.one)
               | _ -> runtime_error "DEC expects float or int"
             in
             Stack.push result stack;
@@ -599,8 +596,8 @@ let run instructions =
                       let elem = Z.add current (Z.mul step (Z.of_int index)) in
                       match end_ with
                       | Some e
-                        when (step >= Z.of_int64 0L && elem > e)
-                             || (step < Z.of_int64 0L && elem < e) ->
+                        when (step >= Z.zero && elem > e)
+                             || (step < Z.zero && elem < e) ->
                           runtime_error
                             "Index out of bounds in LOAD_INDEX for range"
                       | _ -> VInt elem)
@@ -1034,7 +1031,7 @@ let run instructions =
                     runtime_error "SLASHASSIGN: division by zero";
                   VFloat (oldf /. newf)
               | VInt oldi, VInt newi ->
-                  if newi = Z.of_int64 0L then
+                  if newi = Z.zero then
                     runtime_error "SLASHASSIGN: division by zero";
                   VInt (Z.div oldi newi)
               | _ -> runtime_error "SLASHASSIGN: type mismatch"
@@ -1274,7 +1271,7 @@ let run instructions =
               | VInt x -> x
               | _ -> runtime_error "MAKE_RANGE expects int"
             in
-            let range_val = Gc.alloc_range start (Z.of_int64 1L) None in
+            let range_val = Gc.alloc_range start Z.one None in
             let id =
               match range_val with
               | VHeapRef id -> id

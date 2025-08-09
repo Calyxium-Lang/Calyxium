@@ -83,7 +83,7 @@ let rec compile_stmt = function
       let expr_bytecode =
         match assigned_value with
         | Some expr -> compile_expr expr
-        | None -> [ LOAD_INT (Z.of_int64 0L) ]
+        | None -> [ LOAD_INT Z.zero ]
       in
       expr_bytecode @ [ STORE_VAR identifier ]
   | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
@@ -294,14 +294,14 @@ and compile_expr = function
   | RangeExpr { start; end_ } -> (
       match (start, end_) with
       | Some (IntExpr { value = s }), Some (IntExpr { value = e }) ->
-          let count = Z.to_int (Z.add (Z.sub e s) (Z.of_int 1)) in
+          let count = Z.to_int (Z.add (Z.sub e s) Z.one) in
           let range_elements =
             List.init count (fun i -> LOAD_INT (Z.add s (Z.of_int i)))
           in
           range_elements @ [ LOAD_ARRAY count ]
       | Some (IntExpr { value = s }), None -> [ LOAD_INT s; MAKE_RANGE ]
       | None, Some (IntExpr { value = e }) ->
-          let count = Z.to_int (Z.add e (Z.of_int 1)) in
+          let count = Z.to_int (Z.add e Z.one) in
           let range_elements =
             List.init count (fun i -> LOAD_INT (Z.of_int i))
           in

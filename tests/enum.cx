@@ -15,3 +15,23 @@ let week_to_string(day: Week): string {
 let tuesday_str = week_to_string(Week.Tuesday)
 
 assert(tuesday_str == "Tuesday")
+
+assert(Week.Monday != Week.Tuesday)
+assert(Week.Sunday == Week.Sunday)
+
+let weekend = [ Week.Saturday, Week.Sunday ]
+assert(week_to_string(weekend[0]) == "Saturday")
+assert(week_to_string(weekend[1]) == "Sunday")
+
+let describe_day(day: Week): string {
+    match day with
+    | Week.Monday -> "Start of the week"
+    | Week.Friday -> "End of workweek"
+    | Week.Saturday -> "Weekend"
+    | Week.Sunday -> "Weekend"
+    | _ -> "Midweek"
+}
+
+assert(describe_day(Week.Monday) == "Start of the week")
+assert(describe_day(Week.Wednesday) == "Midweek")
+assert(describe_day(Week.Saturday) == "Weekend")

@@ -1,17 +1,16 @@
 -- Id: tests/byte.cx
 
--- basic test for bytes
-
+-- basic single byte checks
 let a = 'A'
 assert(a == 'A')
-
-let arr = ['H', 'e', 'l', 'l', 'o']
-assert(arr[0] == 'H')
-assert(arr[4] == 'o')
 
 let c = 'c'
 let d = 'c'
 assert(c == d)
+
+let arr = ['H', 'e', 'l', 'l', 'o']
+assert(arr[0] == 'H')
+assert(arr[4] == 'o')
 
 let greeting = ['H', 'i']
 assert(greeting[0] == 'H')
@@ -48,7 +47,45 @@ assert(to_int('\n') == 10)
 assert(to_int('\t') == 9)
 
 assert(to_byte(10) == '\n')
+assert(to_byte(65) == 'A')
+assert(to_byte(122) == 'z')
 
 let ascii_vals = [33, 34, 35, 36, 37, 38, 39]
 let ascii_str = to_string(to_byte(ascii_vals))
 assert(ascii_str == "!\"#$%&'")
+
+let upper = to_bytes("HELLO")
+let lower = to_bytes("hello")
+let rec check_case_down(i: int): int {
+    if i < length(upper) then {
+        assert(to_int(upper[i]) + 32 == to_int(lower[i]))
+        check_case_down(i + 1)
+    }
+}
+check_case_down(0)
+
+let rec check_case_up(i: int): int {
+    if i < length(lower) then {
+        assert(to_int(lower[i]) - 32 == to_int(upper[i]))
+        check_case_up(i + 1)
+    }
+}
+check_case_up(0)
+
+let s1 = "abc"
+let s2 = "123"
+let s_combined = s1 ^ s2
+assert(s_combined == "abc123")
+
+let original = "roundtrip"
+let as_bytes = to_bytes(original)
+let back_str = to_string(as_bytes)
+assert(back_str == original)
+
+let rec check_ascii(i: int): int {
+    if i < 16 then {
+        assert(to_int(to_byte(i)) == i)
+        check_ascii(i + 1)
+    }
+}
+check_ascii(0)
