@@ -1,0 +1,10 @@
+(rule
+ (alias runtest)
+ (deps
+  %{bin:calyxium}
+  (glob_files *.cx))
+ (action
+  (run
+   bash
+   -c
+   "set -e; for f in *.cx; do calyxium \"$f\" > /dev/null; echo Passed: $f; done")))

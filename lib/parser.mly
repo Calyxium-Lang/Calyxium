@@ -135,7 +135,6 @@ expr:
   | expr BitWiseAND expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseAND; right = $3 } }
   | expr LeftShift expr { Expr.BinaryExpr { left = $1; operator = Token.LeftShift; right = $3 } }
   | expr RightShift expr { Expr.BinaryExpr { left = $1; operator = Token.RightShift; right = $3 } }
-  | expr RightShiftLogical expr { Expr.BinaryExpr { left = $1; operator = Token.RightShiftLogical; right = $3 } }
   | expr BitWiseANDAssign expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseANDAssign; right = $3 } }
   | expr BitWiseORAssign expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseORAssign; right = $3 } }
   | expr BitWiseXORAssign expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseXORAssign; right = $3 } }

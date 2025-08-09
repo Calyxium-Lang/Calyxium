@@ -8,7 +8,6 @@ exception TypeError of string
 
 let enum_variants : (string, string list) Hashtbl.t = Hashtbl.create 10
 let stdlib_used = ref false
-let float_type = SymbolType { value = "float" }
 
 let rec string_of_type = function
   | Any -> "any"
@@ -36,7 +35,10 @@ let built_in_modules : (string * (string * Type.t) list) list =
         ("nan", SymbolType { value = "float" });
         ("inf", SymbolType { value = "float" });
         ("neg_inf", SymbolType { value = "float" });
-        ("sin", FunctionType ([ float_type ], float_type));
+        ( "sin",
+          FunctionType
+            ([ SymbolType { value = "float" } ], SymbolType { value = "float" })
+        );
       ] );
   ]
 
@@ -453,8 +455,8 @@ and check_expr env func_env expr =
       | Eq | Neq | Geq | Leq | LogicalAnd | LogicalOr | Less | Greater ->
           SymbolType { value = "bool" }
       | BitWiseAND | BitWiseOR | BitWiseXOR | LeftShift | RightShift
-      | RightShiftLogical | BitWiseANDAssign | BitWiseORAssign
-      | BitWiseXORAssign | LeftShiftAssign | RightShiftAssign ->
+      | BitWiseANDAssign | BitWiseORAssign | BitWiseXORAssign | LeftShiftAssign
+      | RightShiftAssign ->
           if not (type_eq lt (SymbolType { value = "int" })) then
             raise
               (TypeError

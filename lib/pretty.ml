@@ -53,7 +53,6 @@ let token_to_string = function
   | Token.BitWiseXOR -> "$"
   | Token.LeftShift -> "<<"
   | Token.RightShift -> ">>"
-  | Token.RightShiftLogical -> ">>>"
   | _ -> "<unknown>"
 
 let rec string_of_type t =

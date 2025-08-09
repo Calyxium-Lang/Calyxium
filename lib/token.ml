@@ -54,14 +54,14 @@ type t =
   | False
   | Enum
   | Ref
-  | Int64Type
+  | IntType
   | FloatType
   | StringType
   | ByteType
   | BoolType
   | UnitType
   | Ident of string
-  | Int64 of int64
+  | Int of Z.t
   | Float of float
   | String of string
   | Byte of char
@@ -75,7 +75,6 @@ type t =
   | BitWiseNOT
   | LeftShift
   | RightShift
-  | RightShiftLogical
   | BitWiseANDAssign
   | BitWiseORAssign
   | BitWiseXORAssign
