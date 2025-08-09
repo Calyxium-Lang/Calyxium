@@ -16,11 +16,12 @@
 %right Pow Carot ArrConcat
 %nonassoc UnaryMinus NotPrec
 %left Dot
+%right Question
 %nonassoc Inc Dec
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Use Module True False Enum Struct IntType FloatType StringType ByteType BoolType UnitType
+%token Recursive If Then Else Let Match With Use Module True False Type In IntType FloatType StringType ByteType BoolType UnitType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range DoubleColon
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift RightShiftLogical
@@ -54,7 +55,7 @@ stmt:
   | FunctionDeclStmt { $1 }
   | ModuleStmt { $1 }
   | EnumStmt { $1 }
-  | StructStmt { $1 }
+  | RecordStmt { $1 }
   | expr { Stmt.ExprStmt $1 }
 
 case_list:
@@ -127,7 +128,7 @@ expr:
   | LBracket expr_list RBracket { Expr.ArrayExpr { elements = $2 } }
   | expr LBracket expr RBracket { Expr.IndexExpr { array = $1; index = $3 } }
   | expr Dot Ident { Expr.DotExpr { left = $1; right = $3 } }
-  | LParen expr RParen Question expr Colon expr { Expr.TernaryExpr { cond = $2; onTrue = $5; onFalse = $7; } }
+  | expr Question expr Colon expr { Expr.TernaryExpr { cond = $1; onTrue = $3; onFalse = $5 } }
   | LParen expr_list RParen { match $2 with | [single] -> single | multiple -> Expr.TupleExpr multiple }
   | LParen expr RParen { $2 }
   | expr BitWiseOR expr { Expr.BinaryExpr { left = $1; operator = Token.BitWiseOR; right = $3 } }
@@ -185,10 +186,10 @@ ModuleStmt:
   | Module Ident LBrace stmt_list RBrace { Stmt.ModuleStmt { module_name = $2; block = $4 } }
 
 VarDeclStmt:
-  | Let Ident Colon type_expr Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
-  | Let ident_list Colon type_expr Assign expr_list { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4; } }
-  | Let Ident Assign expr { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $4; explicit_type = Type.Infer } }
-  | Let ident_list Assign expr_list { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $4; explicit_type = Type.Infer } }
+  | Let Ident Colon type_expr Assign expr In { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
+  | Let ident_list Colon type_expr Assign expr_list In { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4; } }
+  | Let Ident Assign expr In { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $4; explicit_type = Type.Infer } }
+  | Let ident_list Assign expr_list In { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $4; explicit_type = Type.Infer } }
   
 FunctionDeclStmt:
   | Let Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = $7; body = $9 } }
@@ -199,7 +200,7 @@ FunctionDeclStmt:
   // | Let Ident LParen RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = Type.Infer; body = $6 } }
 
 EnumStmt:
-  | Enum Ident LBrace enum_member_list RBrace { Stmt.EnumStmt { name = $2; members = $4; }} 
+  | Type Ident Assign LBrace enum_member_list RBrace { Stmt.EnumStmt { name = $2; members = $5; }} 
 
-StructStmt:
-  | Struct Ident LBrace stmt_list RBrace { Stmt.StructStmt { name = $2; fields = $4; } }
+RecordStmt:
+  | Type Ident Assign LBrace stmt_list RBrace { Stmt.RecordStmt { name = $2; fields = $5; } }

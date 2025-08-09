@@ -19,11 +19,11 @@ let rec string_of_type = function
   | FunctionType (params, ret) ->
       let params_str = String.concat " * " (List.map string_of_type params) in
       Printf.sprintf "(%s -> %s)" params_str (string_of_type ret)
-  | StructType fields ->
+  | RecordType fields ->
       let field_strs =
         List.map (fun (name, ty) -> name ^ ": " ^ string_of_type ty) fields
       in
-      "struct { " ^ String.concat "; " field_strs ^ " }"
+      "record { " ^ String.concat "; " field_strs ^ " }"
 
 let built_in_modules : (string * (string * Type.t) list) list =
   [
@@ -144,7 +144,7 @@ let rec check_stmt env func_env stmt =
             | Some t ->
                 raise
                   (TypeError
-                     ("Cannot destructure non-tuple variable `" ^ name
+                     ("Cannot derecordure non-tuple variable `" ^ name
                     ^ "`: expected tuple, but got " ^ string_of_type t))
             | None -> raise (TypeError ("Unbound variable `" ^ name ^ "`")))
         | [ expr ] -> (
@@ -159,7 +159,7 @@ let rec check_stmt env func_env stmt =
             | _ ->
                 raise
                   (TypeError
-                     ("Cannot destructure non-tuple expression: expected \
+                     ("Cannot derecordure non-tuple expression: expected \
                        tuple, but got " ^ string_of_type expr_type)))
         | _ -> assigned_value
       in
@@ -168,7 +168,7 @@ let rec check_stmt env func_env stmt =
       if id_count <> val_count then
         raise
           (TypeError
-             ("Tuple destructure mismatch: expected " ^ string_of_int id_count
+             ("Tuple derecordure mismatch: expected " ^ string_of_int id_count
             ^ " values, but got " ^ string_of_int val_count));
       let inferred_types =
         List.mapi
@@ -185,7 +185,7 @@ let rec check_stmt env func_env stmt =
             raise
               (TypeError
                  ("Declared tuple type has " ^ string_of_int type_count
-                ^ " elements, but destructure has " ^ string_of_int id_count
+                ^ " elements, but derecordure has " ^ string_of_int id_count
                 ^ " identifiers"));
           List.iteri
             (fun i (ident, inferred) ->
@@ -193,7 +193,7 @@ let rec check_stmt env func_env stmt =
               if not (type_eq inferred expected) then
                 raise
                   (TypeError
-                     ("Type mismatch in destructure of `" ^ ident
+                     ("Type mismatch in derecordure of `" ^ ident
                     ^ "`: expected " ^ string_of_type expected ^ ", but got "
                     ^ string_of_type inferred)))
             inferred_types;
@@ -210,7 +210,7 @@ let rec check_stmt env func_env stmt =
               if not (type_eq inferred explicit_type) then
                 raise
                   (TypeError
-                     ("Type mismatch in destructure: expected "
+                     ("Type mismatch in derecordure: expected "
                      ^ string_of_type explicit_type
                      ^ ", but got " ^ string_of_type inferred)))
             inferred_types;
@@ -358,8 +358,8 @@ let rec check_stmt env func_env stmt =
           (List.mapi (fun i m -> (i, m)) members)
       in
       (name, enum_type) :: new_env
-  | StructStmt { name; fields } ->
-      let struct_env =
+  | RecordStmt { name; fields } ->
+      let record_env =
         List.fold_left
           (fun acc_env field_stmt ->
             match field_stmt with
@@ -367,17 +367,17 @@ let rec check_stmt env func_env stmt =
             | _ ->
                 raise
                   (TypeError
-                     ("Invalid statement in struct `" ^ name
+                     ("Invalid statement in record `" ^ name
                     ^ "`: only variable delcarations are allowed")))
           [] fields
       in
-      let struct_type =
+      let record_type =
         let fields_as_types =
-          List.rev_map (fun (id, ty) -> (id, ty)) struct_env
+          List.rev_map (fun (id, ty) -> (id, ty)) record_env
         in
-        StructType fields_as_types
+        RecordType fields_as_types
       in
-      (name, struct_type) :: env
+      (name, record_type) :: env
 
 and check_expr env func_env expr =
   match expr with
@@ -598,39 +598,39 @@ and check_expr env func_env expr =
           | Some member_type -> member_type
           | None -> (
               match List.assoc_opt name env with
-              | Some (StructType fields) -> (
+              | Some (RecordType fields) -> (
                   match List.assoc_opt right fields with
                   | Some ty -> ty
                   | None ->
                       raise
                         (TypeError
-                           ("Unknown struct field:\n" ^ "  `" ^ right
-                          ^ "` is not a field of struct `" ^ name ^ "`")))
+                           ("Unknown record field:\n" ^ "  `" ^ right
+                          ^ "` is not a field of record `" ^ name ^ "`")))
               | Some _ ->
                   raise
                     (TypeError
-                       ("Cannot access `" ^ right ^ "` on non-struct value `"
+                       ("Cannot access `" ^ right ^ "` on non-record value `"
                       ^ name ^ "`"))
               | None ->
                   raise
                     (TypeError
-                       ("Unknown enum or struct:\n" ^ "  `" ^ name
+                       ("Unknown enum or record:\n" ^ "  `" ^ name
                       ^ "` is not defined"))))
       | _ -> (
           match left_type with
-          | StructType fields -> (
+          | RecordType fields -> (
               match List.assoc_opt right fields with
               | Some ty -> ty
               | None ->
                   raise
                     (TypeError
-                       ("Unknown struct field:\n" ^ "  `" ^ right
-                      ^ "` is not a field of the struct")))
+                       ("Unknown record field:\n" ^ "  `" ^ right
+                      ^ "` is not a field of the record")))
           | _ ->
               raise
                 (TypeError
                    ("Dot access error:\n" ^ "  Cannot access field `" ^ right
-                  ^ "` on non-struct or non-enum expression"))))
+                  ^ "` on non-record or non-enum expression"))))
   | TernaryExpr { cond; onTrue; onFalse } ->
       let ct = check_expr env func_env cond in
       if not (type_eq ct (SymbolType { value = "bool" })) then

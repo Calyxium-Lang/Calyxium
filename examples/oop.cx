@@ -18,26 +18,26 @@
 -- }
 
 type Person {
-    let name = "John Doe"
-    let age = 30
+    let name = "John Doe" in
+    let age = 30 in
 }
 
 print(Person.name ^ "\n")
 print(to_string(Person.age) ^ "\n")
 
-struct Car {
-    let make = "Tesla"
-    let model = "Model S"
-    let year = 2023
+type Car {
+    let make = "Tesla" in
+    let model = "Model S" in
+    let year = 2023 in
 }
 
 print(Car.make ^ " " ^ Car.model ^ "\n")
 print(to_string(Car.year) ^ "\n")
 
 
-struct Ascii {
-    let ascii_vals = [33, 34, 35]
+type Ascii {
+    let ascii_vals = [33, 34, 35] in
 }
 
-let ascii_str = to_string(to_byte(Ascii.ascii_vals))
+let ascii_str = to_string(to_byte(Ascii.ascii_vals)) in
 print(ascii_str)

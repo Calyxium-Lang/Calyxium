@@ -129,7 +129,7 @@ let rec compile_stmt = function
       let numbered_members = List.mapi (fun i m -> (m, i)) members in
       Hashtbl.replace enum_tbl name numbered_members;
       []
-  | StructStmt { name; fields } ->
+  | RecordStmt { name; fields } ->
       let rec register_struct prefix fields =
         let full_name = String.concat "." prefix in
         let actual_fields =
@@ -138,7 +138,7 @@ let rec compile_stmt = function
               match stmt with
               | VarDeclarationStmt { identifier; assigned_value = Some v; _ } ->
                   (identifier, v) :: acc
-              | StructStmt { name = nested_name; fields = nested_fields } ->
+              | RecordStmt { name = nested_name; fields = nested_fields } ->
                   let nested_full = prefix @ [ nested_name ] in
                   register_struct nested_full nested_fields;
                   acc

@@ -83,8 +83,8 @@ rule token = parse
   | "mod"                    { at_line_start := false; Module }
   | "true"                   { at_line_start := false; True }
   | "false"                  { at_line_start := false; False }
-  | "enum"                   { at_line_start := false; Enum }
-  | "struct"                 { at_line_start := false; Struct }
+  | "type"                   { at_line_start := false; Type }
+  | "in"                     { at_line_start := false; In }
 
   | "int"                    { at_line_start := false; IntType }
   | "float"                  { at_line_start := false; FloatType }

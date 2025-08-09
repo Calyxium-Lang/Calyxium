@@ -1,27 +1,27 @@
 -- Id: tests/byte.cx
 
 -- basic single byte checks
-let a = 'A'
+let a = 'A' in 
 assert(a == 'A')
 
-let c = 'c'
-let d = 'c'
+let c = 'c' in
+let d = 'c' in
 assert(c == d)
 
-let arr = ['H', 'e', 'l', 'l', 'o']
+let arr = ['H', 'e', 'l', 'l', 'o'] in
 assert(arr[0] == 'H')
 assert(arr[4] == 'o')
 
-let greeting = ['H', 'i']
+let greeting = ['H', 'i'] in
 assert(greeting[0] == 'H')
 assert(greeting[1] == 'i')
 assert(to_string(greeting) == "Hi")
 
-let empty = []
+let empty = [] in
 assert(length(empty) == 0)
 
-let byte_str = "Byte test"
-let byte_arr = to_bytes(byte_str)
+let byte_str = "Byte test" in
+let byte_arr = to_bytes(byte_str) in
 assert(length(byte_arr) == 9)
 assert(byte_arr[0] == 'B')
 assert(byte_arr[8] == 't')
@@ -50,12 +50,12 @@ assert(to_byte(10) == '\n')
 assert(to_byte(65) == 'A')
 assert(to_byte(122) == 'z')
 
-let ascii_vals = [33, 34, 35, 36, 37, 38, 39]
-let ascii_str = to_string(to_byte(ascii_vals))
+let ascii_vals = [33, 34, 35, 36, 37, 38, 39] in
+let ascii_str = to_string(to_byte(ascii_vals)) in
 assert(ascii_str == "!\"#$%&'")
 
-let upper = to_bytes("HELLO")
-let lower = to_bytes("hello")
+let upper = to_bytes("HELLO") in
+let lower = to_bytes("hello") in
 let rec check_case_down(i: int): int {
     if i < length(upper) then {
         assert(to_int(upper[i]) + 32 == to_int(lower[i]))
@@ -72,14 +72,14 @@ let rec check_case_up(i: int): int {
 }
 check_case_up(0)
 
-let s1 = "abc"
-let s2 = "123"
-let s_combined = s1 ^ s2
+let s1 = "abc" in
+let s2 = "123" in
+let s_combined = s1 ^ s2 in
 assert(s_combined == "abc123")
 
-let original = "roundtrip"
-let as_bytes = to_bytes(original)
-let back_str = to_string(as_bytes)
+let original = "roundtrip" in
+let as_bytes = to_bytes(original) in
+let back_str = to_string(as_bytes) in
 assert(back_str == original)
 
 let rec check_ascii(i: int): int {

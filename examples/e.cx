@@ -19,7 +19,7 @@ let array_to_float(int_array: []int): []float {
     let rec convert(i: int, acc: []float, arr: []int): []float {
         if i >= length(arr) then reverse(acc, [])
         else {
-            let f = to_float(arr[i])
+            let f = to_float(arr[i]) in
             convert(i + 1, prepend(f, acc), arr)
         }
     }
@@ -27,9 +27,3 @@ let array_to_float(int_array: []int): []float {
 }
 
 print(array_to_float([ 1, 2 ]) == [ 1.0, 2.0 ])
-
-let x = [1..5]
-match x with
-| [single] -> print("one")
-| x :: y :: rest -> print(x)
-| [] -> print("empty array")

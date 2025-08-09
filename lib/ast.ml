@@ -4,7 +4,7 @@ module rec Type : sig
     | ArrayType of { element_type : t }
     | TupleType of t list
     | FunctionType of t list * t
-    | StructType of (string * t) list
+    | RecordType of (string * t) list
     | Any
     | Infer
 end = struct
@@ -13,7 +13,7 @@ end = struct
     | ArrayType of { element_type : t }
     | TupleType of t list
     | FunctionType of t list * t
-    | StructType of (string * t) list
+    | RecordType of (string * t) list
     | Any
     | Infer
 end
@@ -44,7 +44,7 @@ and Stmt : sig
     | ModuleStmt of { module_name : string; block : t list }
     | ExprStmt of Expr.t
     | EnumStmt of { name : string; members : string list }
-    | StructStmt of { name : string; fields : t list }
+    | RecordStmt of { name : string; fields : t list }
 end = struct
   type parameter = { name : string; param_type : Type.t }
 
@@ -71,7 +71,7 @@ end = struct
     | ModuleStmt of { module_name : string; block : t list }
     | ExprStmt of Expr.t
     | EnumStmt of { name : string; members : string list }
-    | StructStmt of { name : string; fields : t list }
+    | RecordStmt of { name : string; fields : t list }
 end
 
 and Expr : sig

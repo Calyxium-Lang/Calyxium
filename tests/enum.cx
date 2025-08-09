@@ -2,24 +2,24 @@
 
 -- basic tests for enum
 
-enum Week {
+type Week = {
     Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
 }
 
-let week_names = [ "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" ]
+let week_names = [ "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" ] in
 
 let week_to_string(day: Week): string {
     week_names[day]
 }
 
-let tuesday_str = week_to_string(Week.Tuesday)
+let tuesday_str = week_to_string(Week.Tuesday) in
 
 assert(tuesday_str == "Tuesday")
 
 assert(Week.Monday != Week.Tuesday)
 assert(Week.Sunday == Week.Sunday)
 
-let weekend = [ Week.Saturday, Week.Sunday ]
+let weekend = [ Week.Saturday, Week.Sunday ] in
 assert(week_to_string(weekend[0]) == "Saturday")
 assert(week_to_string(weekend[1]) == "Sunday")
 

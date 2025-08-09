@@ -2,11 +2,11 @@
 
 -- basic tests for pattern matching
 
-enum Colors {
+type Colors = {
     Red, Blue, Green
 }
 
-let c = Colors.Green
+let c = Colors.Green in
 
 let result(): string {
     match c with
@@ -58,7 +58,7 @@ assert(check(5) == "small")
 assert(check(42) == "magic")
 assert(check(20) == "big")
 
-enum Light {
+type Light =  {
     Red, Yellow, Green
 }
 

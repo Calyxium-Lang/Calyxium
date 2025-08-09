@@ -2,23 +2,23 @@
 
 -- basic tests for ternay
 
-let a, b = 10, 20
+let a, b = 10, 20 in
 
-let max = (a > b) ? a : b
+let max = (a > b) ? a : b in
 assert(max == 20)
 
-let min = (a < b) ? a : b
+let min = (a < b) ? a : b in
 assert(min == 10)
 
-let check = (a == 10) ? "yes" : "no"
+let check = (a == 10) ? "yes" : "no" in
 assert(check == "yes")
 
-let nested = (a == 10) ? ((b == 20) ? 100 : 200) : 300
+let nested = (a == 10) ? ((b == 20) ? 100 : 200) : 300 in
 assert(nested == 100)
 
-let complex = (a > b) ? ((b < 30) ? "A" : "B") : ((a < 5) ? "C" : "D")
+let complex = (a > b) ? ((b < 30) ? "A" : "B") : ((a < 5) ? "C" : "D") in
 assert(complex == "D")
 
-let condition = true
-let result = (condition) ? "Condition is true" : "Condition is false"
+let condition = true in
+let result = (condition) ? "Condition is true" : "Condition is false" in
 assert(result == "Condition is true")

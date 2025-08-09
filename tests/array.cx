@@ -1,6 +1,6 @@
-let a = [1..5]
-let b = [6, 7, 8]
-let c = a @ b
+let a = [1..5] in
+let b = [6, 7, 8] in
+let c = a @ b in
 
 assert(a[0:2] == [1, 2])
 assert(a[2:5] == [3, 4, 5])
@@ -24,19 +24,19 @@ assert(c[-10:-6] == [])
 assert(a[-2:2] == [1, 2])
 assert(a[-3:4] == [1, 2, 3, 4])
 
-let d = a[1:4] @ b[:2]
+let d = a[1:4] @ b[:2] in
 assert(d == [2, 3, 4, 6, 7])
 
-let e = a[:] @ []
+let e = a[:] @ [] in
 assert(e == a)
 
-let f = [] @ b[:1]
+let f = [] @ b[:1] in
 assert(f == [6])
 
-let g = a[0:0] @ b[0:0]
+let g = a[0:0] @ b[0:0] in
 assert(g == [])
 
-let i = (a[:3])[1:]
+let i = (a[:3])[1:] in
 assert(i == [2, 3])
 assert(a[0:1] == [1])
 assert(b[2:3] == [8])

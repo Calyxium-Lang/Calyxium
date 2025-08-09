@@ -1,7 +1,7 @@
 -- Id: tests/math.cx
 
-let pi = 3.141592653589
-let e = 2.718281828459
+let pi = 3.141592653589 in
+let e = 2.718281828459 in
 
 let rec fact(n: int): float {
     if n <= 1 then 1.0 else to_float(n) * fact(n - 1)
@@ -25,8 +25,8 @@ let radToDeg(rad: float): float {
 
 let rec sin_iter(x: float, n: int, terms: int, acc: float): float {
     if n >= terms then acc else {
-        let sign = ((n % 2) == 0) ? 1.0 : -1.0
-        let term = sign * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1)
+        let sign = ((n % 2) == 0) ? 1.0 : -1.0 in
+        let term = sign * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1) in
         sin_iter(x, n + 1, terms, acc + term)
     }
 }
@@ -41,23 +41,23 @@ let csc(x: float, terms: int): float {
 
 let rec arcsin_iter(x: float, n: int, terms: int, acc: float): float {
     if n >= terms then acc else {
-        let num = fact(2 * n)
-        let denom = pow(4.0, to_float(n)) * pow(fact(n), 2.0) * to_float(2 * n + 1)
-        let term = (num / denom) * pow(x, to_float(2 * n + 1))
+        let num = fact(2 * n) in
+        let denom = pow(4.0, to_float(n)) * pow(fact(n), 2.0) * to_float(2 * n + 1) in
+        let term = (num / denom) * pow(x, to_float(2 * n + 1)) in
         arcsin_iter(x, n + 1, terms, acc + term)
     }
 }
 
 let arcsin(x: float, terms: int): float {
     if (x < -1.0 || x > 1.0) then panic("Error: arcsin(x) is undefined for x < -1 or x > 1")
-    let raw = arcsin_iter(x, 0, terms, 0.0)
+    let raw = arcsin_iter(x, 0, terms, 0.0) in
     (raw < -pi/2.0) ? -pi/2.0 : (raw > pi/2.0) ? pi/2.0 : raw
 }
 
 let rec cos_iter(x: float, n: int, terms: int, acc: float): float {
     if n >= terms then acc else {
-        let sign = ((n % 2) == 0) ? 1.0 : -1.0
-        let term = sign * pow(x, to_float(2 * n)) / fact(2 * n)
+        let sign = ((n % 2) == 0) ? 1.0 : -1.0 in
+        let term = sign * pow(x, to_float(2 * n)) / fact(2 * n) in
         cos_iter(x, n + 1, terms, acc + term)
     }
 }
@@ -86,7 +86,7 @@ let cot(x: float, terms: int): float {
 
 let rec arctan_iter(x: float, n: int, terms: int, acc: float): float {
     if n >= terms then acc else {
-        let term = pow(-1.0, to_float(n)) * pow(x, to_float(2 * n + 1)) / to_float(2 * n + 1)
+        let term = pow(-1.0, to_float(n)) * pow(x, to_float(2 * n + 1)) / to_float(2 * n + 1) in
         arctan_iter(x, n + 1, terms, acc + term)
     }
 }
@@ -107,12 +107,12 @@ let sign(x: float): int {
 }
 
 let floor(x: float): float {
-    let i = to_int(x)
+    let i = to_int(x) in
     (to_float(i) > x) ? to_float(i - 1) : to_float(i)
 }
 
 let ceil(x: float): float {
-    let i = to_int(x)
+    let i = to_int(x) in
     (to_float(i) < x) ? to_float(i + 1) : to_float(i)
 }
 
@@ -121,7 +121,7 @@ let round(x: float): float {
 }
 
 let rec sqrt_iter(x: float, guess: float): float {
-    let new_guess = 0.5 * (guess + x / guess)
+    let new_guess = 0.5 * (guess + x / guess) in
     if abs(new_guess - guess) < 0.00001 then new_guess
     else sqrt_iter(x, new_guess)
 }
@@ -133,7 +133,7 @@ let sqrt(x: float): float {
 }
 
 let rec cbrt_iter(x: float, guess: float): float {
-    let new_guess = (2.0 * guess + x / (guess * guess)) / 3.0
+    let new_guess = (2.0 * guess + x / (guess * guess)) / 3.0 in
     if abs(new_guess - guess) < 0.00001 then new_guess
     else cbrt_iter(x, new_guess)
 }
@@ -145,7 +145,7 @@ let cbrt(x: float): float {
 }
 
 let rec nthRoot_iter(x: float, n: float, guess: float): float {
-    let new_guess = ((n - 1.0) * guess + x / pow(guess, n - 1.0)) / n
+    let new_guess = ((n - 1.0) * guess + x / pow(guess, n - 1.0)) / n in
     if abs(new_guess - guess) < 0.00001 then new_guess
     else nthRoot_iter(x, n, new_guess)
 }
@@ -160,7 +160,7 @@ let nthRoot(x: float, n: float): float {
 
 let rec exp_iter(x: float, n: int, terms: int, acc: float): float {
     if n >= terms then acc else {
-        let term = pow(x, to_float(n)) / fact(n)
+        let term = pow(x, to_float(n)) / fact(n) in
         exp_iter(x, n + 1, terms, acc + term)
     }
 }
@@ -170,7 +170,7 @@ let exp(x: float): float {
 }
 
 let rec log_iter(x: float, guess: float): float {
-    let new_guess = guess - (exp(guess) - x) / exp(guess)
+    let new_guess = guess - (exp(guess) - x) / exp(guess) in
     if abs(new_guess - guess) < 0.00001 then new_guess
     else log_iter(x, new_guess)
 }
@@ -193,37 +193,37 @@ let logBase(x: float, base: float): float {
     else log(x) / log(base)
 }
 
-let angle = pi / 4.0
-let s = sin(angle, 15)
-let c = cos(angle, 15)
+let angle = pi / 4.0 in
+let s = sin(angle, 15) in
+let c = cos(angle, 15) in
 
-let a0 = 0.0
-let s0 = sin(a0, 15)
-let c0 = cos(a0, 15)
+let a0 = 0.0 in
+let s0 = sin(a0, 15) in
+let c0 = cos(a0, 15) in
+ 
+let a1 = pi / 6.0 in 
+let s1 = sin(a1, 15) in
+let c1 = cos(a1, 15) in
 
-let a1 = pi / 6.0
-let s1 = sin(a1, 15)
-let c1 = cos(a1, 15)
+let a2 = pi / 4.0 in
+let s2 = sin(a2, 15) in
+let c2 = cos(a2, 15) in
 
-let a2 = pi / 4.0
-let s2 = sin(a2, 15)
-let c2 = cos(a2, 15)
+let a3 = pi / 3.0 in
+let s3 = sin(a3, 15) in
+let c3 = cos(a3, 15) in
 
-let a3 = pi / 3.0
-let s3 = sin(a3, 15)
-let c3 = cos(a3, 15)
+let a4 = pi / 2.0 in
+let s4 = sin(a4, 15) in
+let c4 = cos(a4, 15) in
 
-let a4 = pi / 2.0
-let s4 = sin(a4, 15)
-let c4 = cos(a4, 15)
+let a5 = pi in
+let s5 = sin(a5, 15) in
+let c5 = cos(a5, 15) in
 
-let a5 = pi
-let s5 = sin(a5, 15)
-let c5 = cos(a5, 15)
-
-let quad_angle = 3.0 * pi / 4.0
-let sin_q = sin(quad_angle, 15)
-let cos_q = cos(quad_angle, 15)
+let quad_angle = 3.0 * pi / 4.0 in
+let sin_q = sin(quad_angle, 15) in
+let cos_q = cos(quad_angle, 15) in
 
 let rec gcd(a: int, b: int): int {
     if b == 0 then abs(to_float(a)) |> to_int
@@ -233,8 +233,8 @@ let rec gcd(a: int, b: int): int {
 let lcm(a: int, b: int): int {
     if a == 0 || b == 0 then 0
     else {
-        let prod = abs(to_float(a * b))
-        let prod_int = to_int(prod)
+        let prod = abs(to_float(a * b)) in
+        let prod_int = to_int(prod) in
         prod_int / gcd(a, b)
     }
 }
@@ -286,18 +286,18 @@ let modExp(base: int, exp: int, m: int): int {
 let rec extendedGCD(a: int, b: int): (int, int, int) {
     if b == 0 then (a, 1, 0)
     else {
-        let res = extendedGCD(b, a % b)
-        let g = res[0]
-        let x1 = res[1]
-        let y1 = res[2]
+        let res = extendedGCD(b, a % b) in
+        let g = res[0] in
+        let x1 = res[1] in
+        let y1 = res[2] in
         (g, y1, x1 - (a / b) * y1)
     }
 }
 
 let modInverse(a: int, m: int): int {
-    let res = extendedGCD(a, m)
-    let g = res[0]
-    let x = res[1]
+    let res = extendedGCD(a, m) in
+    let g = res[0] in
+    let x = res[1] in
     if g != 1 then -1
     else ((x % m + m) % m)
 }
