@@ -32,4 +32,4 @@ jobs:
       - run: opam exec -- dune build
 
       - name: Run tests
-        run: dune runtest
+        run: opam exec -- dune runtest
