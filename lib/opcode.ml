@@ -1,5 +1,5 @@
 type opcode =
-  | LOAD_INT of Z.t
+  | LOAD_INT of Bigint.t
   | LOAD_FLOAT of float
   | LOAD_STRING of string
   | LOAD_BYTE of char

@@ -29,7 +29,7 @@
 %token LeftShiftAssign RightShiftAssign
 %token Plus Minus Star Slash Mod Carot ArrConcat Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe DeRef UnderScore Question
 %token <string> Ident
-%token <Z.t> Int
+%token <Bigint.t> Int
 %token <float> Float
 %token <string> String
 %token <char> Byte

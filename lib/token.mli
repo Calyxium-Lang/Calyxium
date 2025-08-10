@@ -61,7 +61,7 @@ type t =
   | BoolType
   | UnitType
   | Ident of string
-  | Int of Z.t
+  | Int of Bigint.t
   | Float of float
   | String of string
   | Byte of char

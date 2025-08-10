@@ -138,7 +138,7 @@ let rec check_stmt env func_env stmt =
                     IndexExpr
                       {
                         array = VarExpr name;
-                        index = IntExpr { value = Z.of_int i };
+                        index = IntExpr { value = Bigint.of_int i };
                       })
                   element_types
             | Some t ->
@@ -154,7 +154,10 @@ let rec check_stmt env func_env stmt =
                 List.mapi
                   (fun i _ ->
                     IndexExpr
-                      { array = expr; index = IntExpr { value = Z.of_int i } })
+                      {
+                        array = expr;
+                        index = IntExpr { value = Bigint.of_int i };
+                      })
                   element_types
             | _ ->
                 raise
@@ -550,7 +553,7 @@ and check_expr env func_env expr =
       | TupleType element_types -> (
           match index with
           | IntExpr { value } ->
-              let idx = Z.to_int value in
+              let idx = Bigint.to_int value in
               if idx < 0 || idx >= List.length element_types then
                 raise
                   (TypeError

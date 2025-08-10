@@ -1,4 +1,4 @@
--- let map = [("hi", "string")]
+-- let map = [("hi", "string")] in
 
 -- let get_value(key: string): string {
 --     let rec find(i: int, key: string): string {
@@ -12,24 +12,24 @@
 
 -- print(get_value("hi"))
 
-let bubble_sort(arr: []int): []int {
-    let rec pass(xs: []int, i: int, acc: []int, ch: bool): (bool, []int) {
-        if i + 1 >= length(xs) then (ch, acc @ (if i < length(xs) then [xs[i]] else []))
-        else {
-            let a = xs[i] in
-            let b = xs[i + 1] in
-            pass(xs, if a > b then i + 2 else i + 1, acc @ (if a > b then [b, a] else [a]), ch || a > b)
-        }
-    }
+-- let bubble_sort(arr: []int): []int {
+--     let rec pass(xs: []int, i: int, acc: []int, ch: bool): (bool, []int) {
+--         if i + 1 >= length(xs) then (ch, acc @ (if i < length(xs) then [xs[i]] else []))
+--         else {
+--             let a = xs[i] in
+--             let b = xs[i + 1] in
+--             pass(xs, if a > b then i + 2 else i + 1, acc @ (if a > b then [b, a] else [a]), ch || a > b)
+--         }
+--     }
 
-    let rec sort(xs: []int): []int {
-        let ch, xs' = pass(xs, 0, [], false) in
-        if ch then sort(xs') else xs'
-    }
+--     let rec sort(xs: []int): []int {
+--         let ch, xs' = pass(xs, 0, [], false) in
+--         if ch then sort(xs') else xs'
+--     }
 
-    sort(arr)
-}
+--     sort(arr)
+-- }
 
-let arr = [ 5, 2, 9, 1, 3 ] in
-let sorted = bubble_sort(arr) in
-print(sorted)
+-- let arr = [ 5, 2, 9, 1, 3 ] in
+-- let sorted = bubble_sort(arr) in
+-- print(sorted)

@@ -192,9 +192,9 @@ let rec not_equal_value a b =
 let string_to_bytes s = Array.init (String.length s) (String.get s)
 
 let safe_shift_left a b =
-  if Z.sign b < 0 || Z.gt b (Z.of_int 63) then
+  if Bigint.sign b < 0 || Bigint.gt b (Bigint.of_int 63) then
     runtime_error "Invalid shift amount"
-  else Z.shift_left a (Z.to_int b)
+  else Bigint.shift_left a (Bigint.to_int b)
 
 let rec force v = match v with VThunk f -> force (f ()) | v -> v
 
@@ -220,7 +220,7 @@ let run instructions =
         let next () = frame.pc <- frame.pc + 1 in
         match instr with
         | LOAD_INT v ->
-            push_trace ("LOAD_INT " ^ Z.to_string v);
+            push_trace ("LOAD_INT " ^ Bigint.to_string v);
             Stack.push (VInt v) stack;
             next ()
         | LOAD_FLOAT v ->
@@ -275,7 +275,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in addition"
                        else VFloat res
-                   | VInt a, VInt b -> VInt (Z.add a b)
+                   | VInt a, VInt b -> VInt (Bigint.add a b)
                    | _ -> runtime_error "PLUS expects numbers"))
               stack;
             next ()
@@ -293,7 +293,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in subtraction"
                        else VFloat res
-                   | VInt a, VInt b -> VInt (Z.sub a b)
+                   | VInt a, VInt b -> VInt (Bigint.sub a b)
                    | _ -> runtime_error "MINUS expects numbers"))
               stack;
             next ()
@@ -311,7 +311,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in multiplication"
                        else VFloat res
-                   | VInt a, VInt b -> VInt (Z.mul a b)
+                   | VInt a, VInt b -> VInt (Bigint.mul a b)
                    | _ -> runtime_error "STAR expects numbers"))
               stack;
             next ()
@@ -323,7 +323,7 @@ let run instructions =
                  (fun () ->
                    match (force a, force b) with
                    | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
-                   | VInt _, VInt z when Z.equal z Z.zero ->
+                   | VInt _, VInt z when Bigint.equal z Bigint.zero ->
                        runtime_error "Division by zero"
                    | VFloat a, VFloat b ->
                        let res = a /. b in
@@ -332,7 +332,7 @@ let run instructions =
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in division"
                        else VFloat res
-                   | VInt a, VInt b -> VInt (Z.div a b)
+                   | VInt a, VInt b -> VInt (Bigint.div a b)
                    | _ -> runtime_error "SLASH expects numbers"))
               stack;
             next ()
@@ -344,10 +344,10 @@ let run instructions =
                  (fun () ->
                    match (force a, force b) with
                    | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
-                   | VInt _, VInt z when Z.equal z Z.zero ->
+                   | VInt _, VInt z when Bigint.equal z Bigint.zero ->
                        runtime_error "Modulo by zero"
                    | VFloat a, VFloat b -> VFloat (mod_float a b)
-                   | VInt a, VInt b -> VInt (Z.rem a b)
+                   | VInt a, VInt b -> VInt (Bigint.rem a b)
                    | _ -> runtime_error "MOD expects numbers"))
               stack;
             next ()
@@ -360,9 +360,9 @@ let run instructions =
                    match (force a, force b) with
                    | VFloat a, VFloat b -> VFloat (a ** b)
                    | VInt a, VInt b ->
-                       if Z.sign b < 0 then
+                       if Bigint.sign b < 0 then
                          runtime_error "POW expects non-negative exponent"
-                       else VInt (Z.pow a (Z.to_int b))
+                       else VInt (Bigint.pow a (Bigint.to_int b))
                    | _ -> runtime_error "POW expects numbers"))
               stack;
             next ()
@@ -383,7 +383,7 @@ let run instructions =
             push_trace ("JUMP_IF_FALSE " ^ string_of_int offset);
             match Stack.pop_opt stack with
             | Some (VFloat 0.0) -> frame.pc <- frame.pc + offset
-            | Some (VInt z) when Z.equal z Z.zero ->
+            | Some (VInt z) when Bigint.equal z Bigint.zero ->
                 frame.pc <- frame.pc + offset
             | Some (VBool false) -> frame.pc <- frame.pc + offset
             | Some _ -> next ()
@@ -398,7 +398,7 @@ let run instructions =
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a < b)
-              | VInt a, VInt b -> VBool (Z.compare a b < 0)
+              | VInt a, VInt b -> VBool (Bigint.compare a b < 0)
               | _ -> runtime_error "LESS expects two floats or int"
             in
             Stack.push result stack;
@@ -410,7 +410,7 @@ let run instructions =
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a > b)
-              | VInt a, VInt b -> VBool (Z.compare a b > 0)
+              | VInt a, VInt b -> VBool (Bigint.compare a b > 0)
               | _ -> runtime_error "GREATER expects two floats or int"
             in
             Stack.push result stack;
@@ -422,7 +422,7 @@ let run instructions =
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a <= b)
-              | VInt a, VInt b -> VBool (Z.compare a b <= 0)
+              | VInt a, VInt b -> VBool (Bigint.compare a b <= 0)
               | _ -> runtime_error "LESS_EQUAL expects two floats or int"
             in
             Stack.push result stack;
@@ -434,7 +434,7 @@ let run instructions =
             let result =
               match (a, b) with
               | VFloat a, VFloat b -> VBool (a >= b)
-              | VInt a, VInt b -> VBool (Z.compare a b >= 0)
+              | VInt a, VInt b -> VBool (Bigint.compare a b >= 0)
               | _ -> runtime_error "GREATER_EQUAL expects two floats or int"
             in
             Stack.push result stack;
@@ -460,7 +460,7 @@ let run instructions =
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
-              | VInt i -> i <> Z.zero
+              | VInt i -> i <> Bigint.zero
               | _ -> runtime_error "AND expects bool, float, or int"
             in
             Stack.push (VBool (bool_val a && bool_val b)) stack;
@@ -472,7 +472,7 @@ let run instructions =
             let bool_val = function
               | VBool b -> b
               | VFloat f -> f <> 0.0
-              | VInt i -> i <> Z.zero
+              | VInt i -> i <> Bigint.zero
               | _ -> runtime_error "OR expects bool, float, or int"
             in
             Stack.push (VBool (bool_val a || bool_val b)) stack;
@@ -499,7 +499,7 @@ let run instructions =
                     || classify_float res = FP_infinite
                   then runtime_error "Float overflow in increment"
                   else VFloat res
-              | VInt i -> VInt (Z.add i Z.one)
+              | VInt i -> VInt (Bigint.add i Bigint.one)
               | _ -> runtime_error "INC expects float or int"
             in
             Stack.push result stack;
@@ -516,7 +516,7 @@ let run instructions =
                     || classify_float res = FP_infinite
                   then runtime_error "Float overflow in decrement"
                   else VFloat res
-              | VInt i -> VInt (Z.sub i Z.one)
+              | VInt i -> VInt (Bigint.sub i Bigint.one)
               | _ -> runtime_error "DEC expects float or int"
             in
             Stack.push result stack;
@@ -554,7 +554,7 @@ let run instructions =
             let collection_val = pop1 stack in
             let index =
               match force index_val with
-              | VInt i -> Z.to_int i
+              | VInt i -> Bigint.to_int i
               | _ -> runtime_error "Expected int for index in LOAD_INDEX"
             in
             let collection = force collection_val in
@@ -593,11 +593,14 @@ let run instructions =
               | VRange id -> (
                   match Gc.find_heap_obj id with
                   | Gc.HRange { current; step; end_ } -> (
-                      let elem = Z.add current (Z.mul step (Z.of_int index)) in
+                      let elem =
+                        Bigint.add current
+                          (Bigint.mul step (Bigint.of_int index))
+                      in
                       match end_ with
                       | Some e
-                        when (step >= Z.zero && elem > e)
-                             || (step < Z.zero && elem < e) ->
+                        when (step >= Bigint.zero && elem > e)
+                             || (step < Bigint.zero && elem < e) ->
                           runtime_error
                             "Index out of bounds in LOAD_INDEX for range"
                       | _ -> VInt elem)
@@ -717,7 +720,7 @@ let run instructions =
                     else if Float.is_infinite f then
                       if f > 0.0 then "inf" else "-inf"
                     else Printf.sprintf "%g" f
-                | VInt i -> Z.to_string i
+                | VInt i -> Bigint.to_string i
                 | VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> s
@@ -784,7 +787,7 @@ let run instructions =
                   || classify_float res = FP_infinite
                 then runtime_error "Float overflow in negation"
                 else Stack.push (VFloat res) stack
-            | VInt i -> Stack.push (VInt (Z.neg i)) stack
+            | VInt i -> Stack.push (VInt (Bigint.neg i)) stack
             | _ -> runtime_error "NEG expects a float or int");
             next ()
         | FLOAT ->
@@ -793,7 +796,7 @@ let run instructions =
             let float_val =
               match v with
               | VFloat f -> f
-              | VInt i -> Z.to_float i
+              | VInt i -> Bigint.to_float i
               | VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> (
@@ -813,12 +816,12 @@ let run instructions =
             let int_val =
               match v with
               | VInt i -> i
-              | VFloat f -> Z.of_float f
-              | VByte c -> Z.of_int (Char.code c)
+              | VFloat f -> Bigint.of_float f
+              | VByte c -> Bigint.of_int (Char.code c)
               | VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> (
-                      try Z.of_string s
+                      try Bigint.of_string s
                       with Failure _ ->
                         runtime_error ("INT: invalid int string: " ^ s))
                   | None ->
@@ -860,12 +863,12 @@ let run instructions =
                   then
                     String.concat ""
                       (List.map
-                         (function VInt i -> Z.to_string i | _ -> "")
+                         (function VInt i -> Bigint.to_string i | _ -> "")
                          vs)
                   else
                     runtime_error
                       "STRING: array is not []byte, []float or []int"
-              | VInt i -> Z.to_string i
+              | VInt i -> Bigint.to_string i
               | VFloat f -> string_of_float f
               | VBool b -> if b then "true" else "false"
               | VByte c -> String.make 1 c
@@ -887,7 +890,7 @@ let run instructions =
                   | None ->
                       runtime_error
                         "TO_BYTES: invalid heap reference for string")
-              | VInt i -> Z.to_string i
+              | VInt i -> Bigint.to_string i
               | VFloat f -> string_of_float f
               | VBool b -> if b then "true" else "false"
               | VByte c -> String.make 1 c
@@ -906,7 +909,10 @@ let run instructions =
             match v with
             | VInt i ->
                 Stack.push
-                  (VByte (Char.chr (Z.to_int (Z.logand i (Z.of_int64 0xFFL)))))
+                  (VByte
+                     (Char.chr
+                        (Bigint.to_int
+                           (Bigint.logand i (Bigint.of_int64 0xFFL)))))
                   stack;
                 next ()
             | VByte c ->
@@ -930,7 +936,8 @@ let run instructions =
                          (function
                            | VInt i ->
                                Char.chr
-                                 (Z.to_int (Z.logand i (Z.of_int64 0xFFL)))
+                                 (Bigint.to_int
+                                    (Bigint.logand i (Bigint.of_int64 0xFFL)))
                            | _ -> assert false)
                          vs)
                   in
@@ -957,7 +964,7 @@ let run instructions =
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf +. newf)
-              | VInt oldi, VInt newi -> VInt (Z.add oldi newi)
+              | VInt oldi, VInt newi -> VInt (Bigint.add oldi newi)
               | _ -> runtime_error "PLUSASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -981,7 +988,7 @@ let run instructions =
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf -. newf)
-              | VInt oldi, VInt newi -> VInt (Z.sub oldi newi)
+              | VInt oldi, VInt newi -> VInt (Bigint.sub oldi newi)
               | _ -> runtime_error "MINUSASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1004,7 +1011,7 @@ let run instructions =
             let result =
               match (old_value, value) with
               | VFloat oldf, VFloat newf -> VFloat (oldf *. newf)
-              | VInt oldi, VInt newi -> VInt (Z.mul oldi newi)
+              | VInt oldi, VInt newi -> VInt (Bigint.mul oldi newi)
               | _ -> runtime_error "STARASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1031,9 +1038,9 @@ let run instructions =
                     runtime_error "SLASHASSIGN: division by zero";
                   VFloat (oldf /. newf)
               | VInt oldi, VInt newi ->
-                  if newi = Z.zero then
+                  if newi = Bigint.zero then
                     runtime_error "SLASHASSIGN: division by zero";
-                  VInt (Z.div oldi newi)
+                  VInt (Bigint.div oldi newi)
               | _ -> runtime_error "SLASHASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1053,13 +1060,14 @@ let run instructions =
                 match v with
                 | VHeapRef id -> (
                     match Gc.find_heap_obj id with
-                    | Gc.HString s -> Z.of_int (String.length s)
-                    | Gc.HBytes bytes_arr -> Z.of_int (Array.length bytes_arr)
+                    | Gc.HString s -> Bigint.of_int (String.length s)
+                    | Gc.HBytes bytes_arr ->
+                        Bigint.of_int (Array.length bytes_arr)
                     | _ ->
                         runtime_error
                           "LENGTH: heap reference is not a string or bytes")
-                | VArray items -> Z.of_int (List.length items)
-                | VTuple items -> Z.of_int (List.length items)
+                | VArray items -> Bigint.of_int (List.length items)
+                | VTuple items -> Bigint.of_int (List.length items)
                 | _ ->
                     runtime_error
                       "LENGTH expects a string, bytes, array, or tuple"
@@ -1070,7 +1078,7 @@ let run instructions =
             push_trace "BITWISE_NOT";
             let v = force (pop1 stack) in
             (match v with
-            | VInt i -> Stack.push (VInt (Z.lognot i)) stack
+            | VInt i -> Stack.push (VInt (Bigint.lognot i)) stack
             | _ -> runtime_error "BITWISE_NOT expects an int");
             next ()
         | BITWISEAND ->
@@ -1078,7 +1086,7 @@ let run instructions =
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Z.logand a b)) stack
+            | VInt a, VInt b -> Stack.push (VInt (Bigint.logand a b)) stack
             | _ -> runtime_error "BITWISE_AND expects int operands");
             next ()
         | BITWISEOR ->
@@ -1086,7 +1094,7 @@ let run instructions =
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Z.logor a b)) stack
+            | VInt a, VInt b -> Stack.push (VInt (Bigint.logor a b)) stack
             | _ -> runtime_error "BITWISE_OR expects int operands");
             next ()
         | BITWISEXOR ->
@@ -1094,7 +1102,7 @@ let run instructions =
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Z.logxor a b)) stack
+            | VInt a, VInt b -> Stack.push (VInt (Bigint.logxor a b)) stack
             | _ -> runtime_error "BITWISE_XOR expects int operands");
             next ()
         | LEFTSHIFT ->
@@ -1111,7 +1119,7 @@ let run instructions =
             let a, b = (force a, force b) in
             (match (a, b) with
             | VInt a, VInt b ->
-                Stack.push (VInt (Z.shift_right a (Z.to_int b))) stack
+                Stack.push (VInt (Bigint.shift_right a (Bigint.to_int b))) stack
             | _ -> runtime_error "RIGHT_SHIFT expects int operands");
             next ()
         | BITWISEANDASSIGN ->
@@ -1129,7 +1137,7 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Z.logand oldi newi)
+              | VInt oldi, VInt newi -> VInt (Bigint.logand oldi newi)
               | _ -> runtime_error "BITWISE_ANDASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1149,7 +1157,7 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Z.logor oldi newi)
+              | VInt oldi, VInt newi -> VInt (Bigint.logor oldi newi)
               | _ -> runtime_error "BITWISE_ORASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1169,7 +1177,7 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Z.logxor oldi newi)
+              | VInt oldi, VInt newi -> VInt (Bigint.logxor oldi newi)
               | _ -> runtime_error "BITWISE_XORASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1189,7 +1197,8 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Z.shift_left oldi (Z.to_int newi))
+              | VInt oldi, VInt newi ->
+                  VInt (Bigint.shift_left oldi (Bigint.to_int newi))
               | _ -> runtime_error "LEFT_SHIFTASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1210,7 +1219,7 @@ let run instructions =
             let result =
               match (old_value, value) with
               | VInt oldi, VInt newi ->
-                  VInt (Z.shift_right oldi (Z.to_int newi))
+                  VInt (Bigint.shift_right oldi (Bigint.to_int newi))
               | _ -> runtime_error "RIGHT_SHIFTASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
@@ -1271,7 +1280,7 @@ let run instructions =
               | VInt x -> x
               | _ -> runtime_error "MAKE_RANGE expects int"
             in
-            let range_val = Gc.alloc_range start Z.one None in
+            let range_val = Gc.alloc_range start Bigint.one None in
             let id =
               match range_val with
               | VHeapRef id -> id
@@ -1300,13 +1309,13 @@ let run instructions =
                 let len = List.length elements in
                 let s =
                   match v_start with
-                  | VInt s -> max 0 (Z.to_int s)
+                  | VInt s -> max 0 (Bigint.to_int s)
                   | VUnit -> 0
                   | _ -> runtime_error "SLICE: start index must be int or unit"
                 in
                 let e =
                   match v_end with
-                  | VInt e -> min len (Z.to_int e)
+                  | VInt e -> min len (Bigint.to_int e)
                   | VUnit -> len
                   | _ -> runtime_error "SLICE: end index must be int or unit"
                 in

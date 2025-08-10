@@ -96,7 +96,7 @@ rule token = parse
   | float1 as f              { at_line_start := false; Float (float_of_string f) }
   | float2 as f              { at_line_start := false; Float (float_of_string f) }
   | float3 as f              { at_line_start := false; Float (float_of_string f) }
-  | digits as d              { at_line_start := false; Int (Z.of_string d) }
+  | digits as d              { at_line_start := false; Int (Bigint.of_string d) }
   | identifier as id         { at_line_start := false; Ident id }
 
   | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\''  { at_line_start := false; let c = match esc with | 'n' -> '\n' | 't' -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | '0' -> '\000' | _ -> esc in Byte c }
@@ -104,8 +104,8 @@ rule token = parse
   | '\''                    { raise (LexerError ("Unterminated character literal", Lexing.lexeme_start_p lexbuf)) }
   | '"'                     { at_line_start := false; read_string (Buffer.create 16) lexbuf }
   | eof                     { EOF }
-  | "0b" ['0'-'1']+ as bin  { at_line_start := false; let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in Int (Z.of_int (parse 2 0)) }
-  | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+ as hex { at_line_start := false; let len = String.length hex in let rec parse i acc = if i = len then acc else let v = match hex.[i] with | '0'..'9' -> int_of_char hex.[i] - int_of_char '0' | 'a'..'f' -> 10 + int_of_char hex.[i] - int_of_char 'a' | 'A'..'F' -> 10 + int_of_char hex.[i] - int_of_char 'A' | _ -> failwith "Invalid hex digit" in parse (i + 1) ((acc lsl 4) lor v) in Int (Z.of_int (parse 2 0)) }
+  | "0b" ['0'-'1']+ as bin  { at_line_start := false; let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in Int (Bigint.of_int (parse 2 0)) }
+  | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+ as hex { at_line_start := false; let len = String.length hex in let rec parse i acc = if i = len then acc else let v = match hex.[i] with | '0'..'9' -> int_of_char hex.[i] - int_of_char '0' | 'a'..'f' -> 10 + int_of_char hex.[i] - int_of_char 'a' | 'A'..'F' -> 10 + int_of_char hex.[i] - int_of_char 'A' | _ -> failwith "Invalid hex digit" in parse (i + 1) ((acc lsl 4) lor v) in Int (Bigint.of_int (parse 2 0)) }
   | _                       { let c = Lexing.lexeme_char lexbuf 0 in let msg = Printf.sprintf "Unrecognized character: '%c'" c in raise (LexerError (msg, Lexing.lexeme_start_p lexbuf)) }
 
 and read_string buf = parse

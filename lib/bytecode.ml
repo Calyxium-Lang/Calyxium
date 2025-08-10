@@ -83,7 +83,7 @@ let rec compile_stmt = function
       let expr_bytecode =
         match assigned_value with
         | Some expr -> compile_expr expr
-        | None -> [ LOAD_INT Z.zero ]
+        | None -> [ LOAD_INT Bigint.zero ]
       in
       expr_bytecode @ [ STORE_VAR identifier ]
   | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
@@ -94,7 +94,8 @@ let rec compile_stmt = function
       in
       let index_exprs expr =
         List.init (List.length identifier) (fun i ->
-            IndexExpr { array = expr; index = IntExpr { value = Z.of_int i } })
+            IndexExpr
+              { array = expr; index = IntExpr { value = Bigint.of_int i } })
       in
       let values =
         match assigned_value with
@@ -248,7 +249,7 @@ and compile_expr = function
               match Hashtbl.find_opt enum_tbl struct_name with
               | Some members -> (
                   match List.assoc_opt right members with
-                  | Some value -> [ LOAD_INT (Z.of_int value) ]
+                  | Some value -> [ LOAD_INT (Bigint.of_int value) ]
                   | None ->
                       failwith
                         ("Unknown enum member `" ^ right ^ "` in enum `"
@@ -294,16 +295,16 @@ and compile_expr = function
   | RangeExpr { start; end_ } -> (
       match (start, end_) with
       | Some (IntExpr { value = s }), Some (IntExpr { value = e }) ->
-          let count = Z.to_int (Z.add (Z.sub e s) Z.one) in
+          let count = Bigint.to_int (Bigint.add (Bigint.sub e s) Bigint.one) in
           let range_elements =
-            List.init count (fun i -> LOAD_INT (Z.add s (Z.of_int i)))
+            List.init count (fun i -> LOAD_INT (Bigint.add s (Bigint.of_int i)))
           in
           range_elements @ [ LOAD_ARRAY count ]
       | Some (IntExpr { value = s }), None -> [ LOAD_INT s; MAKE_RANGE ]
       | None, Some (IntExpr { value = e }) ->
-          let count = Z.to_int (Z.add e Z.one) in
+          let count = Bigint.to_int (Bigint.add e Bigint.one) in
           let range_elements =
-            List.init count (fun i -> LOAD_INT (Z.of_int i))
+            List.init count (fun i -> LOAD_INT (Bigint.of_int i))
           in
           range_elements @ [ LOAD_ARRAY count ]
       | _ -> failwith "Range bounds must be integer literals for now")
