@@ -33,3 +33,60 @@
 -- let arr = [ 5, 2, 9, 1, 3 ] in
 -- let sorted = bubble_sort(arr) in
 -- print(sorted)
+
+let split(str: string, char: string): []string {
+    bsplit(to_bytes(str), char)
+}
+
+let bsplit(str: []byte, char: string): []string {
+    let rec split_it(i: int, str: []byte, s_array: []string, char: string): []string {
+        if i >= length(str) then s_array
+        else {
+            if match char with | to_string(str[i:i+length(char)]) -> true then {
+                let pre_str = str[:i] in
+                let post_str = str[i+length(char):] in
+                let s_array_new = s_array @ [to_string(pre_str)] in
+                split_it(i + 1, post_str, s_array_new, char)
+            } 
+            split_it(i + 1, str[i:], s_array, char)
+        }
+    }
+    split_it(0,str,[],char)
+}
+
+let array_to_float(int_array: []int): []float {
+    let rec itf(i: int, acc: []float, arr: []int): []float  {
+        if i >= length(arr) then acc
+        else itf(i+1,acc @ [to_float(arr[i])],arr)}
+    itf(0,[],int_array)
+}
+
+let array_to_string(float_array: []float): []string {
+    let rec its(i: int, acc: []string, arr: []float): []string  {
+        if i >= length(arr) then acc
+        else its(i+1,acc @ [to_string(arr[i])],arr)}
+    its(0,[],float_array)
+}
+
+let printfi(str: string, ints: []int): string {
+    printff(str,array_to_float(ints))
+}
+
+let printff(str: string, floats: []float): string {
+    printf(str,array_to_string(floats))
+}
+
+let printf(str: string, strs: []string): string {
+    let array = split(str,"¬") in
+    if length(array) < 2 then inject_it(0,array@[""],strs)
+    let rec inject_it(i: int, array: []string, strs: []string): string {
+        if i >= length(strs) then array[0]
+        else {
+            let new_array = [array[i] ^ strs[i] ^ array[i+1]] @ array[i+2:] in
+            inject_it(i+1,new_array,strs)
+        }
+    }
+    inject_it(0,array,strs)
+}
+
+print(split("hi there"," "))

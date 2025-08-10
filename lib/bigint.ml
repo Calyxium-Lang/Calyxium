@@ -1,8 +1,14 @@
 let limb_bits = 32
-let base = Int64.(to_int (shift_left 1L 32))
+let base = 1 lsl limb_bits
 let base_mask = base - 1
 
 type t = { sign : int; limbs : int array }
+
+let zero = { sign = 0; limbs = [||] }
+let one = { sign = 1; limbs = [| 1 |] }
+let minus_one = { sign = -1; limbs = [| 1 |] }
+let is_zero x = x.sign = 0
+let make n = Array.make n 0
 
 let normalize { sign; limbs } =
   let n = Array.length limbs in
@@ -10,14 +16,11 @@ let normalize { sign; limbs } =
     if i < 0 then -1 else if limbs.(i) = 0 then trim (i - 1) else i
   in
   let last = trim (n - 1) in
-  if last = -1 then { sign = 0; limbs = [||] }
-  else if last = n - 1 then { sign; limbs }
-  else { sign; limbs = Array.sub limbs 0 (last + 1) }
+  if last = -1 then zero
+  else if last = n - 1 then { sign; limbs } (* no change *)
+  else { sign; limbs = Array.init (last + 1) (fun i -> limbs.(i)) }
 
-let zero = { sign = 0; limbs = [||] }
-let one = { sign = 1; limbs = [| 1 |] }
-let minus_one = { sign = -1; limbs = [| 1 |] }
-let is_zero x = x.sign = 0
+let sign x = x.sign
 
 let of_int (n : int) : t =
   if n = 0 then zero
@@ -40,8 +43,6 @@ let to_int x =
     match x.limbs with
     | [| v |] -> if x.sign = 1 then v else -v
     | _ -> failwith "BigInt.to_int: overflow"
-
-let sign x = x.sign
 
 let cmp_mag a b =
   let la = Array.length a in
@@ -69,41 +70,43 @@ let equal a b = compare a b = 0
 let gt a b = compare a b > 0
 let neg x = if x.sign = 0 then x else { x with sign = -x.sign }
 let abs x = if x.sign >= 0 then x else neg x
-let make n = Array.make n 0
+let make_from_sign_and_limbs s limbs = normalize { sign = s; limbs }
 
 let add_mag a b =
   let la = Array.length a and lb = Array.length b in
-  let lr = max la lb in
+  let lr = if la >= lb then la else lb in
   let r = make (lr + 1) in
-  let carry = ref 0L in
-  for i = 0 to lr - 1 do
-    let va = if i < la then Int64.of_int a.(i) else 0L in
-    let vb = if i < lb then Int64.of_int b.(i) else 0L in
-    let s = Int64.add (Int64.add va vb) !carry in
-    r.(i) <- Int64.to_int (Int64.logand s (Int64.of_int base_mask));
-    carry := Int64.shift_right_logical s limb_bits
+  let carry = ref 0 in
+  let i = ref 0 in
+  while !i < lr do
+    let va = if !i < la then a.(!i) else 0 in
+    let vb = if !i < lb then b.(!i) else 0 in
+    let s = va + vb + !carry in
+    r.(!i) <- s land base_mask;
+    carry := s lsr limb_bits;
+    incr i
   done;
-  if !carry <> 0L then r.(lr) <- Int64.to_int !carry;
+  if !carry <> 0 then r.(lr) <- !carry;
   r
 
 let sub_mag a b =
   let la = Array.length a and lb = Array.length b in
   let r = make la in
-  let borrow = ref 0L in
-  for i = 0 to la - 1 do
-    let va = Int64.of_int a.(i) in
-    let vb = if i < lb then Int64.of_int b.(i) else 0L in
-    let tmp = Int64.sub (Int64.sub va vb) !borrow in
-    if tmp < 0L then (
-      r.(i) <- Int64.to_int (Int64.add tmp (Int64.of_int base));
-      borrow := 1L)
+  let borrow = ref 0 in
+  let i = ref 0 in
+  while !i < la do
+    let va = a.(!i) in
+    let vb = if !i < lb then b.(!i) else 0 in
+    let tmp = va - vb - !borrow in
+    if tmp < 0 then (
+      r.(!i) <- (tmp + base) land base_mask;
+      borrow := 1)
     else (
-      r.(i) <- Int64.to_int tmp;
-      borrow := 0L)
+      r.(!i) <- tmp land base_mask;
+      borrow := 0);
+    incr i
   done;
   r
-
-let make_from_sign_and_limbs s limbs = normalize { sign = s; limbs }
 
 let add a b =
   match (a.sign, b.sign) with
@@ -128,25 +131,41 @@ let mul a b =
   if a.sign = 0 || b.sign = 0 then zero
   else
     let la = Array.length a.limbs and lb = Array.length b.limbs in
-    let r = make (la + lb) in
-    for i = 0 to la - 1 do
-      let carry = ref 0L in
-      for j = 0 to lb - 1 do
-        let idx = i + j in
-        let prod =
-          Int64.add
-            (Int64.of_int r.(idx))
-            (Int64.mul (Int64.of_int a.limbs.(i)) (Int64.of_int b.limbs.(j)))
-        in
-        let sum = Int64.add prod !carry in
-        r.(idx) <- Int64.to_int (Int64.logand sum (Int64.of_int base_mask));
-        carry := Int64.shift_right_logical sum limb_bits
+    if la = 1 && lb = 1 then
+      let prod = a.limbs.(0) * b.limbs.(0) in
+      let low = prod land base_mask in
+      let high = prod lsr limb_bits in
+      if high = 0 then make_from_sign_and_limbs (a.sign * b.sign) [| low |]
+      else make_from_sign_and_limbs (a.sign * b.sign) [| low; high |]
+    else if la = 1 || lb = 1 then (
+      let small, big, sgn =
+        if la = 1 then (a.limbs.(0), b.limbs, a.sign * b.sign)
+        else (b.limbs.(0), a.limbs, a.sign * b.sign)
+      in
+      let n = Array.length big in
+      let r = make (n + 1) in
+      let carry = ref 0 in
+      for i = 0 to n - 1 do
+        let prod = (big.(i) * small) + !carry in
+        r.(i) <- prod land base_mask;
+        carry := prod lsr limb_bits
       done;
-      if !carry <> 0L then
-        r.(i + lb) <- Int64.to_int (Int64.add (Int64.of_int r.(i + lb)) !carry)
-    done;
-    let sgn = a.sign * b.sign in
-    make_from_sign_and_limbs sgn r
+      if !carry <> 0 then r.(n) <- !carry;
+      make_from_sign_and_limbs sgn r)
+    else
+      let r = make (la + lb) in
+      for i = 0 to la - 1 do
+        let carry = ref 0 in
+        let ai = a.limbs.(i) in
+        for j = 0 to lb - 1 do
+          let idx = i + j in
+          let prod = r.(idx) + (ai * b.limbs.(j)) + !carry in
+          r.(idx) <- prod land base_mask;
+          carry := prod lsr limb_bits
+        done;
+        if !carry <> 0 then r.(i + lb) <- (!carry + r.(i + lb)) land base_mask
+      done;
+      make_from_sign_and_limbs (a.sign * b.sign) r
 
 let divrem_small a (d : int) =
   if d <= 0 then invalid_arg "divrem_small: d must be > 0";
@@ -154,16 +173,14 @@ let divrem_small a (d : int) =
   else
     let n = Array.length a.limbs in
     let q = make n in
-    let rem = ref 0L in
+    let rem = ref 0 in
     for i = n - 1 downto 0 do
-      let cur =
-        Int64.add (Int64.shift_left !rem limb_bits) (Int64.of_int a.limbs.(i))
-      in
-      let qi = Int64.to_int (Int64.div cur (Int64.of_int d)) in
+      let cur = (!rem lsl limb_bits) + a.limbs.(i) in
+      let qi = cur / d in
       q.(i) <- qi;
-      rem := Int64.rem cur (Int64.of_int d)
+      rem := cur - (qi * d)
     done;
-    (make_from_sign_and_limbs a.sign q, Int64.to_int !rem)
+    (make_from_sign_and_limbs (if a.sign >= 0 then 1 else -1) q, !rem)
 
 let div_rem a b =
   if b.sign = 0 then invalid_arg "div_rem: division by zero";
@@ -175,8 +192,8 @@ let div_rem a b =
       let q_small, r = divrem_small a b.limbs.(0) in
       let q = if a.sign * b.sign >= 0 then q_small else neg q_small in
       let r_t = of_int r in
-      let _ = if a.sign < 0 then neg r_t else r_t in
-      if r = 0 then (q, zero) else (q, of_int r)
+      let r_t = if a.sign < 0 then neg r_t else r_t in
+      if r = 0 then (q, zero) else (q, r_t)
     else
       let n = Array.length b.limbs in
       let m = Array.length a.limbs - n in
@@ -184,24 +201,25 @@ let div_rem a b =
       Array.blit a.limbs 0 u 0 (Array.length a.limbs);
       u.(Array.length a.limbs) <- 0;
       let v = Array.copy b.limbs in
+
       let top = v.(n - 1) in
-      let s =
-        let rec bits_needed x k =
-          if x >= base lsr 1 then k else bits_needed (x lsl 1) (k + 1)
-        in
-        bits_needed top 0
+      let rec bits_needed x k =
+        if x >= 1 lsl (limb_bits - 1) then k else bits_needed (x lsl 1) (k + 1)
       in
+      let s = bits_needed top 0 in
+
       let shift_left_bits arr s =
         if s = 0 then Array.copy arr
         else
           let len = Array.length arr in
-          let res = make len in
+          let res = make (len + 1) in
           let carry = ref 0 in
           for i = 0 to len - 1 do
             let cur = (arr.(i) lsl s) + !carry in
             res.(i) <- cur land base_mask;
             carry := cur lsr limb_bits
           done;
+          res.(len) <- !carry;
           res
       in
       let shift_right_bits arr s =
@@ -217,6 +235,7 @@ let div_rem a b =
           done;
           res
       in
+
       let u' = shift_left_bits u s in
       let v' = shift_left_bits v s in
 
@@ -229,39 +248,47 @@ let div_rem a b =
         let uj_n = u'.(j + n) in
         let uj_n1 = u'.(j + n - 1) in
         let uj_n2 = if j + n - 2 >= 0 then u'.(j + n - 2) else 0 in
-        let numerator =
-          Int64.add
-            (Int64.shift_left (Int64.of_int uj_n) limb_bits)
-            (Int64.of_int uj_n1)
+
+        let numerator = (uj_n lsl limb_bits) + uj_n1 in
+        let qhat =
+          let qh = numerator / v_n1 in
+          if qh >= base then base - 1 else qh
         in
-        let qhat = Int64.to_int (Int64.div numerator (Int64.of_int v_n1)) in
-        let qhat = if qhat >= base then base - 1 else qhat in
+
         let rec adjust qh =
           if qh = 0 then 0
           else
-            let prod1 = Int64.mul (Int64.of_int qh) (Int64.of_int v_n2) in
+            let prod1 = qh * v_n2 in
             let left = prod1 in
-            let r_temp =
-              Int64.sub numerator
-                (Int64.mul (Int64.of_int qh) (Int64.of_int v_n1))
-            in
-            let r_shifted = Int64.shift_left r_temp limb_bits in
-            let rhs = Int64.add r_shifted (Int64.of_int uj_n2) in
+            let r_temp = numerator - (qh * v_n1) in
+            let r_shifted = r_temp lsl limb_bits in
+            let rhs = r_shifted + uj_n2 in
             if left > rhs then adjust (qh - 1) else qh
         in
+
         let qhat = adjust qhat in
-        let borrow = ref 0L in
+
+        (* multiply-subtract v' * qhat from u' starting at j *)
+        let borrow = ref 0 in
         for i = 0 to n - 1 do
-          let p = Int64.mul (Int64.of_int qhat) (Int64.of_int v'.(i)) in
-          let sub_val = Int64.add p !borrow in
-          let uidx = j + i in
-          let diff = Int64.sub (Int64.of_int u'.(uidx)) sub_val in
-          u'.(uidx) <- Int64.to_int (Int64.logand diff (Int64.of_int base_mask));
-          borrow := Int64.shift_right_logical (Int64.neg diff) limb_bits
+          let p = (qhat * v'.(i)) + !borrow in
+          let idx = j + i in
+          let diff = u'.(idx) - (p land base_mask) in
+          (* since p can be larger than base, we handle borrowing with carry-like approach *)
+          let carry_p = p lsr limb_bits in
+          let sub = diff in
+          if sub < 0 then (
+            u'.(idx) <- (sub + base) land base_mask;
+            borrow := carry_p + 1)
+          else (
+            u'.(idx) <- sub land base_mask;
+            borrow := carry_p)
         done;
-        let diff2 = Int64.sub (Int64.of_int u'.(j + n)) !borrow in
-        u'.(j + n) <- Int64.to_int (Int64.logand diff2 (Int64.of_int base_mask));
-        if diff2 < 0L then (
+
+        let diff2 = u'.(j + n) - !borrow in
+        u'.(j + n) <- diff2 land base_mask;
+        if diff2 < 0 then (
+          (* qhat was one too large; add v' back *)
           q.(j) <- qhat - 1;
           let carry2 = ref 0 in
           for i = 0 to n - 1 do
@@ -324,21 +351,23 @@ let to_twos_comp x k =
 
 let of_twos_comp arr =
   let k = Array.length arr in
-  let highest = arr.(k - 1) in
-  let negative = highest lsr (limb_bits - 1) = 1 in
-  if not negative then make_from_sign_and_limbs 1 (Array.copy arr)
+  if k = 0 then zero
   else
-    let mag = Array.copy arr in
-    for i = 0 to k - 1 do
-      mag.(i) <- base_mask lxor mag.(i)
-    done;
-    let carry = ref 1 in
-    for i = 0 to k - 1 do
-      let sum = mag.(i) + !carry in
-      mag.(i) <- sum land base_mask;
-      carry := sum lsr limb_bits
-    done;
-    make_from_sign_and_limbs (-1) mag
+    let highest = arr.(k - 1) in
+    let negative = highest lsr (limb_bits - 1) = 1 in
+    if not negative then make_from_sign_and_limbs 1 (Array.copy arr)
+    else
+      let mag = Array.copy arr in
+      for i = 0 to k - 1 do
+        mag.(i) <- base_mask lxor mag.(i)
+      done;
+      let carry = ref 1 in
+      for i = 0 to k - 1 do
+        let sum = mag.(i) + !carry in
+        mag.(i) <- sum land base_mask;
+        carry := sum lsr limb_bits
+      done;
+      make_from_sign_and_limbs (-1) mag
 
 let bitwise_op a b f =
   let la = Array.length a.limbs and lb = Array.length b.limbs in
@@ -487,9 +516,6 @@ let of_float f =
     let limbs = Array.of_list (List.rev limbs_list) in
     normalize { sign = s; limbs }
 
-let to_string = to_string
-let of_string = of_string
-
 let to_int64 x =
   if is_zero x then 0L
   else
@@ -506,3 +532,5 @@ let to_int64 x =
     | _ -> failwith "to_int64: overflow"
 
 let of_int64 = of_int64
+let to_string = to_string
+let of_string = of_string
