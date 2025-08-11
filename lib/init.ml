@@ -1,4 +1,4 @@
-open Calyxium_stdlib.Cmathlib
+open Calyxium_stdlib.Mathlib
 open Gc
 
 type stdlib_module = string * (string * value) list

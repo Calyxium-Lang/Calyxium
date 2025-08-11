@@ -1,11 +1,6 @@
 (env
- (dev
-  (ocamlopt_flags
-   (:standard -warn-error +a -w -32 -strict-sequence -short-paths -inline 0))
-  (flags
-   (:standard -safe-string -strict-formats)))
  (release
   (ocamlopt_flags
-   (:standard -O3 -compact -unbox-closures -noassert -nodynlink))
+   (:standard -O3 -compact -unbox-closures -noassert -inline 100))
   (flags
    (:standard -safe-string -strict-formats))))

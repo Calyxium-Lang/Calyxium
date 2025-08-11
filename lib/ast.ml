@@ -23,16 +23,6 @@ and Stmt : sig
 
   type t =
     | BlockStmt of { body : t list }
-    | VarDeclarationStmt of {
-        identifier : string;
-        assigned_value : Expr.t option;
-        explicit_type : Type.t;
-      }
-    | MultiVarDeclarationStmt of {
-        identifier : string list;
-        assigned_value : Expr.t list;
-        explicit_type : Type.t;
-      }
     | FunctionDeclStmt of {
         name : string;
         is_rec : bool;
@@ -40,26 +30,13 @@ and Stmt : sig
         return_type : Type.t;
         body : t list;
       }
-    | ImportStmt of { module_name : string list }
-    | ModuleStmt of { module_name : string; block : t list }
     | ExprStmt of Expr.t
-    | EnumStmt of { name : string; members : string list }
-    | RecordStmt of { name : string; fields : t list }
+    | RecordStmt of { name : string; fields : Expr.t list }
 end = struct
   type parameter = { name : string; param_type : Type.t }
 
   type t =
     | BlockStmt of { body : t list }
-    | VarDeclarationStmt of {
-        identifier : string;
-        assigned_value : Expr.t option;
-        explicit_type : Type.t;
-      }
-    | MultiVarDeclarationStmt of {
-        identifier : string list;
-        assigned_value : Expr.t list;
-        explicit_type : Type.t;
-      }
     | FunctionDeclStmt of {
         name : string;
         is_rec : bool;
@@ -67,11 +44,8 @@ end = struct
         return_type : Type.t;
         body : t list;
       }
-    | ImportStmt of { module_name : string list }
-    | ModuleStmt of { module_name : string; block : t list }
     | ExprStmt of Expr.t
-    | EnumStmt of { name : string; members : string list }
-    | RecordStmt of { name : string; fields : t list }
+    | RecordStmt of { name : string; fields : Expr.t list }
 end
 
 and Expr : sig
@@ -97,6 +71,19 @@ and Expr : sig
     | RangeExpr of { start : t option; end_ : t option }
     | BlockExpr of { body : Stmt.t list }
     | SliceExpr of { array : t; start : t option; end_ : t option }
+    | VarDeclExpr of {
+        identifier : string;
+        assigned_value : t option;
+        explicit_type : Type.t;
+      }
+    | MultiVarDeclExpr of {
+        identifier : string list;
+        assigned_value : t list;
+        explicit_type : Type.t;
+      }
+    | ImportExpr of { module_name : string list }
+    | ModuleExpr of { module_name : string; block : t list }
+    | EnumExpr of { name : string; members : string list }
 end = struct
   type t =
     | IntExpr of { value : Bigint.t }
@@ -120,4 +107,17 @@ end = struct
     | RangeExpr of { start : t option; end_ : t option }
     | BlockExpr of { body : Stmt.t list }
     | SliceExpr of { array : t; start : t option; end_ : t option }
+    | VarDeclExpr of {
+        identifier : string;
+        assigned_value : t option;
+        explicit_type : Type.t;
+      }
+    | MultiVarDeclExpr of {
+        identifier : string list;
+        assigned_value : t list;
+        explicit_type : Type.t;
+      }
+    | ImportExpr of { module_name : string list }
+    | ModuleExpr of { module_name : string; block : t list }
+    | EnumExpr of { name : string; members : string list }
 end

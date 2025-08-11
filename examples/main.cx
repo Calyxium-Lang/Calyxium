@@ -4,7 +4,7 @@ let is_num(char: byte): bool {
 }
 
 let to_int_safe(x: string): unit {
-    let bytes = to_bytes(x)
+    let bytes = to_bytes(x) in
 
     let rec collect_digits(i: int, acc: string): string {
         if i >= length(bytes) then acc else

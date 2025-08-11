@@ -79,70 +79,15 @@ let rec compile_stmt = function
       Hashtbl.replace function_table name
         { return_type; params = parameters; bytecode = full_function_bytecode };
       []
-  | VarDeclarationStmt { identifier; assigned_value; explicit_type = _ } ->
-      let expr_bytecode =
-        match assigned_value with
-        | Some expr -> compile_expr expr
-        | None -> [ LOAD_INT Bigint.zero ]
-      in
-      expr_bytecode @ [ STORE_VAR identifier ]
-  | MultiVarDeclarationStmt { identifier; assigned_value; _ } ->
-      let rec flatten_expr expr =
-        match expr with
-        | TupleExpr elements -> List.concat_map flatten_expr elements
-        | _ -> [ expr ]
-      in
-      let index_exprs expr =
-        List.init (List.length identifier) (fun i ->
-            IndexExpr
-              { array = expr; index = IntExpr { value = Bigint.of_int i } })
-      in
-      let values =
-        match assigned_value with
-        | [ (TupleExpr _ as t) ] -> flatten_expr t
-        | [ expr ] when List.length identifier > 1 -> index_exprs expr
-        | _ -> assigned_value
-      in
-      if List.length identifier <> List.length values then
-        failwith
-          ("MultiVarDeclarationStmt: number of identifiers ("
-          ^ string_of_int (List.length identifier)
-          ^ ") does not match number of assigned values ("
-          ^ string_of_int (List.length values)
-          ^ ")");
-      let expr_codes = List.map compile_expr values in
-      let store_codes =
-        List.map2
-          (fun ident _ -> [ STORE_VAR ident ])
-          (List.rev identifier) expr_codes
-        |> List.concat
-      in
-      List.concat expr_codes @ store_codes
-  | ImportStmt { module_name } ->
-      let mod_name, field_name =
-        match List.rev module_name with
-        | field :: rest -> (String.concat "." (List.rev rest), field)
-        | [] -> failwith "Invalid module path"
-      in
-      [ LOAD_MODULE mod_name; LOAD_FIELD field_name; STORE_VAR field_name ]
-  | ModuleStmt _ -> failwith "Modules not implemented."
-  | EnumStmt { name; members } ->
-      let numbered_members = List.mapi (fun i m -> (m, i)) members in
-      Hashtbl.replace enum_tbl name numbered_members;
-      []
   | RecordStmt { name; fields } ->
-      let rec register_struct prefix fields =
+      let register_struct prefix fields =
         let full_name = String.concat "." prefix in
         let actual_fields =
           List.fold_left
-            (fun acc stmt ->
-              match stmt with
-              | VarDeclarationStmt { identifier; assigned_value = Some v; _ } ->
+            (fun acc expr ->
+              match expr with
+              | VarDeclExpr { identifier; assigned_value = Some v; _ } ->
                   (identifier, v) :: acc
-              | RecordStmt { name = nested_name; fields = nested_fields } ->
-                  let nested_full = prefix @ [ nested_name ] in
-                  register_struct nested_full nested_fields;
-                  acc
               | _ -> failwith ("Invalid field in struct `" ^ full_name ^ "`"))
             [] fields
         in
@@ -318,3 +263,54 @@ and compile_expr = function
         match end_ with Some e -> compile_expr e | None -> [ LOAD_UNIT () ]
       in
       array_code @ start_code @ end_code @ [ SLICE ]
+  | VarDeclExpr { identifier; assigned_value; explicit_type = _ } ->
+      let expr_bytecode =
+        match assigned_value with
+        | Some expr -> compile_expr expr
+        | None -> [ LOAD_INT Bigint.zero ]
+      in
+      expr_bytecode @ [ STORE_VAR identifier ]
+  | MultiVarDeclExpr { identifier; assigned_value; _ } ->
+      let rec flatten_expr expr =
+        match expr with
+        | TupleExpr elements -> List.concat_map flatten_expr elements
+        | _ -> [ expr ]
+      in
+      let index_exprs expr =
+        List.init (List.length identifier) (fun i ->
+            IndexExpr
+              { array = expr; index = IntExpr { value = Bigint.of_int i } })
+      in
+      let values =
+        match assigned_value with
+        | [ (TupleExpr _ as t) ] -> flatten_expr t
+        | [ expr ] when List.length identifier > 1 -> index_exprs expr
+        | _ -> assigned_value
+      in
+      if List.length identifier <> List.length values then
+        failwith
+          ("MultiVarDeclExpr: number of identifiers ("
+          ^ string_of_int (List.length identifier)
+          ^ ") does not match number of assigned values ("
+          ^ string_of_int (List.length values)
+          ^ ")");
+      let expr_codes = List.map compile_expr values in
+      let store_codes =
+        List.map2
+          (fun ident _ -> [ STORE_VAR ident ])
+          (List.rev identifier) expr_codes
+        |> List.concat
+      in
+      List.concat expr_codes @ store_codes
+  | ImportExpr { module_name } ->
+      let mod_name, field_name =
+        match List.rev module_name with
+        | field :: rest -> (String.concat "." (List.rev rest), field)
+        | [] -> failwith "Invalid module path"
+      in
+      [ LOAD_MODULE mod_name; LOAD_FIELD field_name; STORE_VAR field_name ]
+  | ModuleExpr _ -> failwith "Modules not implemented."
+  | EnumExpr { name; members } ->
+      let numbered_members = List.mapi (fun i m -> (m, i)) members in
+      Hashtbl.replace enum_tbl name numbered_members;
+      []

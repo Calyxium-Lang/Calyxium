@@ -50,11 +50,7 @@ stmt_list:
   | stmt { [$1] }
 
 stmt:
-  | VarDeclStmt { $1 }
-  | ImportStmt { $1 }
   | FunctionDeclStmt { $1 }
-  | ModuleStmt { $1 }
-  | EnumStmt { $1 }
   | RecordStmt { $1 }
   | expr { Stmt.ExprStmt $1 }
 
@@ -153,6 +149,13 @@ expr:
   | expr LBracket expr Colon RBracket { Expr.SliceExpr { array = $1; start = Some $3; end_ = None } }
   | expr LBracket Colon expr RBracket { Expr.SliceExpr { array = $1; start = None; end_ = Some $4 } }
   | expr LBracket Colon RBracket { Expr.SliceExpr { array = $1; start = None; end_ = None } }
+  | Let Ident Colon type_expr Assign expr In { Expr.VarDeclExpr { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
+  | Let ident_list Colon type_expr Assign expr_list In { Expr.MultiVarDeclExpr { identifier = $2; assigned_value = $6; explicit_type = $4; } }
+  | Let Ident Assign expr In { Expr.VarDeclExpr { identifier = $2; assigned_value = Some $4; explicit_type = Type.Infer } }
+  | Let ident_list Assign expr_list In { Expr.MultiVarDeclExpr { identifier = $2; assigned_value = $4; explicit_type = Type.Infer } }
+  | Use path { Expr.ImportExpr { module_name = $2 } }
+  | Module Ident LBrace expr_list RBrace { Expr.ModuleExpr { module_name = $2; block = $4 } }
+  | Type Ident Assign LBrace enum_member_list RBrace { Expr.EnumExpr { name = $2; members = $5; }} 
 
 block_expr:
   | expr { $1 }
@@ -178,18 +181,6 @@ path:
 enum_member_list:
   | Ident Comma enum_member_list { $1 :: $3 }
   | Ident { [$1] }
-
-ImportStmt:
-  | Use path { Stmt.ImportStmt { module_name = $2 } }
-
-ModuleStmt:
-  | Module Ident LBrace stmt_list RBrace { Stmt.ModuleStmt { module_name = $2; block = $4 } }
-
-VarDeclStmt:
-  | Let Ident Colon type_expr Assign expr In { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
-  | Let ident_list Colon type_expr Assign expr_list In { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $6; explicit_type = $4; } }
-  | Let Ident Assign expr In { Stmt.VarDeclarationStmt { identifier = $2; assigned_value = Some $4; explicit_type = Type.Infer } }
-  | Let ident_list Assign expr_list In { Stmt.MultiVarDeclarationStmt { identifier = $2; assigned_value = $4; explicit_type = Type.Infer } }
   
 FunctionDeclStmt:
   | Let Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = $7; body = $9 } }
@@ -199,8 +190,5 @@ FunctionDeclStmt:
   // | Let Recursive Ident LParen parameter_list RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = Type.Infer; body = $8 } }
   // | Let Ident LParen RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = Type.Infer; body = $6 } }
 
-EnumStmt:
-  | Type Ident Assign LBrace enum_member_list RBrace { Stmt.EnumStmt { name = $2; members = $5; }} 
-
 RecordStmt:
-  | Type Ident Assign LBrace stmt_list RBrace { Stmt.RecordStmt { name = $2; fields = $5; } }
+  | Type Ident Assign LBrace expr_list RBrace { Stmt.RecordStmt { name = $2; fields = $5; } }

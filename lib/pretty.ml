@@ -43,16 +43,18 @@ let token_to_string = function
   | Token.Colon -> ":"
   | Token.Semi -> ";"
   | Token.Comma -> ","
-  | Token.Not -> "!"
+  | Token.Not -> "not"
   | Token.Pipe -> "|"
   | Token.UnderScore -> "_"
   | Token.Question -> "?"
-  | Token.BitWiseOR -> "`"
-  | Token.BitWiseAND -> "&"
-  | Token.BitWiseNOT -> "~"
-  | Token.BitWiseXOR -> "$"
+  | Token.BitWiseOR -> "lor"
+  | Token.BitWiseAND -> "land"
+  | Token.BitWiseNOT -> "lnot"
+  | Token.BitWiseXOR -> "lxor"
   | Token.LeftShift -> "<<"
   | Token.RightShift -> ">>"
+  | Token.ArrConcat -> "@"
+  | Token.DeRef -> "!"
   | _ -> "<unknown>"
 
 let rec string_of_type t =
@@ -64,56 +66,59 @@ let rec string_of_type t =
       let params_str = String.concat ", " (List.map string_of_type params) in
       Printf.sprintf "(%s) -> %s" params_str (string_of_type ret)
   | Type.ArrayType { element_type } -> "[]" ^ string_of_type element_type
+  | Type.Infer -> ""
   | _ -> "<type>"
 
 let string_of_parameter (param : Stmt.parameter) =
   Printf.sprintf "%s: %s" param.name (string_of_type param.param_type)
 
-let rec string_of_expr = function
+(* let is_complex_expr = function
+  | Expr.IfExpr _ | Expr.MatchExpr _ | Expr.BlockExpr _ -> true
+  | _ -> false *)
+
+(* let indent_multiline s =
+  s |> String.split_on_char '\n'
+  |> List.map (fun line -> indent () ^ line)
+  |> String.concat "\n" *)
+
+let rec string_of_expr ?(top_level = true) = function
   | Expr.IntExpr { value } -> Bigint.to_string value
   | Expr.FloatExpr { value } -> string_of_float value
-  | Expr.StringExpr { value } ->
-      let escaped = String.escaped value in
-      Printf.sprintf "\"%s\"" escaped
+  | Expr.StringExpr { value } -> Printf.sprintf "\"%s\"" (String.escaped value)
   | Expr.BoolExpr { value } -> string_of_bool value
   | Expr.ByteExpr { value } -> Printf.sprintf "'%c'" value
   | Expr.VarExpr name -> name
   | Expr.BinaryExpr { left; operator; right } ->
-      Printf.sprintf "%s %s %s" (string_of_expr left) (token_to_string operator)
-        (string_of_expr right)
+      Printf.sprintf "%s %s %s"
+        (string_of_expr ~top_level:false left)
+        (token_to_string operator)
+        (string_of_expr ~top_level:false right)
   | Expr.IfExpr { condition; then_branch; else_branch } ->
-      let cond_str = string_of_expr condition in
-      let format_then expr =
-        match expr with
-        | Expr.IfExpr _ | Expr.MatchExpr _ ->
-            incr indent_level;
-            let s = "\n" ^ indent () ^ string_of_expr expr in
-            decr indent_level;
-            "then" ^ s
-        | _ -> "then " ^ string_of_expr expr
+      let cond_str = string_of_expr ~top_level:false condition in
+      let then_str =
+        " { " ^ string_of_expr ~top_level:false then_branch ^ " }"
       in
-      let format_else expr =
-        match expr with
-        | Expr.IfExpr _ | Expr.MatchExpr _ ->
-            incr indent_level;
-            let s = "\n" ^ indent () ^ string_of_expr expr in
-            decr indent_level;
-            "\n" ^ indent () ^ "else" ^ s
-        | _ -> " else " ^ string_of_expr expr
+      let else_str =
+        match else_branch with
+        | Some e -> " else { " ^ string_of_expr ~top_level:false e ^ " }"
+        | None -> ""
       in
-      Printf.sprintf "if %s %s%s" cond_str (format_then then_branch)
-        (match else_branch with Some expr -> format_else expr | None -> "")
+      (if top_level then indent () else "")
+      ^ "if " ^ cond_str ^ then_str ^ else_str
   | Expr.MatchExpr { expr; cases } ->
-      let expr_str = string_of_expr expr in
+      let expr_str = string_of_expr ~top_level:false expr in
       let case_strs =
         List.map
           (fun (pat_opt, body) ->
             let pat_str =
-              match pat_opt with Some p -> string_of_expr p | None -> "_"
+              match pat_opt with
+              | Some p -> string_of_expr ~top_level:false p
+              | None -> "_"
             in
             let body_str =
               match body with
-              | [ Stmt.ExprStmt expr ] -> " -> " ^ string_of_expr expr
+              | [ Stmt.ExprStmt e ] ->
+                  " -> " ^ string_of_expr ~top_level:false e
               | _ -> " -> <complex block>"
             in
             indent () ^ "| " ^ pat_str ^ body_str)
@@ -121,30 +126,130 @@ let rec string_of_expr = function
       in
       Printf.sprintf "match %s with\n%s" expr_str (String.concat "\n" case_strs)
   | Expr.ArrayExpr { elements } ->
-      let elems = elements |> List.map string_of_expr |> String.concat ", " in
-      "{ " ^ elems ^ " }"
+      if elements = [] then "[]"
+      else
+        "[ "
+        ^ (elements
+          |> List.map (string_of_expr ~top_level:false)
+          |> String.concat ", ")
+        ^ " ]"
   | Expr.CallExpr { callee; arguments } ->
-      let callee_str = string_of_expr callee in
+      let callee_str = string_of_expr ~top_level:false callee in
       let args_str =
-        arguments |> List.map string_of_expr |> String.concat ", "
+        arguments
+        |> List.map (fun arg ->
+               String.trim (string_of_expr ~top_level:false arg))
+        |> String.concat ", "
       in
-      Printf.sprintf "%s(%s)" callee_str args_str
+      (if top_level then indent () else "")
+      ^ Printf.sprintf "%s(%s)" callee_str args_str
   | Expr.UnaryExpr { operator; operand } ->
-      let op_str = token_to_string operator in
-      let operand_str = string_of_expr operand in
-      Printf.sprintf "%s%s" op_str operand_str
-  | _ -> raise (Failure "Unsupported expression type")
-
-let rec string_of_stmt = function
-  | Stmt.ExprStmt expr -> indent () ^ string_of_expr expr
-  | Stmt.VarDeclarationStmt { identifier; explicit_type; assigned_value } ->
-      let type_str = string_of_type explicit_type in
+      Printf.sprintf "%s%s" (token_to_string operator)
+        (string_of_expr ~top_level:false operand)
+  | Expr.VarDeclExpr { identifier; explicit_type; assigned_value } ->
+      let type_str =
+        match explicit_type with
+        | Type.Infer -> ""
+        | ty -> ": " ^ string_of_type ty
+      in
       let value_str =
         match assigned_value with
-        | Some v -> " = " ^ string_of_expr v
+        | Some v -> " = " ^ string_of_expr ~top_level:false v
         | None -> ""
       in
-      indent () ^ Printf.sprintf "let %s: %s%s" identifier type_str value_str
+      indent () ^ Printf.sprintf "let %s%s%s in" identifier type_str value_str
+  | Expr.EnumExpr { name; members } ->
+      let members_str = String.concat ", " members in
+      String.concat "\n"
+        [
+          indent () ^ Printf.sprintf "type %s [" name;
+          indent () ^ "    " ^ members_str;
+          indent () ^ "]";
+        ]
+  | Expr.UnitExpr _ -> "()"
+  | Expr.IndexExpr { array; index } ->
+      Printf.sprintf "%s[%s]"
+        (string_of_expr ~top_level:false array)
+        (string_of_expr ~top_level:false index)
+  | Expr.DotExpr { left; right } ->
+      Printf.sprintf "%s.%s" (string_of_expr ~top_level:false left) right
+  | Expr.TernaryExpr { cond; onTrue; onFalse } ->
+      Printf.sprintf "(%s) ? %s : %s"
+        (string_of_expr ~top_level:false cond)
+        (string_of_expr ~top_level:false onTrue)
+        (string_of_expr ~top_level:false onFalse)
+  | Expr.TupleExpr elements ->
+      "("
+      ^ (elements
+        |> List.map (string_of_expr ~top_level:false)
+        |> String.concat ", ")
+      ^ ")"
+  | Expr.PipelineExpr { left; right } ->
+      Printf.sprintf "%s |> %s"
+        (string_of_expr ~top_level:false left)
+        (string_of_expr ~top_level:false right)
+  | Expr.RangeExpr { start; end_ } ->
+      let start_str =
+        match start with
+        | Some s -> string_of_expr ~top_level:false s
+        | None -> ""
+      in
+      let end_str =
+        match end_ with
+        | Some e -> string_of_expr ~top_level:false e
+        | None -> ""
+      in
+      Printf.sprintf "%s..%s" start_str end_str
+  | Expr.BlockExpr { body } ->
+      let header = indent () ^ "{" in
+      incr indent_level;
+      let body_str = body |> List.map string_of_stmt |> String.concat "\n" in
+      decr indent_level;
+      String.concat "\n" [ header; body_str; indent () ^ "}" ]
+  | Expr.SliceExpr { array; start; end_ } ->
+      let start_str =
+        match start with
+        | Some s -> string_of_expr ~top_level:false s
+        | None -> ""
+      in
+      let end_str =
+        match end_ with
+        | Some e -> string_of_expr ~top_level:false e
+        | None -> ""
+      in
+      Printf.sprintf "%s[%s:%s]"
+        (string_of_expr ~top_level:false array)
+        start_str end_str
+  | Expr.MultiVarDeclExpr { identifier; explicit_type; assigned_value } ->
+      let id_str = String.concat ", " identifier in
+      let type_str =
+        match explicit_type with
+        | Type.Infer -> ""
+        | ty -> ": " ^ string_of_type ty
+      in
+      let value_str =
+        if assigned_value <> [] then
+          " = "
+          ^ String.concat ", "
+              (List.map (string_of_expr ~top_level:false) assigned_value)
+        else ""
+      in
+      indent () ^ Printf.sprintf "let %s%s%s in" id_str type_str value_str
+  | Expr.ImportExpr { module_name } ->
+      Printf.sprintf "use %s" (String.concat "." module_name)
+  | Expr.ModuleExpr { module_name; block } ->
+      let header = indent () ^ Printf.sprintf "module %s {" module_name in
+      incr indent_level;
+      let body_str =
+        block
+        |> List.map (string_of_expr ~top_level:false)
+        |> String.concat "\n"
+      in
+      decr indent_level;
+      String.concat "\n" [ header; body_str; indent () ^ "}" ]
+
+and string_of_stmt = function
+  | Stmt.ExprStmt expr -> string_of_expr expr
   | Stmt.FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
       let rec_keyword = if is_rec then "rec " else "" in
       let params_str =
@@ -159,8 +264,8 @@ let rec string_of_stmt = function
       let body_str = body |> List.map string_of_stmt |> String.concat "\n" in
       decr indent_level;
 
-      let footer = "}" in
-      String.concat "\n" [ indent () ^ header; body_str; indent () ^ footer ]
+      let footer = indent () ^ "}" in
+      String.concat "\n" [ indent () ^ header; body_str; footer ]
   | Stmt.BlockStmt { body } ->
       let header = indent () ^ "{" in
       incr indent_level;
@@ -168,12 +273,6 @@ let rec string_of_stmt = function
       decr indent_level;
       let footer = indent () ^ "}" in
       String.concat "\n" [ header; body_str; footer ]
-  | Stmt.EnumStmt { name; members } ->
-      let members_str = String.concat ", " members in
-      let header = Printf.sprintf "enum %s {" name in
-      let body = indent () ^ "    " ^ members_str in
-      let footer = indent () ^ "}" in
-      String.concat "\n" [ indent () ^ header; body; footer ]
   | _ -> raise (Failure "Unsupported statement type")
 
 let string_of_program (stmts : Stmt.t list) : string =
