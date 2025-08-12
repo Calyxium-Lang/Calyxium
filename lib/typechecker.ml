@@ -578,7 +578,6 @@ and check_expr env func_env expr =
             tl;
           (ArrayType { element_type = hd }, final_env))
   | IndexExpr { array; index } -> (
-      let subst = ref (Subst.empty ()) in
       let at, env' = check_expr env func_env array in
       let index_type, env'' = check_expr env' func_env index in
       let is_enum_type = function
@@ -617,31 +616,28 @@ and check_expr env func_env expr =
                   ^ "  Only constant integer indices (e.g. `t[0]`) are allowed"
                    )))
       | VarType id -> (
-          let resolved_type = Subst.apply !subst (VarType id) in
-          match resolved_type with
-          | TupleType element_types -> (
-              match index with
-              | IntExpr { value } ->
-                  let idx = Bigint.to_int value in
-                  if idx < 0 || idx >= List.length element_types then
-                    raise
-                      (TypeError
-                         ("Tuple index out of bounds:\n" ^ "  Index: "
-                        ^ string_of_int idx ^ "\n  Tuple size: "
-                         ^ string_of_int (List.length element_types)));
-                  (List.nth element_types idx, env'')
-              | _ ->
-                  raise
-                    (TypeError
-                       ("Invalid tuple index:\n"
-                      ^ "  Only constant integer indices (e.g. `t[0]`) are \
-                         allowed")))
+          let subst_tbl = Subst.empty () in
+          match index with
+          | IntExpr { value } ->
+              let idx = Bigint.to_int value in
+              let fresh_elems = List.init (idx + 1) (fun _ -> fresh_tyvar ()) in
+              let tuple_ty = TupleType fresh_elems in
+              unify_with_subst subst_tbl (VarType id) tuple_ty;
+              let element_types =
+                List.map (Subst.apply subst_tbl) fresh_elems
+              in
+              if idx < 0 || idx >= List.length element_types then
+                raise
+                  (TypeError
+                     ("Tuple index out of bounds:\n" ^ "  Index: "
+                    ^ string_of_int idx ^ "\n  Tuple size: "
+                     ^ string_of_int (List.length element_types)));
+              (List.nth element_types idx, env'')
           | _ ->
-              raise
-                (TypeError
-                   ("Type error in index expression:\n"
-                  ^ "  Can only index into arrays or tuples\n" ^ "  Found: "
-                   ^ string_of_type resolved_type)))
+              let elem_ty = fresh_tyvar () in
+              let arr_ty = ArrayType { element_type = elem_ty } in
+              unify_with_subst subst_tbl (VarType id) arr_ty;
+              (Subst.apply subst_tbl elem_ty, env''))
       | _ ->
           raise
             (TypeError
@@ -919,6 +915,31 @@ and check_expr env func_env expr =
             | None -> env2
           in
           (array_type, env3)
+      | Type.VarType id ->
+          let elem_ty = fresh_tyvar () in
+          let arr_ty = Type.ArrayType { element_type = elem_ty } in
+          let subst_tbl = Subst.empty () in
+          unify_with_subst subst_tbl (Type.VarType id) arr_ty;
+          let env2 =
+            match start with
+            | Some s -> (
+                let s_ty, env' = check_expr env1 func_env s in
+                match s_ty with
+                | Type.SymbolType { value = "int" } -> env'
+                | _ -> raise (TypeError "Slice start index must be of type int")
+                )
+            | None -> env1
+          in
+          let env3 =
+            match end_ with
+            | Some e -> (
+                let e_ty, env' = check_expr env2 func_env e in
+                match e_ty with
+                | Type.SymbolType { value = "int" } -> env'
+                | _ -> raise (TypeError "Slice end index must be of type int"))
+            | None -> env2
+          in
+          (Subst.apply subst_tbl arr_ty, env3)
       | _ -> raise (TypeError "Attempted to slice a non-array value"))
   | VarDeclExpr { identifier; assigned_value; explicit_type } -> (
       match assigned_value with
@@ -973,8 +994,27 @@ and check_expr env func_env expr =
             | None -> raise (TypeError ("Unbound variable `" ^ name ^ "`")))
         | [ expr ] -> (
             let expr_type, env2 = check_expr env func_env expr in
-            match expr_type with
+            let subst = Subst.empty () in
+            match Subst.apply subst expr_type with
             | TupleType element_types ->
+                let exprs =
+                  List.mapi
+                    (fun i _ ->
+                      IndexExpr
+                        {
+                          array = expr;
+                          index = IntExpr { value = Bigint.of_int i };
+                        })
+                    element_types
+                in
+                (exprs, env2)
+            | VarType _ ->
+                let fresh_elems =
+                  List.init (List.length identifier) (fun _ -> fresh_tyvar ())
+                in
+                let tuple_ty = TupleType fresh_elems in
+                unify_with_subst subst expr_type tuple_ty;
+                let element_types = List.map (Subst.apply subst) fresh_elems in
                 let exprs =
                   List.mapi
                     (fun i _ ->

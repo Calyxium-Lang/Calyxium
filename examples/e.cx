@@ -1,22 +1,22 @@
-let head(lst: []float) {
+let head(lst) {
     lst[0]
 }
 
-let tail(lst: []float): []float {
+let tail(lst) {
     lst[1:]
 }
 
-let prepend(elem, lst: []float): []float { 
+let prepend(elem, lst) { 
     [elem] @ lst
 }
 
-let rec reverse(lst: []float, acc: []float): []float {
+let rec reverse(lst, acc) {
     if length(lst) == 0 then acc
     else reverse(tail(lst), prepend(head(lst), acc))
 }
 
-let array_to_float(int_array: []int): []float {
-    let rec convert(i, acc: []float, arr: []int): []float {
+let array_to_float(int_array) {
+    let rec convert(i, acc, arr) {
         if i >= length(arr) then reverse(acc, [])
         else {
             let f = to_float(arr[i]) in

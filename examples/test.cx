@@ -1,5 +1,5 @@
 let bubble_sort(arr) {
-    let rec pass(xs: []int, i, acc, ch): (bool, []int) {
+    let rec pass(xs, i, acc, ch) {
         if i + 1 >= length(xs) then (ch, acc @ if i < length(xs) then [ xs[i] ] else []) else {
             let a = xs[i] in
             let b = xs[i + 1] in
@@ -18,10 +18,3 @@ let arr = [ 5, 2, 9, 1, 3 ] in
 let sorted = bubble_sort(arr) in
 
 print(sorted)
-
-let add(x, y) {
-    x + y
-}
-
-print(add(5, 5))
-print(add(5.2, 1.0))

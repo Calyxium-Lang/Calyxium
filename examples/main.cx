@@ -1,12 +1,12 @@
-let is_num(char: byte): bool {
+let is_num(char) {
     let char_int = to_int(char) in
     (char_int >= 48) && (char_int <= 57)
 }
 
-let to_int_safe(x: string): unit {
+let to_int_safe(x) {
     let bytes = to_bytes(x) in
 
-    let rec collect_digits(i: int, acc: string): string {
+    let rec collect_digits(i, acc) {
         if i >= length(bytes) then acc else
             let char = bytes[i] in
             let acc2 = if is_num(char) then acc ^ (char |> to_string) else acc in

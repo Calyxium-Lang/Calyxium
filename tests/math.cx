@@ -283,7 +283,7 @@ let modExp(base, exp, m) {
     modExpIter(base % m, exp, m, 1)
 }
 
-let rec extendedGCD(a, b): (int, int, int) {
+let rec extendedGCD(a, b) {
     if b == 0 then (a, 1, 0)
     else {
         let res = extendedGCD(b, a % b) in
