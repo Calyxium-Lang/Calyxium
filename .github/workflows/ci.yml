@@ -27,7 +27,7 @@ jobs:
         with:
           ocaml-compiler: 5
 
-      - run: opam install dune zarith
+      - run: opam install dune
 
       - run: opam exec -- dune build --profile release
 

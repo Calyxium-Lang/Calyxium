@@ -95,9 +95,7 @@ let rec string_of_expr ?(top_level = true) = function
         (string_of_expr ~top_level:false right)
   | Expr.IfExpr { condition; then_branch; else_branch } ->
       let cond_str = string_of_expr ~top_level:false condition in
-      let then_str =
-        " { " ^ string_of_expr ~top_level:false then_branch ^ " }"
-      in
+      let then_str = string_of_expr ~top_level:false then_branch in
       let else_str =
         match else_branch with
         | Some e -> " else { " ^ string_of_expr ~top_level:false e ^ " }"

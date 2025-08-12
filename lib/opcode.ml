@@ -69,3 +69,4 @@ type opcode =
   | MAKE_RANGE
   | ARRAYCONCAT
   | SLICE
+  | TYPE

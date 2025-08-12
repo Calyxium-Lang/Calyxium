@@ -56,7 +56,7 @@ assert(ascii_str == "!\"#$%&'")
 
 let upper = to_bytes("HELLO") in
 let lower = to_bytes("hello") in
-let rec check_case_down(i: int): int {
+let rec check_case_down(i) {
     if i < length(upper) then {
         assert(to_int(upper[i]) + 32 == to_int(lower[i]))
         check_case_down(i + 1)
@@ -64,7 +64,7 @@ let rec check_case_down(i: int): int {
 }
 check_case_down(0)
 
-let rec check_case_up(i: int): int {
+let rec check_case_up(i) {
     if i < length(lower) then {
         assert(to_int(lower[i]) - 32 == to_int(upper[i]))
         check_case_up(i + 1)
@@ -82,7 +82,7 @@ let as_bytes = to_bytes(original) in
 let back_str = to_string(as_bytes) in
 assert(back_str == original)
 
-let rec check_ascii(i: int): int {
+let rec check_ascii(i) {
     if i < 16 then {
         assert(to_int(to_byte(i)) == i)
         check_ascii(i + 1)

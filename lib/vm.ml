@@ -1329,6 +1329,40 @@ let run instructions =
                 Stack.push (VArray slice) stack;
                 next ()
             | _ -> runtime_error "SLICE expects array as first argument")
+        | TYPE ->
+            push_trace "TYPE";
+            if Stack.is_empty stack then
+              runtime_error "TYPE expects a value on the stack"
+            else
+              let v = force (Stack.pop stack) in
+              let type_str =
+                match v with
+                | VInt _ -> "int"
+                | VFloat _ -> "float"
+                | VHeapRef id -> (
+                    match Gc.get_string id with
+                    | Some _ -> "string"
+                    | None -> (
+                        match Gc.get_bytes id with
+                        | Some _ -> "bytes"
+                        | None -> (
+                            match Gc.get_value id with
+                            | Some _ -> "ref"
+                            | None -> "unknown")))
+                | VByte _ -> "byte"
+                | VBool _ -> "bool"
+                | VUnit -> "unit"
+                | VArray _ -> "array"
+                | VTuple _ -> "tuple"
+                | VRange _ -> "range"
+                | VNative _ -> "native"
+                | VModule _ -> "module"
+                | VClosure _ -> "function"
+                | VThunk _ -> "thunk"
+              in
+              let v = Gc.alloc_string_with_gc stack frame.env type_str in
+              Stack.push v stack;
+              next ()
     done;
     flush_buffer ()
   with RuntimeError msg ->

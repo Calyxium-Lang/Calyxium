@@ -1,5 +1,6 @@
 module rec Type : sig
   type t =
+    | VarType of int
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
     | TupleType of t list
@@ -9,6 +10,7 @@ module rec Type : sig
     | Infer
 end = struct
   type t =
+    | VarType of int
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
     | TupleType of t list

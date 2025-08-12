@@ -17,7 +17,7 @@ let normalize { sign; limbs } =
   in
   let last = trim (n - 1) in
   if last = -1 then zero
-  else if last = n - 1 then { sign; limbs } (* no change *)
+  else if last = n - 1 then { sign; limbs }
   else { sign; limbs = Array.init (last + 1) (fun i -> limbs.(i)) }
 
 let sign x = x.sign
@@ -268,13 +268,11 @@ let div_rem a b =
 
         let qhat = adjust qhat in
 
-        (* multiply-subtract v' * qhat from u' starting at j *)
         let borrow = ref 0 in
         for i = 0 to n - 1 do
           let p = (qhat * v'.(i)) + !borrow in
           let idx = j + i in
           let diff = u'.(idx) - (p land base_mask) in
-          (* since p can be larger than base, we handle borrowing with carry-like approach *)
           let carry_p = p lsr limb_bits in
           let sub = diff in
           if sub < 0 then (
@@ -288,7 +286,6 @@ let div_rem a b =
         let diff2 = u'.(j + n) - !borrow in
         u'.(j + n) <- diff2 land base_mask;
         if diff2 < 0 then (
-          (* qhat was one too large; add v' back *)
           q.(j) <- qhat - 1;
           let carry2 = ref 0 in
           for i = 0 to n - 1 do

@@ -1,8 +1,8 @@
-let println(n: string): unit {
+let println(n) {
     print(n ^ "\n")
 }
 
-let rec loop(cond: bool): unit {
+let rec loop(cond) {
     if cond then {
         println("Hello, world!")
         loop(cond)

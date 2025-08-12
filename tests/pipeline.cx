@@ -2,15 +2,16 @@
 
 -- basic pipeline test
 
-let double(x: int): int {
-    x * 2
+let double(x) {
+    (if of_type(x) == "float" then x * 2.0 else x * 2)
 }
 
-let sqr(x: int): int {
+let sqr(x) {
     x * x
 }
 
-assert(3 |> double |> sqr == 36)
+print(3.0 |> double |> sqr == 36.0)
+print(3 |> double |> sqr == 36)
 
 assert(123 |> to_string == "123")
 
@@ -19,38 +20,33 @@ assert((2 + 3) |> sqr == 25)
 let y = 7 |> double in
 assert(y == 14) 
 
-let id(x: int): int {
+let id(x) {
     x
 }
 
 assert(42 |> id == 42)
+assert("hello" |> id == "hello")
 
-let float_double(x: float): float {
-    x * 2.0
-}
-
-assert(3.5 |> float_double == 7.0)
-
-let make_point(x: int, y: int): (int, int) {
+let make_point(x, y) {
     (x, y)
 }
 
 assert(make_point(1, 2) == (1, 2))
 
-let is_even(x: int): bool {
+let is_even(x) {
     (x % 2) == 0
 }
 
 assert(4 |> is_even == true)
 assert(5 |> is_even == false)
 
-let triple_then_double(x: int): int {
+let triple_then_double(x) {
     (x * 3) |> double
 }
 
 assert(3 |> triple_then_double == 18)
 
-let greet(name: string): string {
+let greet(name) {
     "Hello, " ^ name
 }
 

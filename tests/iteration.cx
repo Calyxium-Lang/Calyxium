@@ -2,17 +2,17 @@
 
 -- basic tests for iteration operations using recursion and immutable values
 
-let rec loop1(i: int, acc: int): int {
+let rec loop1(i, acc) {
     if i > 5 then acc else loop1(i + 1, acc + i)
 }
 let acc = loop1(1, 0) in
 assert(acc == 15)
 
-let rec loop2_inner(i: int, j: int, acc: int): int {
+let rec loop2_inner(i, j, acc) {
     if j > 2 then acc else loop2_inner(i, j + 1, acc + (i * j))
 }
 
-let rec loop2_outer(i: int, acc: int): int {
+let rec loop2_outer(i, acc) {
     if i > 3 then acc else {
         let acc2 = loop2_inner(i, 1, acc) in
         loop2_outer(i + 1, acc2)
@@ -21,26 +21,26 @@ let rec loop2_outer(i: int, acc: int): int {
 let total2 = loop2_outer(1, 0) in
 assert(total2 == 18)
 
-let rec loop3(i: int, acc: int): int {
+let rec loop3(i, acc) {
     if i < 10 then loop3(i + 1, acc + i) else acc
 }
 let sum = loop3(10, 0) in
 assert(sum == 0)
 
-let rec loop4(i: int, acc: int): int {
+let rec loop4(i, acc) {
     if i < 1 then acc else loop4(i - 1, acc + i)
 }
 let down = loop4(5, 0) in
 assert(down == 15)
 
-let rec loop5(i: int, acc: int): int {
+let rec loop5(i, acc) {
     if i > 5 then acc else loop5(i + 2, acc + i)
 }
 let sum2 = loop5(1, 0) in
 assert(sum2 == 9)
 
 let arr = [1..5] in
-let rec loop6(i: int, acc: int): int {
+let rec loop6(i, acc) {
     if i >= length(arr) then acc else loop6(i + 1, acc + arr[i])
 }
 let arr_sum = loop6(0, 0) in

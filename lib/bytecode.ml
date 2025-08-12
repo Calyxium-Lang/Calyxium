@@ -27,6 +27,7 @@ let builtins =
     ("input", fun args -> args @ [ INPUT ]);
     ("assert", fun args -> args @ [ ASSERT ]);
     ("panic", fun args -> args @ [ PANIC ]);
+    ("of_type", fun args -> args @ [ TYPE ]);
   ]
 
 let opcode_of_binop = function

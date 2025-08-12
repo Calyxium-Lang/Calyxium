@@ -186,9 +186,9 @@ FunctionDeclStmt:
   | Let Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = $7; body = $9 } }
   | Let Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = $8; body = $10 } }
   | Let Ident LParen RParen Colon type_expr LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = $6; body = $8 } }
-  // | Let Ident LParen parameter_list RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = Type.Infer; body = $7 } }
-  // | Let Recursive Ident LParen parameter_list RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = Type.Infer; body = $8 } }
-  // | Let Ident LParen RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = Type.Infer; body = $6 } }
+  | Let Ident LParen parameter_list RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = Type.Infer; body = $7 } }
+  | Let Recursive Ident LParen parameter_list RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = Type.Infer; body = $8 } }
+  | Let Ident LParen RParen LBrace stmt_list RBrace { Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = Type.Infer; body = $6 } }
 
 RecordStmt:
   | Type Ident Assign LBrace expr_list RBrace { Stmt.RecordStmt { name = $2; fields = $5; } }

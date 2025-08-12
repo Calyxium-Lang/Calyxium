@@ -3,27 +3,27 @@
 let pi = 3.141592653589 in
 let e = 2.718281828459 in
 
-let rec fact(n: int): float {
+let rec fact(n) {
     if n <= 1 then 1.0 else to_float(n) * fact(n - 1)
 }
 
-let pow(base: float, exp: float): float {
+let pow(base, exp) {
     base ** exp
 }
 
-let abs(x: float): float {
+let abs(x) {
     (x <= 0.0) ? -x : x
 }
 
-let degToRad(deg: float): float {
+let degToRad(deg) {
     deg * pi / 180.0
 }
 
-let radToDeg(rad: float): float {
+let radToDeg(rad) {
     rad * 180.0 / pi
 }
 
-let rec sin_iter(x: float, n: int, terms: int, acc: float): float {
+let rec sin_iter(x, n, terms, acc) {
     if n >= terms then acc else {
         let sign = ((n % 2) == 0) ? 1.0 : -1.0 in
         let term = sign * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1) in
@@ -31,15 +31,15 @@ let rec sin_iter(x: float, n: int, terms: int, acc: float): float {
     }
 }
 
-let sin(x: float, terms: int): float {
+let sin(x, terms) {
     sin_iter(x, 0, terms, 0.0)
 }
 
-let csc(x: float, terms: int): float {
+let csc(x, terms) {
     1.0 / sin(x, terms)
 }
 
-let rec arcsin_iter(x: float, n: int, terms: int, acc: float): float {
+let rec arcsin_iter(x, n, terms, acc) {
     if n >= terms then acc else {
         let num = fact(2 * n) in
         let denom = pow(4.0, to_float(n)) * pow(fact(n), 2.0) * to_float(2 * n + 1) in
@@ -48,13 +48,13 @@ let rec arcsin_iter(x: float, n: int, terms: int, acc: float): float {
     }
 }
 
-let arcsin(x: float, terms: int): float {
+let arcsin(x, terms) {
     if (x < -1.0 || x > 1.0) then panic("Error: arcsin(x) is undefined for x < -1 or x > 1")
     let raw = arcsin_iter(x, 0, terms, 0.0) in
     (raw < -pi/2.0) ? -pi/2.0 : (raw > pi/2.0) ? pi/2.0 : raw
 }
 
-let rec cos_iter(x: float, n: int, terms: int, acc: float): float {
+let rec cos_iter(x, n, terms, acc) {
     if n >= terms then acc else {
         let sign = ((n % 2) == 0) ? 1.0 : -1.0 in
         let term = sign * pow(x, to_float(2 * n)) / fact(2 * n) in
@@ -62,95 +62,95 @@ let rec cos_iter(x: float, n: int, terms: int, acc: float): float {
     }
 }
 
-let cos(x: float, terms: int): float {
+let cos(x, terms) {
     cos_iter(x, 0, terms, 0.0)
 }
 
-let sec(x: float, terms: int): float {
+let sec(x, terms) {
     1.0 / cos(x, terms)
 }
 
-let arccos(x: float, terms: int): float {
+let arccos(x, terms) {
     if x == 1.0 then 0.0
     else if x == -1.0 then pi
     else pi / 2.0 - arcsin(x, terms)
 }
 
-let tan(x: float, terms: int): float {
+let tan(x, terms) {
     sin(x, terms) / cos(x, terms)
 }
 
-let cot(x: float, terms: int): float {
+let cot(x, terms) {
     cos(x, terms) / sin(x, terms)
 }
 
-let rec arctan_iter(x: float, n: int, terms: int, acc: float): float {
+let rec arctan_iter(x, n, terms, acc) {
     if n >= terms then acc else {
         let term = pow(-1.0, to_float(n)) * pow(x, to_float(2 * n + 1)) / to_float(2 * n + 1) in
         arctan_iter(x, n + 1, terms, acc + term)
     }
 }
 
-let rec arctan(x: float, terms: int): float {
+let rec arctan(x, terms) {
     if x == 1.0 then pi / 4.0
     else if x > 1.0 then pi / 2.0 - arctan(1.0 / x, terms)
     else if x < -1.0 then -pi / 2.0 - arctan(1.0 / x, terms)
     else arctan_iter(x, 0, terms, 0.0)
 }
 
-let wrapAngle(angle: float): float {
+let wrapAngle(angle) {
     angle % (2.0 * pi)
 }
 
-let sign(x: float): int {
+let sign(x) {
     (x > 0.0) ? 1 : (x < 0.0) ? -1 : 0
 }
 
-let floor(x: float): float {
+let floor(x) {
     let i = to_int(x) in
     (to_float(i) > x) ? to_float(i - 1) : to_float(i)
 }
 
-let ceil(x: float): float {
+let ceil(x) {
     let i = to_int(x) in
     (to_float(i) < x) ? to_float(i + 1) : to_float(i)
 }
 
-let round(x: float): float {
+let round(x) {
     floor(x + 0.5)
 }
 
-let rec sqrt_iter(x: float, guess: float): float {
+let rec sqrt_iter(x, guess) {
     let new_guess = 0.5 * (guess + x / guess) in
     if abs(new_guess - guess) < 0.00001 then new_guess
     else sqrt_iter(x, new_guess)
 }
 
-let sqrt(x: float): float {
+let sqrt(x) {
     if x < 0.0 then { panic("sqrt: negative input") 0.0 }
     else if x == 0.0 then 0.0
     else sqrt_iter(x, x / 2.0)
 }
 
-let rec cbrt_iter(x: float, guess: float): float {
+let rec cbrt_iter(x, guess) {
     let new_guess = (2.0 * guess + x / (guess * guess)) / 3.0 in
     if abs(new_guess - guess) < 0.00001 then new_guess
     else cbrt_iter(x, new_guess)
 }
 
-let cbrt(x: float): float {
+let cbrt(x) {
     if x == 0.0 then 0.0
     else if x > 0.0 then cbrt_iter(x, x / 3.0)
     else -cbrt_iter(-x, -x / 3.0)
 }
 
-let rec nthRoot_iter(x: float, n: float, guess: float): float {
+let rec nthRoot_iter(x, n, guess) {
     let new_guess = ((n - 1.0) * guess + x / pow(guess, n - 1.0)) / n in
     if abs(new_guess - guess) < 0.00001 then new_guess
     else nthRoot_iter(x, n, new_guess)
 }
 
-let nthRoot(x: float, n: float): float {
+let nthRoot(x, n) {
     if n == 0.0 then { panic("nthRoot: zero root") 0.0 }
     else if x == 0.0 then 0.0
     else if x > 0.0 then nthRoot_iter(x, n, x / n)
@@ -158,37 +158,37 @@ let nthRoot(x: float, n: float): float {
     else { panic("nthRoot: negative base with even root") 0.0 }
 }
 
-let rec exp_iter(x: float, n: int, terms: int, acc: float): float {
+let rec exp_iter(x, n, terms, acc) {
     if n >= terms then acc else {
         let term = pow(x, to_float(n)) / fact(n) in
         exp_iter(x, n + 1, terms, acc + term)
     }
 }
 
-let exp(x: float): float {
+let exp(x) {
     exp_iter(x, 0, 30, 0.0)
 }
 
-let rec log_iter(x: float, guess: float): float {
+let rec log_iter(x, guess) {
     let new_guess = guess - (exp(guess) - x) / exp(guess) in
     if abs(new_guess - guess) < 0.00001 then new_guess
     else log_iter(x, new_guess)
 }
 
-let log(x: float): float {
+let log(x) {
     if x <= 0.0 then { panic("log: non-positive input") 0.0 }
     else log_iter(x, 1.0)
 }
 
-let log10(x: float): float {
+let log10(x) {
     log(x) / log(10.0)
 }
 
-let log2(x: float): float {
+let log2(x) {
     log(x) / log(2.0)
 }
 
-let logBase(x: float, base: float): float {
+let logBase(x, base) {
     if base <= 0.0 || base == 1.0 then { panic("logBase: invalid base") 0.0 }
     else log(x) / log(base)
 }
@@ -200,8 +200,8 @@ let c = cos(angle, 15) in
 let a0 = 0.0 in
 let s0 = sin(a0, 15) in
 let c0 = cos(a0, 15) in
- 
-let a1 = pi / 6.0 in 
+
+let a1 = pi / 6.0 in
 let s1 = sin(a1, 15) in
 let c1 = cos(a1, 15) in
 
@@ -225,12 +225,12 @@ let quad_angle = 3.0 * pi / 4.0 in
 let sin_q = sin(quad_angle, 15) in
 let cos_q = cos(quad_angle, 15) in
 
-let rec gcd(a: int, b: int): int {
+let rec gcd(a, b) {
     if b == 0 then abs(to_float(a)) |> to_int
     else gcd(b, a % b)
 }
 
-let lcm(a: int, b: int): int {
+let lcm(a, b) {
     if a == 0 || b == 0 then 0
     else {
         let prod = abs(to_float(a * b)) in
@@ -239,43 +239,43 @@ let lcm(a: int, b: int): int {
     }
 }
 
-let rec isPrimeCheck(n: int, i: int): bool {
+let rec isPrimeCheck(n, i) {
     if i * i > n then true
     else if n % i == 0 then false
     else isPrimeCheck(n, i + 1)
 }
 
-let isPrime(n: int): bool {
+let isPrime(n) {
     if n < 2 then false
     else if n == 2 then true
     else if n % 2 == 0 then false
     else isPrimeCheck(n, 3)
 }
 
-let rec isPrimeLimited(n: int, d: int): bool {
+let rec isPrimeLimited(n, d) {
     if d * d > n then true
     else if n % d == 0 then false
     else isPrimeLimited(n, d + 1)
 }
 
-let rec primesUpTo(n: int, current: int): string {
-    if current > n then "" 
+let rec primesUpTo(n, current) {
+    if current > n then ""
     else if isPrimeLimited(current, 2) then to_string(current) ^ " " ^ primesUpTo(n, current + 1)
     else primesUpTo(n, current + 1)
 }
 
-let rec phi_iter(n: int, k: int, count: int): int {
+let rec phi_iter(n, k, count) {
     if k > n then count
     else if gcd(n, k) == 1 then phi_iter(n, k + 1, count + 1)
     else phi_iter(n, k + 1, count)
 }
 
-let phi(n: int): int {
+let phi(n) {
     if n <= 0 then 0 else phi_iter(n, 1, 0)
 }
 
-let modExp(base: int, exp: int, m: int): int {
-    let rec modExpIter(b: int, e: int, m: int, acc: int): int {
+let modExp(base, exp, m) {
+    let rec modExpIter(b, e, m, acc) {
         if e == 0 then acc
         else if e % 2 == 0 then modExpIter((b * b) % m, e / 2, m, acc)
         else modExpIter(b, e - 1, m, (acc * b) % m)
@@ -283,7 +283,7 @@ let modExp(base: int, exp: int, m: int): int {
     modExpIter(base % m, exp, m, 1)
 }
 
-let rec extendedGCD(a: int, b: int): (int, int, int) {
+let rec extendedGCD(a, b): (int, int, int) {
     if b == 0 then (a, 1, 0)
     else {
         let res = extendedGCD(b, a % b) in
@@ -294,7 +294,7 @@ let rec extendedGCD(a: int, b: int): (int, int, int) {
     }
 }
 
-let modInverse(a: int, m: int): int {
+let modInverse(a, m) {
     let res = extendedGCD(a, m) in
     let g = res[0] in
     let x = res[1] in
@@ -302,54 +302,54 @@ let modInverse(a: int, m: int): int {
     else ((x % m + m) % m)
 }
 
-let rec divisorCountIter(n: int, i: int, count: int): int {
+let rec divisorCountIter(n, i, count) {
     if i > n then count
     else if n % i == 0 then divisorCountIter(n, i + 1, count + 1)
     else divisorCountIter(n, i + 1, count)
 }
 
-let divisorCount(n: int): int {
+let divisorCount(n) {
     divisorCountIter(n, 1, 0)
 }
 
-let rec sumDivisorsIter(n: int, i: int, sum: int): int {
+let rec sumDivisorsIter(n, i, sum) {
     if i > n then sum
     else if n % i == 0 then sumDivisorsIter(n, i + 1, sum + i)
     else sumDivisorsIter(n, i + 1, sum)
 }
 
-let sumDivisors(n: int): int {
+let sumDivisors(n) {
     sumDivisorsIter(n, 1, 0)
 }
 
-let isPerfectNumber(n: int): bool {
+let isPerfectNumber(n) {
     sumDivisors(n) - n == n
 }
 
-let nPr(n: int, r: int): float {
+let nPr(n, r) {
     if r > n || n < 0 || r < 0 then 0.0
     else fact(n) / fact(n - r)
 }
 
-let nCr(n: int, r: int): float {
+let nCr(n, r) {
     if r > n || n < 0 || r < 0 then 0.0
     else fact(n) / (fact(r) * fact(n - r))
 }
 
-let binomial(n: int, k: int): float {
+let binomial(n, k) {
     nCr(n, k)
 }
 
-let rec pascalRowIter(n: int, k: int): string {
+let rec pascalRowIter(n, k) {
     if k > n then ""
     else to_string(to_int(binomial(n, k))) ^ " " ^ pascalRowIter(n, k + 1)
 }
 
-let pascalRow(n: int): string {
+let pascalRow(n) {
     pascalRowIter(n, 0)
 }
 
-let powerSetSize(n: int): float {
+let powerSetSize(n) {
     pow(2.0, to_float(n))
 }
 

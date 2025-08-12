@@ -8,7 +8,7 @@ type Week = {
 
 let week_names = [ "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" ] in
 
-let week_to_string(day: Week): string {
+let week_to_string(day) {
     week_names[day]
 }
 
@@ -23,7 +23,7 @@ let weekend = [ Week.Saturday, Week.Sunday ] in
 assert(week_to_string(weekend[0]) == "Saturday")
 assert(week_to_string(weekend[1]) == "Sunday")
 
-let describe_day(day: Week): string {
+let describe_day(day) {
     match day with
     | Week.Monday -> "Start of the week"
     | Week.Friday -> "End of workweek"

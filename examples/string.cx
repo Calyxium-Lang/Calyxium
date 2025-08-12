@@ -1,4 +1,4 @@
-let swap(a: string, x: int): (int, string) {
+let swap(a, x): (int, string) {
     (x, a)
 }
 

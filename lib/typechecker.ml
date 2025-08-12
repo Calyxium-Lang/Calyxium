@@ -5,6 +5,52 @@ open Ast.Expr
 open Token
 
 exception TypeError of string
+exception UnifyError of string
+
+let fresh_var_counter = ref 0
+
+let fresh_tyvar () =
+  let id = !fresh_var_counter in
+  incr fresh_var_counter;
+  VarType id
+
+module Subst = struct
+  type t = (int, Type.t) Hashtbl.t
+
+  let empty () = Hashtbl.create 16
+  let find_opt s id = try Some (Hashtbl.find s id) with Not_found -> None
+  let add s id ty = Hashtbl.replace s id ty
+
+  let rec apply s ty =
+    match ty with
+    | VarType id -> (
+        match find_opt s id with
+        | None -> VarType id
+        | Some ty' ->
+            let ty'' = apply s ty' in
+            Hashtbl.replace s id ty'';
+            ty'')
+    | ArrayType { element_type } ->
+        ArrayType { element_type = apply s element_type }
+    | TupleType lst -> TupleType (List.map (apply s) lst)
+    | FunctionType (params, ret) ->
+        FunctionType (List.map (apply s) params, apply s ret)
+    | RecordType fields ->
+        RecordType (List.map (fun (n, t) -> (n, apply s t)) fields)
+    | (Any | Infer | SymbolType _) as other -> other
+end
+
+let rec occurs_check (s : Subst.t) (id : int) (ty : Type.t) : bool =
+  let ty = Subst.apply s ty in
+  match ty with
+  | Type.VarType v -> v = id
+  | Type.ArrayType { element_type } -> occurs_check s id element_type
+  | Type.TupleType ts -> List.exists (occurs_check s id) ts
+  | Type.FunctionType (params, ret) ->
+      List.exists (occurs_check s id) params || occurs_check s id ret
+  | Type.RecordType fields ->
+      List.exists (fun (_, t) -> occurs_check s id t) fields
+  | _ -> false
 
 let enum_variants : (string, string list) Hashtbl.t = Hashtbl.create 10
 let stdlib_used = ref false
@@ -12,6 +58,7 @@ let stdlib_used = ref false
 let rec string_of_type = function
   | Any -> "any"
   | Infer -> "infer"
+  | VarType id -> "'" ^ string_of_int id
   | SymbolType { value } -> value
   | ArrayType { element_type } -> "[" ^ string_of_type element_type ^ "]"
   | TupleType types ->
@@ -25,6 +72,98 @@ let rec string_of_type = function
       in
       "record { " ^ String.concat "; " field_strs ^ " }"
 
+let bind_var subst var_id ty =
+  let ty = Subst.apply subst ty in
+  if ty = VarType var_id then ()
+  else if occurs_check subst var_id ty then
+    raise
+      (UnifyError
+         ("Occurs check failed: cannot construct infinite type for "
+         ^ string_of_type (VarType var_id)))
+  else Subst.add subst var_id ty
+
+let rec unify_with_subst subst t1 t2 =
+  let t1 = Subst.apply subst t1 in
+  let t2 = Subst.apply subst t2 in
+  match (t1, t2) with
+  | Any, _ | _, Any -> ()
+  | VarType id, t | t, VarType id -> bind_var subst id t
+  | SymbolType { value = v1 }, SymbolType { value = v2 } when v1 = v2 -> ()
+  | ArrayType { element_type = e1 }, ArrayType { element_type = e2 } ->
+      unify_with_subst subst e1 e2
+  | TupleType xs, TupleType ys when List.length xs = List.length ys ->
+      List.iter2 (unify_with_subst subst) xs ys
+  | FunctionType (ps1, r1), FunctionType (ps2, r2)
+    when List.length ps1 = List.length ps2 ->
+      List.iter2 (unify_with_subst subst) ps1 ps2;
+      unify_with_subst subst r1 r2
+  | RecordType fs1, RecordType fs2 ->
+      let names1 = List.map fst fs1 in
+      let names2 = List.map fst fs2 in
+      if List.sort_uniq compare names1 <> List.sort_uniq compare names2 then
+        raise (UnifyError "Cannot unify record types with different fields")
+      else
+        List.iter
+          (fun name ->
+            let t1 = List.assoc name fs1 in
+            let t2 = List.assoc name fs2 in
+            unify_with_subst subst t1 t2)
+          names1
+  | _, Infer -> ()
+  | SymbolType { value = "*" }, _ -> ()
+  | _, SymbolType { value = "*" } -> ()
+  | _ ->
+      raise
+        (UnifyError
+           ("Cannot unify " ^ string_of_type t1 ^ " with " ^ string_of_type t2))
+
+let unify t1 t2 =
+  let s = Subst.empty () in
+  try
+    let s' = unify_with_subst s t1 t2 in
+    s'
+  with UnifyError msg -> raise (TypeError ("Unification error: " ^ msg))
+
+let rec ftv_type = function
+  | VarType id -> [ id ]
+  | ArrayType { element_type } -> ftv_type element_type
+  | TupleType ts -> List.concat_map ftv_type ts
+  | FunctionType (ps, r) -> List.concat_map ftv_type (r :: ps)
+  | RecordType fs -> List.concat_map (fun (_, t) -> ftv_type t) fs
+  | _ -> []
+
+let ftv_env env =
+  let vars = List.concat_map (fun (_, t) -> ftv_type t) env in
+  List.sort_uniq compare vars
+
+let generalize env t =
+  let ftv_t = ftv_type t in
+  let ftv_e = ftv_env env in
+  let quant = List.filter (fun v -> not (List.mem v ftv_e)) ftv_t in
+  (quant, t)
+
+let instantiate_scheme (quantified_vars, tp) =
+  let map_tbl = Hashtbl.create (List.length quantified_vars) in
+  let fresh_for id =
+    try Hashtbl.find map_tbl id
+    with Not_found ->
+      let v = fresh_tyvar () in
+      Hashtbl.add map_tbl id v;
+      v
+  in
+  let rec inst t =
+    match t with
+    | VarType id when List.mem id quantified_vars -> fresh_for id
+    | VarType _ -> t
+    | ArrayType { element_type } ->
+        ArrayType { element_type = inst element_type }
+    | TupleType ts -> TupleType (List.map inst ts)
+    | FunctionType (ps, r) -> FunctionType (List.map inst ps, inst r)
+    | RecordType fs -> RecordType (List.map (fun (n, t) -> (n, inst t)) fs)
+    | other -> other
+  in
+  inst tp
+
 let rec can_compare t1 t2 =
   match (t1, t2) with
   | Type.Any, _ -> true
@@ -35,6 +174,9 @@ let rec can_compare t1 t2 =
   | Type.ArrayType { element_type = et1 }, Type.ArrayType { element_type = et2 }
     ->
       can_compare et1 et2
+  | Type.VarType _, _ | _, Type.VarType _ -> true
+  | SymbolType { value = "*" }, _ -> true
+  | _, SymbolType { value = "*" } -> true
   | _ -> false
 
 let rec fold_left_map2 f env idents exprs =
@@ -63,44 +205,53 @@ let built_in_modules : (string * (string * Type.t) list) list =
       ] );
   ]
 
-let builtins : (string * (Type.t list * Type.t) list) list =
+let builtins : (string * (int list * Type.t) list) list =
+  let mk_builtin name overloads =
+    let schemes =
+      List.map
+        (fun (params, ret) ->
+          let func_type = FunctionType (params, ret) in
+          generalize [] func_type)
+        overloads
+    in
+    (name, schemes)
+  in
   [
-    ("print", [ ([ Any ], SymbolType { value = "unit" }) ]);
-    ( "input",
-      [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]
-    );
-    ( "to_bytes",
+    mk_builtin "print" [ ([ Any ], SymbolType { value = "unit" }) ];
+    mk_builtin "input"
+      [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ];
+    mk_builtin "to_bytes"
       [
         ( [ SymbolType { value = "string" } ],
           ArrayType { element_type = SymbolType { value = "byte" } } );
-      ] );
-    ( "to_float",
+      ];
+    mk_builtin "to_float"
       [
         ([ SymbolType { value = "*" } ], SymbolType { value = "float" });
         ([ SymbolType { value = "string" } ], SymbolType { value = "float" });
         ([ SymbolType { value = "int" } ], SymbolType { value = "float" });
-      ] );
-    ( "to_int",
+      ];
+    mk_builtin "to_int"
       [
         ([ SymbolType { value = "*" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "byte" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "string" } ], SymbolType { value = "int" });
         ([ SymbolType { value = "float" } ], SymbolType { value = "int" });
-      ] );
-    ("length", [ ([ Any ], SymbolType { value = "int" }) ]);
-    ("to_string", [ ([ Any ], SymbolType { value = "string" }) ]);
-    ( "assert",
-      [ ([ SymbolType { value = "bool" } ], SymbolType { value = "unit" }) ] );
-    ( "panic",
-      [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ]
-    );
-    ( "to_byte",
+      ];
+    mk_builtin "length" [ ([ Any ], SymbolType { value = "int" }) ];
+    mk_builtin "to_string" [ ([ Any ], SymbolType { value = "string" }) ];
+    mk_builtin "assert"
+      [ ([ SymbolType { value = "bool" } ], SymbolType { value = "unit" }) ];
+    mk_builtin "panic"
+      [ ([ SymbolType { value = "string" } ], SymbolType { value = "unit" }) ];
+    mk_builtin "to_byte"
       [
         ( [ ArrayType { element_type = SymbolType { value = "int" } } ],
           SymbolType { value = "byte" } );
         ([ SymbolType { value = "int" } ], SymbolType { value = "byte" });
         ([ SymbolType { value = "string" } ], SymbolType { value = "byte" });
-      ] );
+      ];
+    mk_builtin "of_type" [ ([ Any ], SymbolType { value = "string" }) ];
   ]
 
 let rec type_eq expected actual =
@@ -111,78 +262,52 @@ let rec type_eq expected actual =
   | SymbolType { value = v1 }, SymbolType { value = v2 } -> v1 = v2
   | ArrayType { element_type = e1 }, ArrayType { element_type = e2 } ->
       type_eq e1 e2
-  | SymbolType { value = "tuple" }, TupleType _ -> true
-  | TupleType _, SymbolType { value = "tuple" } -> true
   | TupleType xs, TupleType ys ->
       List.length xs = List.length ys && List.for_all2 type_eq xs ys
+  | Type.VarType _, _ | _, Type.VarType _ -> true
+  | SymbolType { value = "*" }, _ -> true
+  | _, SymbolType { value = "*" } -> true
   | _ -> false
 
 let rec check_stmt env func_env stmt =
   match stmt with
   | ExprStmt expr ->
       let _, env1 = check_expr env func_env expr in
-      env1
+      (env1, func_env)
   | FunctionDeclStmt { name; is_rec; parameters; return_type; body } ->
       let local_funcs = collect_functions body in
-      let param_types = List.map (fun p -> p.param_type) parameters in
-      let this_func = (name, [ (param_types, return_type) ]) in
-      let func_env =
+      let param_types =
+        List.map
+          (fun p ->
+            match p.param_type with Infer -> fresh_tyvar () | other -> other)
+          parameters
+      in
+      let declared_return =
+        match return_type with Infer -> fresh_tyvar () | other -> other
+      in
+      let func_type = FunctionType (param_types, declared_return) in
+      let env_for_generalize = env in
+      let placeholder_scheme = ([], func_type) in
+
+      let func_env_with_placeholder =
         let base_env = local_funcs @ func_env in
-        match List.assoc_opt name base_env with
-        | Some overloads ->
-            (name, (param_types, return_type) :: overloads)
-            :: List.remove_assoc name base_env
-        | None -> this_func :: base_env
+        if is_rec then
+          (name, [ placeholder_scheme ]) :: List.remove_assoc name base_env
+        else base_env
       in
-      let rec contains_recursive_call fname expr =
-        let open Expr in
-        match expr with
-        | CallExpr { callee = VarExpr callee_name; _ } -> callee_name = fname
-        | CallExpr { callee; arguments } ->
-            contains_recursive_call fname callee
-            || List.exists (contains_recursive_call fname) arguments
-        | UnaryExpr { operand; _ } -> contains_recursive_call fname operand
-        | BinaryExpr { left; right; _ } ->
-            contains_recursive_call fname left
-            || contains_recursive_call fname right
-        | IfExpr { condition; then_branch; else_branch } -> (
-            contains_recursive_call fname condition
-            || contains_recursive_call fname then_branch
-            ||
-            match else_branch with
-            | Some e -> contains_recursive_call fname e
-            | None -> false)
-        | ArrayExpr { elements } ->
-            List.exists (contains_recursive_call fname) elements
-        | IndexExpr { array; index } ->
-            contains_recursive_call fname array
-            || contains_recursive_call fname index
-        | _ -> false
+
+      let param_env =
+        List.map2 (fun p ty -> (p.name, ty)) parameters param_types
       in
-      let rec contains_recursive_call_stmt fname stmt =
-        let open Stmt in
-        match stmt with
-        | ExprStmt e -> contains_recursive_call fname e
-        | BlockStmt { body } ->
-            List.exists (contains_recursive_call_stmt fname) body
-        | _ -> false
-      in
-      let has_recursive_call =
-        List.exists (contains_recursive_call_stmt name) body
-      in
-      if has_recursive_call && not is_rec then
-        raise
-          (TypeError
-             ("Function `" ^ name ^ "` is missing `rec` keyword:\n"
-            ^ "  This function contains a recursive call to itself, but is not \
-               marked `rec`.\n" ^ "  Add `rec` to allow recursive behavior."));
-      let param_env = List.map (fun p -> (p.name, p.param_type)) parameters in
       let env_with_params = param_env @ env in
-      let final_env =
+
+      let final_env, final_func_env =
         List.fold_left
-          (fun e stmt -> check_stmt e func_env stmt)
-          env_with_params body
+          (fun (e, fe) stmt -> check_stmt e fe stmt)
+          (env_with_params, func_env_with_placeholder)
+          body
       in
+
       let rec gather_return_types env func_env stmts =
         List.concat_map
           (function
@@ -191,7 +316,10 @@ let rec check_stmt env func_env stmt =
             | _ -> [])
           stmts
       in
-      let return_expr_types = gather_return_types final_env func_env body in
+
+      let return_expr_types =
+        gather_return_types final_env final_func_env body
+      in
       let return_types_only = List.map fst return_expr_types in
 
       let last_expr_type =
@@ -199,53 +327,69 @@ let rec check_stmt env func_env stmt =
           List.rev body
           |> List.find_opt (function ExprStmt _ -> true | _ -> false)
         with
-        | Some (ExprStmt expr) -> Some (check_expr final_env func_env expr)
+        | Some (ExprStmt expr) ->
+            Some (check_expr final_env final_func_env expr)
         | _ -> None
       in
-      let last_type_only = Option.map fst last_expr_type in
 
+      let last_type_only = Option.map fst last_expr_type in
       let all_return_types =
         match last_type_only with
         | Some t -> if return_types_only = [] then [ t ] else return_types_only
         | None -> return_types_only
       in
+
       List.iter
         (fun actual_type ->
-          if not (type_eq return_type actual_type) then
+          try ignore (unify declared_return actual_type)
+          with TypeError msg ->
             raise
               (TypeError
-                 ("Function `" ^ name ^ "` has mismatched return type:\n"
-                ^ "  Expected: " ^ string_of_type return_type ^ "\n"
-                ^ "  Found:    " ^ string_of_type actual_type ^ "\n"
-                ^ "  All return expressions must match the declared return \
-                   type.")))
+                 ("Function " ^ name ^ " has mismatched return type:\n"
+                ^ "  Expected: "
+                 ^ string_of_type declared_return
+                 ^ "\n" ^ "  Found:    " ^ string_of_type actual_type ^ "\n"
+                 ^ "  All return expressions must match the declared return \
+                    type.\n" ^ "  Unify error: " ^ msg)))
         all_return_types;
-      env
-  | BlockStmt { body } ->
-      let _final_env =
-        List.fold_left (fun e stmt -> check_stmt e func_env stmt) env body
+
+      let scheme = generalize env_for_generalize func_type in
+      let func_env_updated =
+        let base_env = local_funcs @ func_env in
+        match List.assoc_opt name base_env with
+        | Some existing_schemes ->
+            (name, scheme :: existing_schemes)
+            :: List.remove_assoc name base_env
+        | None -> (name, [ scheme ]) :: base_env
       in
-      _final_env
-  | RecordStmt { name; fields } ->
-      let record_env =
+
+      (final_env, func_env_updated)
+  | BlockStmt { body } ->
+      let final_env, final_func_env =
         List.fold_left
-          (fun acc_env field_stmt ->
+          (fun (e, fe) stmt -> check_stmt e fe stmt)
+          (env, func_env) body
+      in
+      (final_env, final_func_env)
+  | RecordStmt { name; fields } ->
+      let record_env, record_func_env =
+        List.fold_left
+          (fun (acc_env, acc_func_env) field_stmt ->
             match field_stmt with
-            | VarDeclExpr _ -> check_stmt acc_env func_env (ExprStmt field_stmt)
+            | VarDeclExpr _ ->
+                check_stmt acc_env acc_func_env (ExprStmt field_stmt)
             | _ ->
                 raise
                   (TypeError
                      ("Invalid statement in record `" ^ name
-                    ^ "`: only variable delcarations are allowed")))
-          [] fields
+                    ^ "`: only variable declarations are allowed")))
+          ([], func_env) fields
       in
-      let record_type =
-        let fields_as_types =
-          List.rev_map (fun (id, ty) -> (id, ty)) record_env
-        in
-        RecordType fields_as_types
+      let fields_as_types =
+        List.rev_map (fun (id, ty) -> (id, ty)) record_env
       in
-      (name, record_type) :: env
+      let record_type = RecordType fields_as_types in
+      ((name, record_type) :: env, record_func_env)
 
 and check_expr env func_env expr =
   match expr with
@@ -260,6 +404,7 @@ and check_expr env func_env expr =
         List.fold_right
           (fun elem (types_acc, env_acc) ->
             let ty, env_new = check_expr env_acc func_env elem in
+            let ty = match ty with Infer -> fresh_tyvar () | _ -> ty in
             (ty :: types_acc, env_new))
           elements ([], env)
       in
@@ -322,6 +467,7 @@ and check_expr env func_env expr =
       let rt, env2 = check_expr env1 func_env right in
       match operator with
       | Token.Eq | Token.Neq ->
+          let _ = unify lt rt in
           if not (can_compare lt rt) then
             raise
               (TypeError
@@ -332,32 +478,16 @@ and check_expr env func_env expr =
           (Type.SymbolType { value = "bool" }, env2)
       | Token.Geq | Token.Leq | Token.Less | Token.Greater | Token.LogicalAnd
       | Token.LogicalOr ->
-          if not (type_eq lt rt) then
-            raise
-              (TypeError
-                 ("Type error in binary expression:\n"
-                ^ "  Left operand type:  " ^ string_of_type lt ^ "\n"
-                ^ "  Right operand type: " ^ string_of_type rt ^ "\n"
-                ^ "  Both operands must have the same type."));
+          let _ = unify lt rt in
           (Type.SymbolType { value = "bool" }, env2)
       | Token.BitWiseAND | Token.BitWiseOR | Token.BitWiseXOR | Token.LeftShift
       | Token.RightShift | Token.BitWiseANDAssign | Token.BitWiseORAssign
       | Token.BitWiseXORAssign | Token.LeftShiftAssign | Token.RightShiftAssign
         ->
-          if not (type_eq lt (Type.SymbolType { value = "int" })) then
-            raise
-              (TypeError
-                 ("Type error in binary bitwise expression:\n"
-                ^ "  Expected: int\n" ^ "  Found:    " ^ string_of_type lt));
+          let _ = unify lt (Type.SymbolType { value = "int" }) in
           (lt, env2)
       | _ ->
-          if not (type_eq lt rt) then
-            raise
-              (TypeError
-                 ("Type error in binary expression:\n"
-                ^ "  Left operand type:  " ^ string_of_type lt ^ "\n"
-                ^ "  Right operand type: " ^ string_of_type rt ^ "\n"
-                ^ "  Both operands must have the same type."));
+          let _ = unify lt rt in
           (lt, env2))
   | CallExpr { callee = VarExpr name; arguments } -> (
       let env', arg_types =
@@ -368,13 +498,28 @@ and check_expr env func_env expr =
           env arguments
       in
       match List.assoc_opt name func_env with
-      | Some overloads -> (
+      | Some schemes -> (
+          let instantiated_overloads =
+            List.map
+              (fun scheme ->
+                match instantiate_scheme scheme with
+                | FunctionType (params, ret) -> (params, ret)
+                | _ ->
+                    failwith ("Non-function type stored in func_env for " ^ name))
+              schemes
+          in
           let matching =
             List.find_opt
               (fun (params, _) ->
                 List.length params = List.length arg_types
-                && List.for_all2 type_eq params arg_types)
-              overloads
+                &&
+                try
+                  List.iter2
+                    (fun param_ty arg_ty -> ignore (unify param_ty arg_ty))
+                    params arg_types;
+                  true
+                with TypeError _ -> false)
+              instantiated_overloads
           in
           match matching with
           | Some (_, return_type) -> (return_type, env')
@@ -433,6 +578,7 @@ and check_expr env func_env expr =
             tl;
           (ArrayType { element_type = hd }, final_env))
   | IndexExpr { array; index } -> (
+      let subst = ref (Subst.empty ()) in
       let at, env' = check_expr env func_env array in
       let index_type, env'' = check_expr env' func_env index in
       let is_enum_type = function
@@ -461,7 +607,7 @@ and check_expr env func_env expr =
                 raise
                   (TypeError
                      ("Tuple index out of bounds:\n" ^ "  Index: "
-                    ^ string_of_int idx ^ "\n" ^ "  Tuple size: "
+                    ^ string_of_int idx ^ "\n  Tuple size: "
                      ^ string_of_int (List.length element_types)));
               (List.nth element_types idx, env'')
           | _ ->
@@ -470,6 +616,32 @@ and check_expr env func_env expr =
                    ("Invalid tuple index:\n"
                   ^ "  Only constant integer indices (e.g. `t[0]`) are allowed"
                    )))
+      | VarType id -> (
+          let resolved_type = Subst.apply !subst (VarType id) in
+          match resolved_type with
+          | TupleType element_types -> (
+              match index with
+              | IntExpr { value } ->
+                  let idx = Bigint.to_int value in
+                  if idx < 0 || idx >= List.length element_types then
+                    raise
+                      (TypeError
+                         ("Tuple index out of bounds:\n" ^ "  Index: "
+                        ^ string_of_int idx ^ "\n  Tuple size: "
+                         ^ string_of_int (List.length element_types)));
+                  (List.nth element_types idx, env'')
+              | _ ->
+                  raise
+                    (TypeError
+                       ("Invalid tuple index:\n"
+                      ^ "  Only constant integer indices (e.g. `t[0]`) are \
+                         allowed")))
+          | _ ->
+              raise
+                (TypeError
+                   ("Type error in index expression:\n"
+                  ^ "  Can only index into arrays or tuples\n" ^ "  Found: "
+                   ^ string_of_type resolved_type)))
       | _ ->
           raise
             (TypeError
@@ -558,14 +730,24 @@ and check_expr env func_env expr =
       match right with
       | VarExpr name -> (
           match List.assoc_opt name func_env with
-          | Some overloads -> (
+          | Some schemes -> (
+              let instantiated_overloads =
+                List.map
+                  (fun scheme ->
+                    match instantiate_scheme scheme with
+                    | FunctionType (params, ret) -> (params, ret)
+                    | _ ->
+                        failwith
+                          ("Non-function type stored in func_env for " ^ name))
+                  schemes
+              in
               let matching =
                 List.find_opt
                   (fun (params, _) ->
                     match params with
                     | [ param_type ] -> type_eq param_type arg_type
                     | _ -> false)
-                  overloads
+                  instantiated_overloads
               in
               match matching with
               | Some (_, return_type) -> (return_type, env1)
@@ -618,14 +800,15 @@ and check_expr env func_env expr =
                     ^ "  Match expression type: " ^ string_of_type et ^ "\n"
                     ^ "  Pattern type:          " ^ string_of_type pt))
           | None -> ());
-          let final_env =
+          let final_env, final_func_env =
             List.fold_left
-              (fun e stmt -> check_stmt e func_env stmt)
-              env case_stmts
+              (fun (e, fe) stmt -> check_stmt e fe stmt)
+              (env, func_env) case_stmts
           in
           let first_branch_type =
             match List.rev case_stmts with
-            | ExprStmt expr :: _ -> fst (check_expr final_env func_env expr)
+            | ExprStmt expr :: _ ->
+                fst (check_expr final_env final_func_env expr)
             | _ -> SymbolType { value = "unit" }
           in
 
@@ -641,15 +824,15 @@ and check_expr env func_env expr =
                         ^ "  Match expression type: " ^ string_of_type et ^ "\n"
                         ^ "  Pattern type:          " ^ string_of_type pt))
               | None -> ());
-              let branch_env =
+              let branch_env, branch_func_env =
                 List.fold_left
-                  (fun e stmt -> check_stmt e func_env stmt)
-                  env case_stmts
+                  (fun (e, fe) stmt -> check_stmt e fe stmt)
+                  (env, func_env) case_stmts
               in
               let branch_type =
                 match List.rev case_stmts with
                 | ExprStmt expr :: _ ->
-                    fst (check_expr branch_env func_env expr)
+                    fst (check_expr branch_env branch_func_env expr)
                 | _ -> SymbolType { value = "unit" }
               in
               if not (type_eq branch_type first_branch_type) then
@@ -696,19 +879,21 @@ and check_expr env func_env expr =
   | BlockExpr { body } ->
       let rec check_stmts env func_env stmts =
         match stmts with
-        | [] -> (Type.SymbolType { value = "unit" }, env)
+        | [] -> (Type.SymbolType { value = "unit" }, env, func_env)
         | [ last_stmt ] -> (
-            let env' = check_stmt env func_env last_stmt in
+            let env', func_env' = check_stmt env func_env last_stmt in
             match last_stmt with
             | Stmt.ExprStmt expr ->
-                let t, env'' = check_expr env' func_env expr in
-                (t, env'')
-            | _ -> (Type.SymbolType { value = "unit" }, env'))
+                let t, env'' = check_expr env' func_env' expr in
+                (t, env'', func_env')
+            | _ -> (Type.SymbolType { value = "unit" }, env', func_env'))
         | hd :: tl ->
-            let env' = check_stmt env func_env hd in
-            check_stmts env' func_env tl
+            let env', func_env' = check_stmt env func_env hd in
+            check_stmts env' func_env' tl
       in
-      let block_type, env_after = check_stmts env func_env body in
+      let block_type, env_after, _func_env_after =
+        check_stmts env func_env body
+      in
       (block_type, env_after)
   | Expr.SliceExpr { array; start; end_ } -> (
       let array_type, env1 = check_expr env func_env array in
@@ -934,10 +1119,12 @@ and collect_functions stmts =
     match stmt with
     | FunctionDeclStmt { name; parameters; return_type; _ } ->
         let param_types = List.map (fun p -> p.param_type) parameters in
+        let func_type = FunctionType (param_types, return_type) in
+        let scheme = generalize [] func_type in
         let overload =
           match List.assoc_opt name acc with
-          | Some overloads -> (name, (param_types, return_type) :: overloads)
-          | None -> (name, [ (param_types, return_type) ])
+          | Some overloads -> (name, scheme :: overloads)
+          | None -> (name, [ scheme ])
         in
         overload :: List.remove_assoc name acc
     | BlockStmt { body } -> List.fold_right collect_from_stmt body acc
@@ -953,7 +1140,11 @@ let typecheck_program stmts : bool =
     ]
   in
   let func_env = collect_functions stmts in
-  ignore (List.fold_left (fun e stmt -> check_stmt e func_env stmt) env stmts);
+  let _final_env, _final_func_env =
+    List.fold_left
+      (fun (e, f) stmt -> check_stmt e f stmt)
+      (env, func_env) stmts
+  in
   let used = !stdlib_used in
   stdlib_used := false;
   used

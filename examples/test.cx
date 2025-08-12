@@ -1,12 +1,12 @@
-let bubble_sort(arr: []int): []int {
-    let rec pass(xs: []int, i: int, acc: []int, ch: bool): (bool, []int) {
+let bubble_sort(arr) {
+    let rec pass(xs: []int, i, acc, ch): (bool, []int) {
         if i + 1 >= length(xs) then (ch, acc @ if i < length(xs) then [ xs[i] ] else []) else {
             let a = xs[i] in
             let b = xs[i + 1] in
             pass(xs, if a > b then i + 2 else i + 1, acc @ if a > b then [ b, a ] else [ a ], ch || a > b)
         }
     }
-    let rec sort(xs: []int): []int {
+    let rec sort(xs) {
         let ch, xs' = pass(xs, 0, [], false) in
         if ch then sort(xs') else xs'
     }
@@ -18,3 +18,10 @@ let arr = [ 5, 2, 9, 1, 3 ] in
 let sorted = bubble_sort(arr) in
 
 print(sorted)
+
+let add(x, y) {
+    x + y
+}
+
+print(add(5, 5))
+print(add(5.2, 1.0))
