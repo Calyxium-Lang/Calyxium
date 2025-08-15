@@ -12,22 +12,22 @@ assert(0 |> fn b -> (if b == 0 then 1 else 0) == 1)
 assert(7 |> fn x -> x + 1 |> fn y -> y * 2 == 16)
 
 let sqr = fn x -> x * x in
-assert(5 |> sqr == 25)
+assert((5 |> sqr) == 25)
 let add10 = fn n -> n + 10 in
-assert(7 |> add10 == 17)
+assert((7 |> add10) == 17)
 let greet = fn name -> "Hello, " ^ name in
-assert("World" |> greet == "Hello, World")
+assert(("World" |> greet) == "Hello, World")
 
 let double = fn x -> x * 2 in
-assert(5 |> double |> fn y -> y + 3 == 13)
+assert((5 |> double) |> fn y -> y + 3 == 13)
 let triple = fn x -> x * 3 in
-assert(2 |> triple |> fn z -> z - 1 == 5)
+assert((2 |> triple) |> fn z -> z - 1 == 5)
 
 let inc = fn n -> n + 1 in
-assert(5 |> inc |> fn x -> x * 2 == 12)
+assert((5 |> inc) |> fn x -> x * 2 == 12)
 
 let concat_excl = fn s -> s ^ "!" in
-assert("Hi" |> concat_excl == "Hi!")
+assert(("Hi" |> concat_excl) == "Hi!")
 
 assert(3 |> fn x -> x + 2 |> fn y -> y * 3 == 15)
 assert(4 |> fn a -> a * 2 |> fn b -> b + 7 |> fn c -> c / 3 == 5)

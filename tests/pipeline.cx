@@ -10,12 +10,12 @@ let sqr(x) {
     x * x
 }
 
-print(3.0 |> double |> sqr == 36.0)
-print(3 |> double |> sqr == 36)
+assert((3.0 |> double |> sqr) == 36.0)
+assert((3 |> double |> sqr) == 36)
 
-assert(123 |> to_string == "123")
+assert((123 |> to_string) == "123")
 
-assert((2 + 3) |> sqr == 25)
+assert(((2 + 3) |> sqr) == 25)
 
 let y = 7 |> double in
 assert(y == 14) 
@@ -24,8 +24,8 @@ let id(x) {
     x
 }
 
-assert(42 |> id == 42)
-assert("hello" |> id == "hello")
+assert((42 |> id) == 42)
+assert(("hello" |> id) == "hello")
 
 let make_point(x, y) {
     (x, y)
@@ -37,19 +37,19 @@ let is_even(x) {
     (x % 2) == 0
 }
 
-assert(4 |> is_even == true)
-assert(5 |> is_even == false)
+assert((4 |> is_even) == true)
+assert((5 |> is_even) == false)
 
 let triple_then_double(x) {
     (x * 3) |> double
 }
 
-assert(3 |> triple_then_double == 18)
+assert((3 |> triple_then_double) == 18)
 
 let greet(name) {
     "Hello, " ^ name
 }
 
-assert("World" |> greet == "Hello, World")
+assert(("World" |> greet) == "Hello, World")
 
-assert(true |> to_string == "true")
+assert((true |> to_string) == "true")
