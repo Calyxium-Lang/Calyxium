@@ -4,14 +4,16 @@
  (modules
   ast
   token
+  bigint
   lexer
   parser
+  subst
   typechecker
   opcode
   bytecode
   bytegen
-  vm
   gc
+  vm
   color
   error
   help
@@ -19,8 +21,7 @@
   init
   formatter
   pretty
-  toml_config
-  bigint)
+  toml_config)
  (libraries calyxium_stdlib unix))
 
 (ocamllex lexer)

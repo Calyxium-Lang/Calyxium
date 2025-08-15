@@ -527,7 +527,3 @@ let to_int64 x =
         in
         if x.sign >= 0 then v else Int64.neg v
     | _ -> failwith "to_int64: overflow"
-
-let of_int64 = of_int64
-let to_string = to_string
-let of_string = of_string

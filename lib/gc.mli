@@ -1,13 +1,9 @@
-open Opcode
+val interned_strings : (string, int) Hashtbl.t
 
-type heap_obj =
-  | HString of string
-  | HArray of float array
-  | HBytes of char array
-  | HClosure of string * opcode list * (string * (value * bool)) list
-  | HRange of { current : Bigint.t; step : Bigint.t; end_ : Bigint.t option }
+type heap_obj = ..
+type value = ..
 
-and value =
+type value +=
   | VFloat of float
   | VInt of Bigint.t
   | VBool of bool
@@ -22,8 +18,23 @@ and value =
   | VThunk of (unit -> value)
   | VRange of int
 
+type heap_obj +=
+  | HString of string
+  | HArray of float array
+  | HBytes of char array
+  | HClosure of string * Opcode.opcode list * (string * (value * bool)) list
+  | HRange of { current : Bigint.t; step : Bigint.t; end_ : Bigint.t option }
+
+type generation = {
+  objs : (int, heap_obj) Hashtbl.t;
+  marked : (int, bool) Hashtbl.t;
+}
+
 val allocation_count : int ref
 val allocation_threshold : int ref
+val young_gen : generation
+val old_gen : generation
+val next_id : int ref
 val alloc_id : unit -> int
 val alloc_in_young : heap_obj -> value
 val find_heap_obj : int -> heap_obj
@@ -31,8 +42,11 @@ val get_string : int -> string option
 val get_bytes : int -> char array option
 val get_value : int -> value option
 val get_array : int -> float array option
+val mark : int -> generation -> unit
+val mark_value : value -> unit
+val mark_env : ('a * (value * 'b)) list -> unit
+val sweep : generation -> unit
 val mark_and_promote : value list -> (string * (value * bool)) list -> unit
-val reset_heap : unit -> unit
 val maybe_collect_gc : value list -> (string * (value * bool)) list -> unit
 val get_stack_roots : value Stack.t -> value list
 
@@ -46,3 +60,4 @@ val alloc_array_with_gc :
   value Stack.t -> (string * (value * bool)) list -> float array -> value
 
 val alloc_range : Bigint.t -> Bigint.t -> Bigint.t option -> value
+val reset_heap : unit -> unit

@@ -1,20 +1,16 @@
-open Init
-open Opcode
-open Gc
-
 exception RuntimeError of string
 
 type trace_entry = { instr : string }
 
 type frame = {
-  mutable code : opcode array;
+  mutable code : Opcode.opcode array;
   mutable pc : int;
-  mutable env : (string * (value * bool)) list;
+  mutable env : (string * (Gc.value * bool)) list;
 }
 
-let output_buffer : string list ref = ref []
-let stdlib_modules : (string, value) Hashtbl.t = Hashtbl.create 16
-let trace : trace_entry list ref = ref []
+let output_buffer = ref []
+let stdlib_modules = Hashtbl.create 16
+let trace = ref []
 let push_trace instr = trace := { instr } :: !trace
 let clear_trace () = trace := []
 
@@ -38,8 +34,8 @@ let init_stdlib () =
     (fun (name, entries) ->
       let tbl = Hashtbl.create (List.length entries) in
       List.iter (fun (k, v) -> Hashtbl.add tbl k v) entries;
-      Hashtbl.add stdlib_modules name (VModule tbl))
-    stdlib_definitions
+      Hashtbl.add stdlib_modules name (Gc.VModule tbl))
+    Init.stdlib_definitions
 
 let print_trace msg =
   match !trace with
@@ -109,7 +105,7 @@ let get_var env name =
           runtime_error ("Variable '" ^ name ^ "' not found in environment"))
 
 let get_string_from_stack_value = function
-  | VHeapRef id -> (
+  | Gc.VHeapRef id -> (
       match Gc.get_string id with
       | Some s -> s
       | None ->
@@ -125,9 +121,9 @@ let resolve_function_body function_name =
       ("Function '" ^ function_name ^ "' not found in function table")
 
 let extract_param_names = function
-  | FUNCTION _ :: rest ->
+  | Opcode.FUNCTION _ :: rest ->
       let rec collect acc = function
-        | STORE_VAR name :: tl -> collect (name :: acc) tl
+        | Opcode.STORE_VAR name :: tl -> collect (name :: acc) tl
         | _ -> List.rev acc
       in
       collect [] rest
@@ -159,33 +155,33 @@ let update_variable name result env =
 
 let rec equal_value a b =
   match (a, b) with
-  | VHeapRef id1, VHeapRef id2 -> (
+  | Gc.VHeapRef id1, Gc.VHeapRef id2 -> (
       match (Gc.get_string id1, Gc.get_string id2) with
       | Some sa, Some sb -> sa = sb
       | _ -> id1 = id2)
-  | VFloat f1, VFloat f2 -> f1 = f2
-  | VInt i1, VInt i2 -> i1 = i2
-  | VBool b1, VBool b2 -> b1 = b2
-  | VByte c1, VByte c2 -> c1 = c2
-  | VUnit, VUnit -> true
-  | VTuple l1, VTuple l2 ->
+  | Gc.VFloat f1, Gc.VFloat f2 -> f1 = f2
+  | Gc.VInt i1, Gc.VInt i2 -> i1 = i2
+  | Gc.VBool b1, Gc.VBool b2 -> b1 = b2
+  | Gc.VByte c1, Gc.VByte c2 -> c1 = c2
+  | Gc.VUnit, Gc.VUnit -> true
+  | Gc.VTuple l1, Gc.VTuple l2 ->
       List.length l1 = List.length l2 && List.for_all2 equal_value l1 l2
-  | VArray l1, VArray l2 ->
+  | Gc.VArray l1, Gc.VArray l2 ->
       List.length l1 = List.length l2 && List.for_all2 equal_value l1 l2
   | _ -> false
 
 let rec not_equal_value a b =
   match (a, b) with
-  | VHeapRef id1, VHeapRef id2 -> (
+  | Gc.VHeapRef id1, Gc.VHeapRef id2 -> (
       match (Gc.get_string id1, Gc.get_string id2) with
       | Some sa, Some sb -> sa <> sb
       | _ -> id1 = id2)
-  | VFloat f1, VFloat f2 -> f1 <> f2
-  | VInt i1, VInt i2 -> i1 <> i2
-  | VBool b1, VBool b2 -> b1 <> b2
-  | VByte c1, VByte c2 -> c1 <> c2
-  | VUnit, VUnit -> true
-  | VTuple l1, VTuple l2 ->
+  | Gc.VFloat f1, Gc.VFloat f2 -> f1 <> f2
+  | Gc.VInt i1, Gc.VInt i2 -> i1 <> i2
+  | Gc.VBool b1, Gc.VBool b2 -> b1 <> b2
+  | Gc.VByte c1, Gc.VByte c2 -> c1 <> c2
+  | Gc.VUnit, Gc.VUnit -> true
+  | Gc.VTuple l1, Gc.VTuple l2 ->
       List.length l1 = List.length l2 && List.for_all2 not_equal_value l1 l2
   | _ -> false
 
@@ -196,7 +192,7 @@ let safe_shift_left a b =
     runtime_error "Invalid shift amount"
   else Bigint.shift_left a (Bigint.to_int b)
 
-let rec force v = match v with VThunk f -> force (f ()) | v -> v
+let rec force v = match v with Gc.VThunk f -> force (f ()) | v -> v
 
 let reset_vm_state () =
   Stack.clear stack;
@@ -219,32 +215,32 @@ let run instructions =
         let instr = frame.code.(frame.pc) in
         let next () = frame.pc <- frame.pc + 1 in
         match instr with
-        | LOAD_INT v ->
+        | Opcode.LOAD_INT v ->
             push_trace ("LOAD_INT " ^ Bigint.to_string v);
-            Stack.push (VInt v) stack;
+            Stack.push (Gc.VInt v) stack;
             next ()
-        | LOAD_FLOAT v ->
+        | Opcode.LOAD_FLOAT v ->
             push_trace ("LOAD_FLOAT " ^ string_of_float v);
-            Stack.push (VFloat v) stack;
+            Stack.push (Gc.VFloat v) stack;
             next ()
-        | LOAD_STRING s ->
+        | Opcode.LOAD_STRING s ->
             push_trace ("LOAD_STRING " ^ s);
             let v = Gc.alloc_string_with_gc stack frame.env s in
             Stack.push v stack;
             next ()
-        | LOAD_BYTE c ->
+        | Opcode.LOAD_BYTE c ->
             push_trace ("LOAD_BYTE " ^ String.make 1 c);
-            Stack.push (VByte c) stack;
+            Stack.push (Gc.VByte c) stack;
             next ()
-        | LOAD_BOOL b ->
+        | Opcode.LOAD_BOOL b ->
             push_trace ("LOAD_BOOL " ^ string_of_bool b);
-            Stack.push (VBool b) stack;
+            Stack.push (Gc.VBool b) stack;
             next ()
-        | LOAD_UNIT _ ->
+        | Opcode.LOAD_UNIT _ ->
             push_trace "LOAD_UNIT";
-            Stack.push VUnit stack;
+            Stack.push Gc.VUnit stack;
             next ()
-        | LOAD_TUPLE n ->
+        | Opcode.LOAD_TUPLE n ->
             push_trace ("LOAD_TUPLE " ^ string_of_int n);
             if Stack.length stack < n then
               runtime_error
@@ -253,124 +249,126 @@ let run instructions =
             else
               let items = pop_n_rev [] n in
               Stack.push
-                (VThunk (fun () -> VTuple (List.map force items)))
+                (Gc.VThunk (fun () -> Gc.VTuple (List.map force items)))
                 stack;
               next ()
-        | LOAD_VAR name ->
+        | Opcode.LOAD_VAR name ->
             push_trace ("LOAD_VAR " ^ name);
             let v = get_var frame.env name in
             Stack.push (force v) stack;
             next ()
-        | PLUS ->
+        | Opcode.PLUS ->
             push_trace "PLUS";
             let a, b = pop2_safe stack in
             Stack.push
-              (VThunk
+              (Gc.VThunk
                  (fun () ->
                    match (force a, force b) with
-                   | VFloat a, VFloat b ->
+                   | Gc.VFloat a, Gc.VFloat b ->
                        let res = a +. b in
                        if
                          classify_float res = FP_nan
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in addition"
-                       else VFloat res
-                   | VInt a, VInt b -> VInt (Bigint.add a b)
+                       else Gc.VFloat res
+                   | Gc.VInt a, Gc.VInt b -> Gc.VInt (Bigint.add a b)
                    | _ -> runtime_error "PLUS expects numbers"))
               stack;
             next ()
-        | MINUS ->
+        | Opcode.MINUS ->
             push_trace "MINUS";
             let a, b = pop2_safe stack in
             Stack.push
-              (VThunk
+              (Gc.VThunk
                  (fun () ->
                    match (force a, force b) with
-                   | VFloat a, VFloat b ->
+                   | Gc.VFloat a, Gc.VFloat b ->
                        let res = a -. b in
                        if
                          classify_float res = FP_nan
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in subtraction"
-                       else VFloat res
-                   | VInt a, VInt b -> VInt (Bigint.sub a b)
+                       else Gc.VFloat res
+                   | Gc.VInt a, Gc.VInt b -> Gc.VInt (Bigint.sub a b)
                    | _ -> runtime_error "MINUS expects numbers"))
               stack;
             next ()
-        | STAR ->
+        | Opcode.STAR ->
             push_trace "STAR";
             let a, b = pop2_safe stack in
             Stack.push
-              (VThunk
+              (Gc.VThunk
                  (fun () ->
                    match (force a, force b) with
-                   | VFloat a, VFloat b ->
+                   | Gc.VFloat a, Gc.VFloat b ->
                        let res = a *. b in
                        if
                          classify_float res = FP_nan
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in multiplication"
-                       else VFloat res
-                   | VInt a, VInt b -> VInt (Bigint.mul a b)
+                       else Gc.VFloat res
+                   | Gc.VInt a, Gc.VInt b -> Gc.VInt (Bigint.mul a b)
                    | _ -> runtime_error "STAR expects numbers"))
               stack;
             next ()
-        | SLASH ->
+        | Opcode.SLASH ->
             push_trace "SLASH";
             let a, b = pop2_safe stack in
             Stack.push
-              (VThunk
+              (Gc.VThunk
                  (fun () ->
                    match (force a, force b) with
-                   | VFloat _, VFloat 0.0 -> runtime_error "Division by zero"
-                   | VInt _, VInt z when Bigint.equal z Bigint.zero ->
+                   | Gc.VFloat _, Gc.VFloat 0.0 ->
                        runtime_error "Division by zero"
-                   | VFloat a, VFloat b ->
+                   | Gc.VInt _, Gc.VInt z when Bigint.equal z Bigint.zero ->
+                       runtime_error "Division by zero"
+                   | Gc.VFloat a, Gc.VFloat b ->
                        let res = a /. b in
                        if
                          classify_float res = FP_nan
                          || classify_float res = FP_infinite
                        then runtime_error "Float overflow in division"
-                       else VFloat res
-                   | VInt a, VInt b -> VInt (Bigint.div a b)
+                       else Gc.VFloat res
+                   | Gc.VInt a, Gc.VInt b -> Gc.VInt (Bigint.div a b)
                    | _ -> runtime_error "SLASH expects numbers"))
               stack;
             next ()
-        | MOD ->
+        | Opcode.MOD ->
             push_trace "MOD";
             let a, b = pop2_safe stack in
             Stack.push
-              (VThunk
+              (Gc.VThunk
                  (fun () ->
                    match (force a, force b) with
-                   | VFloat _, VFloat 0.0 -> runtime_error "Modulo by zero"
-                   | VInt _, VInt z when Bigint.equal z Bigint.zero ->
+                   | Gc.VFloat _, Gc.VFloat 0.0 ->
                        runtime_error "Modulo by zero"
-                   | VFloat a, VFloat b -> VFloat (mod_float a b)
-                   | VInt a, VInt b -> VInt (Bigint.rem a b)
+                   | Gc.VInt _, Gc.VInt z when Bigint.equal z Bigint.zero ->
+                       runtime_error "Modulo by zero"
+                   | Gc.VFloat a, Gc.VFloat b -> Gc.VFloat (mod_float a b)
+                   | Gc.VInt a, Gc.VInt b -> Gc.VInt (Bigint.rem a b)
                    | _ -> runtime_error "MOD expects numbers"))
               stack;
             next ()
-        | POW ->
+        | Opcode.POW ->
             push_trace "POW";
             let a, b = pop2_safe stack in
             Stack.push
-              (VThunk
+              (Gc.VThunk
                  (fun () ->
                    match (force a, force b) with
-                   | VFloat a, VFloat b -> VFloat (a ** b)
-                   | VInt a, VInt b ->
+                   | Gc.VFloat a, Gc.VFloat b -> Gc.VFloat (a ** b)
+                   | Gc.VInt a, Gc.VInt b ->
                        if Bigint.sign b < 0 then
                          runtime_error "POW expects non-negative exponent"
-                       else VInt (Bigint.pow a (Bigint.to_int b))
+                       else Gc.VInt (Bigint.pow a (Bigint.to_int b))
                    | _ -> runtime_error "POW expects numbers"))
               stack;
             next ()
-        | CONCAT ->
+        | Opcode.CONCAT ->
             push_trace "CONCAT";
             let a, b = pop2_safe stack in
             Stack.push
-              (VThunk
+              (Gc.VThunk
                  (fun () ->
                    let result =
                      get_string_from_stack_value (force a)
@@ -379,160 +377,160 @@ let run instructions =
                    Gc.alloc_string_with_gc stack frame.env result))
               stack;
             next ()
-        | JUMP_IF_FALSE offset -> (
+        | Opcode.JUMP_IF_FALSE offset -> (
             push_trace ("JUMP_IF_FALSE " ^ string_of_int offset);
             match Stack.pop_opt stack with
-            | Some (VFloat 0.0) -> frame.pc <- frame.pc + offset
-            | Some (VInt z) when Bigint.equal z Bigint.zero ->
+            | Some (Gc.VFloat 0.0) -> frame.pc <- frame.pc + offset
+            | Some (Gc.VInt z) when Bigint.equal z Bigint.zero ->
                 frame.pc <- frame.pc + offset
-            | Some (VBool false) -> frame.pc <- frame.pc + offset
+            | Some (Gc.VBool false) -> frame.pc <- frame.pc + offset
             | Some _ -> next ()
             | None -> runtime_error "JUMP_IF_FALSE with empty stack")
-        | JUMP n ->
+        | Opcode.JUMP n ->
             push_trace ("JUMP " ^ string_of_int n);
             frame.pc <- frame.pc + n
-        | LESS ->
+        | Opcode.LESS ->
             push_trace "LESS";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             let result =
               match (a, b) with
-              | VFloat a, VFloat b -> VBool (a < b)
-              | VInt a, VInt b -> VBool (Bigint.compare a b < 0)
+              | Gc.VFloat a, Gc.VFloat b -> Gc.VBool (a < b)
+              | Gc.VInt a, Gc.VInt b -> Gc.VBool (Bigint.compare a b < 0)
               | _ -> runtime_error "LESS expects two floats or int"
             in
             Stack.push result stack;
             next ()
-        | GREATER ->
+        | Opcode.GREATER ->
             push_trace "GREATER";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             let result =
               match (a, b) with
-              | VFloat a, VFloat b -> VBool (a > b)
-              | VInt a, VInt b -> VBool (Bigint.compare a b > 0)
+              | Gc.VFloat a, Gc.VFloat b -> Gc.VBool (a > b)
+              | Gc.VInt a, Gc.VInt b -> Gc.VBool (Bigint.compare a b > 0)
               | _ -> runtime_error "GREATER expects two floats or int"
             in
             Stack.push result stack;
             next ()
-        | LESS_EQUAL ->
+        | Opcode.LESS_EQUAL ->
             push_trace "LESS_EQUAL";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             let result =
               match (a, b) with
-              | VFloat a, VFloat b -> VBool (a <= b)
-              | VInt a, VInt b -> VBool (Bigint.compare a b <= 0)
+              | Gc.VFloat a, Gc.VFloat b -> Gc.VBool (a <= b)
+              | Gc.VInt a, Gc.VInt b -> Gc.VBool (Bigint.compare a b <= 0)
               | _ -> runtime_error "LESS_EQUAL expects two floats or int"
             in
             Stack.push result stack;
             next ()
-        | GREATER_EQUAL ->
+        | Opcode.GREATER_EQUAL ->
             push_trace "GREATER_EQUAL";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             let result =
               match (a, b) with
-              | VFloat a, VFloat b -> VBool (a >= b)
-              | VInt a, VInt b -> VBool (Bigint.compare a b >= 0)
+              | Gc.VFloat a, Gc.VFloat b -> Gc.VBool (a >= b)
+              | Gc.VInt a, Gc.VInt b -> Gc.VBool (Bigint.compare a b >= 0)
               | _ -> runtime_error "GREATER_EQUAL expects two floats or int"
             in
             Stack.push result stack;
             next ()
-        | NOT_EQUAL ->
+        | Opcode.NOT_EQUAL ->
             push_trace "NOT_EQUAL";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             let result = not_equal_value a b in
-            Stack.push (VBool result) stack;
+            Stack.push (Gc.VBool result) stack;
             next ()
-        | EQUAL ->
+        | Opcode.EQUAL ->
             push_trace "EQUAL";
             let b, a = pop2_safe stack in
             let a, b = (force a, force b) in
             let result = equal_value a b in
-            Stack.push (VBool result) stack;
+            Stack.push (Gc.VBool result) stack;
             next ()
-        | AND ->
+        | Opcode.AND ->
             push_trace "AND";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             let bool_val = function
-              | VBool b -> b
-              | VFloat f -> f <> 0.0
-              | VInt i -> i <> Bigint.zero
+              | Gc.VBool b -> b
+              | Gc.VFloat f -> f <> 0.0
+              | Gc.VInt i -> i <> Bigint.zero
               | _ -> runtime_error "AND expects bool, float, or int"
             in
-            Stack.push (VBool (bool_val a && bool_val b)) stack;
+            Stack.push (Gc.VBool (bool_val a && bool_val b)) stack;
             next ()
-        | OR ->
+        | Opcode.OR ->
             push_trace "OR";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             let bool_val = function
-              | VBool b -> b
-              | VFloat f -> f <> 0.0
-              | VInt i -> i <> Bigint.zero
+              | Gc.VBool b -> b
+              | Gc.VFloat f -> f <> 0.0
+              | Gc.VInt i -> i <> Bigint.zero
               | _ -> runtime_error "OR expects bool, float, or int"
             in
-            Stack.push (VBool (bool_val a || bool_val b)) stack;
+            Stack.push (Gc.VBool (bool_val a || bool_val b)) stack;
             next ()
-        | NOT ->
+        | Opcode.NOT ->
             push_trace "NOT";
             let v = force (pop1 stack) in
             let bool_val =
               match v with
-              | VBool b -> b
+              | Gc.VBool b -> b
               | _ -> runtime_error "NOT expects float or int"
             in
-            Stack.push (VBool (not bool_val)) stack;
+            Stack.push (Gc.VBool (not bool_val)) stack;
             next ()
-        | INC ->
+        | Opcode.INC ->
             push_trace "INC";
             let v = force (pop1 stack) in
             let result =
               match v with
-              | VFloat f ->
+              | Gc.VFloat f ->
                   let res = f +. 1.0 in
                   if
                     classify_float res = FP_nan
                     || classify_float res = FP_infinite
                   then runtime_error "Float overflow in increment"
-                  else VFloat res
-              | VInt i -> VInt (Bigint.add i Bigint.one)
+                  else Gc.VFloat res
+              | Gc.VInt i -> Gc.VInt (Bigint.add i Bigint.one)
               | _ -> runtime_error "INC expects float or int"
             in
             Stack.push result stack;
             next ()
-        | DEC ->
+        | Opcode.DEC ->
             push_trace "DEC";
             let v = force (pop1 stack) in
             let result =
               match v with
-              | VFloat f ->
+              | Gc.VFloat f ->
                   let res = f -. 1.0 in
                   if
                     classify_float res = FP_nan
                     || classify_float res = FP_infinite
                   then runtime_error "Float overflow in decrement"
-                  else VFloat res
-              | VInt i -> VInt (Bigint.sub i Bigint.one)
+                  else Gc.VFloat res
+              | Gc.VInt i -> Gc.VInt (Bigint.sub i Bigint.one)
               | _ -> runtime_error "DEC expects float or int"
             in
             Stack.push result stack;
             next ()
-        | DUP ->
+        | Opcode.DUP ->
             push_trace "DUP";
             Stack.top_opt stack |> Option.iter (fun v -> Stack.push v stack);
             if Stack.is_empty stack then
               runtime_error "Stack underflow during DUP";
             next ()
-        | POP ->
+        | Opcode.POP ->
             push_trace "POP";
             if Stack.pop_opt stack = None then
               runtime_error "POP attempted on empty stack"
             else next ()
-        | LOAD_ARRAY length ->
+        | Opcode.LOAD_ARRAY length ->
             push_trace ("LOAD_ARRAY " ^ string_of_int length);
             if Stack.length stack < length then
               runtime_error
@@ -541,10 +539,10 @@ let run instructions =
             else
               let items = pop_n_rev [] length in
               Stack.push
-                (VThunk (fun () -> VArray (List.map force items)))
+                (Gc.VThunk (fun () -> Gc.VArray (List.map force items)))
                 stack;
               next ()
-        | LOAD_INDEX ->
+        | Opcode.LOAD_INDEX ->
             push_trace "LOAD_INDEX";
             if Stack.length stack < 2 then
               runtime_error
@@ -554,43 +552,43 @@ let run instructions =
             let collection_val = pop1 stack in
             let index =
               match force index_val with
-              | VInt i -> Bigint.to_int i
+              | Gc.VInt i -> Bigint.to_int i
               | _ -> runtime_error "Expected int for index in LOAD_INDEX"
             in
             let collection = force collection_val in
             let item =
               match collection with
-              | VArray items ->
+              | Gc.VArray items ->
                   if index < 0 || index >= List.length items then
                     runtime_error
                       ("Index out of bounds in LOAD_INDEX: "
                      ^ string_of_int index)
                   else List.nth items index
-              | VTuple items ->
+              | Gc.VTuple items ->
                   if index < 0 || index >= List.length items then
                     runtime_error
                       ("Index out of bounds in LOAD_INDEX: "
                      ^ string_of_int index)
                   else List.nth items index
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.find_heap_obj id with
                   | Gc.HString s ->
                       if index < 0 || index >= String.length s then
                         runtime_error
                           ("Index out of bounds in LOAD_INDEX (string): "
                          ^ string_of_int index)
-                      else VByte s.[index]
+                      else Gc.VByte s.[index]
                   | Gc.HBytes arr ->
                       if index < 0 || index >= Array.length arr then
                         runtime_error
                           ("Index out of bounds in LOAD_INDEX (bytes): "
                          ^ string_of_int index)
-                      else VByte arr.(index)
+                      else Gc.VByte arr.(index)
                   | _ ->
                       runtime_error
                         "Expected array, tuple, string, bytes, or range for \
                          LOAD_INDEX")
-              | VRange id -> (
+              | Gc.VRange id -> (
                   match Gc.find_heap_obj id with
                   | Gc.HRange { current; step; end_ } -> (
                       let elem =
@@ -603,32 +601,32 @@ let run instructions =
                              || (step < Bigint.zero && elem < e) ->
                           runtime_error
                             "Index out of bounds in LOAD_INDEX for range"
-                      | _ -> VInt elem)
-                  | _ -> runtime_error "Expected range for VRange")
+                      | _ -> Gc.VInt elem)
+                  | _ -> runtime_error "Expected range for Gc.VRange")
               | _ ->
                   runtime_error
                     "Expected array, tuple, string, bytes, or range for \
                      LOAD_INDEX"
             in
-            Stack.push (VThunk (fun () -> item)) stack;
+            Stack.push (Gc.VThunk (fun () -> item)) stack;
             next ()
-        | FUNCTION _ ->
+        | Opcode.FUNCTION _ ->
             let rec skip_function pc =
               if pc >= Array.length frame.code then
                 runtime_error "Unterminated FUNCTION block"
               else
                 match frame.code.(pc) with
-                | RETURN -> pc + 1
+                | Opcode.RETURN -> pc + 1
                 | _ -> skip_function (pc + 1)
             in
             frame.pc <- skip_function (frame.pc + 1)
-        | CALL function_name ->
+        | Opcode.CALL function_name ->
             push_trace ("CALL " ^ function_name);
             let function_body = resolve_function_body function_name in
             let param_names =
               List.map
-                (fun (p : Ast.Stmt.parameter) -> p.name)
-                function_body.params
+                (fun (p : Ast.Stmt.parameter) -> p.Ast.Stmt.name)
+                function_body.Bytecode.params
             in
             let arg_count = List.length param_names in
 
@@ -647,18 +645,18 @@ let run instructions =
             Gc.maybe_collect_gc roots local_env;
 
             let skip_header = 1 + arg_count in
-            let body = List.drop skip_header function_body.bytecode in
+            let body = List.drop skip_header function_body.Bytecode.bytecode in
             let code = Array.of_list body in
 
             frame.pc <- frame.pc + 1;
             push_frame code local_env
-        | TAIL_CALL function_name ->
+        | Opcode.TAIL_CALL function_name ->
             push_trace ("TAIL_CALL " ^ function_name);
             let function_body = resolve_function_body function_name in
             let param_names =
               List.map
-                (fun (p : Ast.Stmt.parameter) -> p.name)
-                function_body.params
+                (fun (p : Ast.Stmt.parameter) -> p.Ast.Stmt.name)
+                function_body.Bytecode.params
             in
             let arg_count = List.length param_names in
 
@@ -674,28 +672,28 @@ let run instructions =
             in
 
             let skip_header = 1 + arg_count in
-            let body = List.drop skip_header function_body.bytecode in
+            let body = List.drop skip_header function_body.Bytecode.bytecode in
             let code = Array.of_list body in
             let frame = Stack.top frame_stack in
             frame.code <- code;
             frame.pc <- 0;
             frame.env <- local_env
-        | RETURN ->
+        | Opcode.RETURN ->
             push_trace "RETURN";
             let return_value =
               match Stack.pop_opt stack with
               | Some v -> force v
-              | None -> VFloat nan
+              | None -> Gc.VFloat nan
             in
             ignore (pop1 frame_stack);
             Stack.push return_value stack
-        | STORE_VAR name ->
+        | Opcode.STORE_VAR name ->
             push_trace ("STORE_VAR " ^ name);
             if Stack.is_empty stack then
               runtime_error ("STORE_VAR '" ^ name ^ "' failed: stack is empty")
             else
               let value = pop1 stack in
-              let lazy_value = VThunk (fun () -> force value) in
+              let lazy_value = Gc.VThunk (fun () -> force value) in
               if List.mem_assoc name frame.env then (
                 frame.env <-
                   (name, (lazy_value, true)) :: List.remove_assoc name frame.env;
@@ -705,23 +703,24 @@ let run instructions =
                   (name, (lazy_value, true))
                   :: List.remove_assoc name !global_env;
                 next ())
-        | PRINT ->
+        | Opcode.PRINT ->
             push_trace "PRINT";
             if Stack.is_empty stack then
               runtime_error "PRINTLN attempted with empty stack"
             else
               let rec string_of_value = function
-                | VUnit -> "unit"
-                | VByte c -> Printf.sprintf "'%c'" c
-                | VBool true -> "true"
-                | VBool false -> "false"
-                | VFloat f ->
+                | Gc.VUnit -> "unit"
+                | Gc.VByte c -> Printf.sprintf "'%c'" c
+                | Gc.VBool true -> "true"
+                | Gc.VBool false -> "false"
+                | Gc.VFloat f ->
                     if Float.is_nan f then "NaN"
                     else if Float.is_infinite f then
                       if f > 0.0 then "inf" else "-inf"
+                    else if Float.floor f = f then Printf.sprintf "%.1f" f
                     else Printf.sprintf "%g" f
-                | VInt i -> Bigint.to_string i
-                | VHeapRef id -> (
+                | Gc.VInt i -> Bigint.to_string i
+                | Gc.VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> s
                     | None -> (
@@ -732,26 +731,27 @@ let run instructions =
                             match Gc.get_value id with
                             | Some v -> string_of_value v
                             | None -> "<invalid ref>")))
-                | VArray items ->
+                | Gc.VArray items ->
                     let contents =
                       items |> List.map string_of_value |> String.concat ", "
                     in
                     "[" ^ contents ^ "]"
-                | VTuple items ->
+                | Gc.VTuple items ->
                     let contents =
                       items |> List.map string_of_value |> String.concat ", "
                     in
                     "(" ^ contents ^ ")"
-                | VModule _ -> "<module>"
-                | VNative _ -> "<native function>"
-                | VClosure name -> "<function " ^ name ^ ">"
-                | VThunk _ -> "<thunk>"
-                | VRange _ -> "<range>"
+                | Gc.VModule _ -> "<module>"
+                | Gc.VNative _ -> "<native function>"
+                | Gc.VClosure name -> "<function " ^ name ^ ">"
+                | Gc.VThunk _ -> "<thunk>"
+                | Gc.VRange _ -> "<range>"
+                | _ -> "<unknown>"
               in
               let value = force (pop1 stack) in
               safe_push_output (string_of_value value);
               next ()
-        | INPUT -> (
+        | Opcode.INPUT -> (
             push_trace "INPUT";
             if Stack.is_empty stack then
               runtime_error "Stack underflow during INPUT"
@@ -759,7 +759,7 @@ let run instructions =
               let value = pop1 stack in
               let id =
                 match value with
-                | VHeapRef id -> id
+                | Gc.VHeapRef id -> id
                 | _ -> runtime_error "INPUT expected a heap reference ID"
               in
               match Gc.get_string id with
@@ -767,37 +767,37 @@ let run instructions =
                   Printf.printf "%s" prompt;
                   let input_value = read_line () in
                   let processed_value =
-                    try VFloat (float_of_string input_value)
+                    try Gc.VFloat (float_of_string input_value)
                     with Failure _ ->
                       if String.length input_value = 1 then
-                        VByte input_value.[0]
+                        Gc.VByte input_value.[0]
                       else Gc.alloc_string_with_gc stack frame.env input_value
                   in
                   Stack.push processed_value stack;
                   next ()
               | None -> runtime_error "Invalid prompt ID for INPUT")
-        | NEG ->
+        | Opcode.NEG ->
             push_trace "NEG";
             let v = force (pop1 stack) in
             (match v with
-            | VFloat f ->
+            | Gc.VFloat f ->
                 let res = -.f in
                 if
                   classify_float res = FP_nan
                   || classify_float res = FP_infinite
                 then runtime_error "Float overflow in negation"
-                else Stack.push (VFloat res) stack
-            | VInt i -> Stack.push (VInt (Bigint.neg i)) stack
+                else Stack.push (Gc.VFloat res) stack
+            | Gc.VInt i -> Stack.push (Gc.VInt (Bigint.neg i)) stack
             | _ -> runtime_error "NEG expects a float or int");
             next ()
-        | FLOAT ->
+        | Opcode.FLOAT ->
             push_trace "FLOAT";
             let v = force (pop1 stack) in
             let float_val =
               match v with
-              | VFloat f -> f
-              | VInt i -> Bigint.to_float i
-              | VHeapRef id -> (
+              | Gc.VFloat f -> f
+              | Gc.VInt i -> Bigint.to_float i
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> (
                       try float_of_string s
@@ -808,17 +808,17 @@ let run instructions =
               | _ ->
                   runtime_error "FLOAT: unsupported type for float conversion"
             in
-            Stack.push (VFloat float_val) stack;
+            Stack.push (Gc.VFloat float_val) stack;
             next ()
-        | INT ->
+        | Opcode.INT ->
             push_trace "TO_INT";
             let v = force (pop1 stack) in
             let int_val =
               match v with
-              | VInt i -> i
-              | VFloat f -> Bigint.of_float f
-              | VByte c -> Bigint.of_int (Char.code c)
-              | VHeapRef id -> (
+              | Gc.VInt i -> i
+              | Gc.VFloat f -> Bigint.of_float f
+              | Gc.VByte c -> Bigint.of_int (Char.code c)
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> (
                       try Bigint.of_string s
@@ -828,14 +828,14 @@ let run instructions =
                       runtime_error "INT: invalid heap reference for string")
               | _ -> runtime_error "INT: unsupported type for int conversion"
             in
-            Stack.push (VInt int_val) stack;
+            Stack.push (Gc.VInt int_val) stack;
             next ()
-        | STRING ->
+        | Opcode.STRING ->
             push_trace "TO_STRING";
             let v = force (pop1 stack) in
             let str_val =
               match v with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> s
                   | None -> (
@@ -846,55 +846,58 @@ let run instructions =
                           runtime_error
                             "STRING: invalid heap reference for string or byte \
                              array"))
-              | VArray vs ->
-                  if List.for_all (function VByte _ -> true | _ -> false) vs
+              | Gc.VArray vs ->
+                  if
+                    List.for_all (function Gc.VByte _ -> true | _ -> false) vs
                   then
                     String.init (List.length vs) (fun i ->
-                        match List.nth vs i with VByte c -> c | _ -> '\000')
+                        match List.nth vs i with Gc.VByte c -> c | _ -> '\000')
                   else if
-                    List.for_all (function VFloat _ -> true | _ -> false) vs
+                    List.for_all
+                      (function Gc.VFloat _ -> true | _ -> false)
+                      vs
                   then
                     String.concat ""
                       (List.map
-                         (function VFloat f -> string_of_float f | _ -> "")
+                         (function Gc.VFloat f -> string_of_float f | _ -> "")
                          vs)
                   else if
-                    List.for_all (function VInt _ -> true | _ -> false) vs
+                    List.for_all (function Gc.VInt _ -> true | _ -> false) vs
                   then
                     String.concat ""
                       (List.map
-                         (function VInt i -> Bigint.to_string i | _ -> "")
+                         (function Gc.VInt i -> Bigint.to_string i | _ -> "")
                          vs)
                   else
                     runtime_error
                       "STRING: array is not []byte, []float or []int"
-              | VInt i -> Bigint.to_string i
-              | VFloat f -> string_of_float f
-              | VBool b -> if b then "true" else "false"
-              | VByte c -> String.make 1 c
-              | VUnit -> "()"
+              | Gc.VInt i -> Bigint.to_string i
+              | Gc.VFloat f -> string_of_float f
+              | Gc.VBool b -> if b then "true" else "false"
+              | Gc.VByte c -> String.make 1 c
+              | Gc.VUnit -> "()"
               | _ ->
                   runtime_error "STRING: unsupported type for string conversion"
             in
             let new_str_ref = Gc.alloc_string_with_gc stack frame.env str_val in
             Stack.push new_str_ref stack;
             next ()
-        | BYTES ->
+        | Opcode.BYTES ->
             push_trace "TO_BYTES";
             let v = pop1 stack in
             let str_val =
               match v with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some s -> s
                   | None ->
                       runtime_error
                         "TO_BYTES: invalid heap reference for string")
-              | VInt i -> Bigint.to_string i
-              | VFloat f -> string_of_float f
-              | VBool b -> if b then "true" else "false"
-              | VByte c -> String.make 1 c
-              | VUnit -> "()"
+              | Gc.VInt i -> Bigint.to_string i
+              | Gc.VFloat f -> string_of_float f
+              | Gc.VBool b -> if b then "true" else "false"
+              | Gc.VByte c -> String.make 1 c
+              | Gc.VUnit -> "()"
               | _ -> runtime_error "TO_BYTES: unsupported type for conversion"
             in
             let byte_array = string_to_bytes str_val in
@@ -903,56 +906,60 @@ let run instructions =
             in
             Stack.push new_bytes_ref stack;
             next ()
-        | BYTE -> (
+        | Opcode.BYTE -> (
             push_trace "TO_BYTE";
             let v = force (pop1 stack) in
             match v with
-            | VInt i ->
+            | Gc.VInt i ->
                 Stack.push
-                  (VByte
+                  (Gc.VByte
                      (Char.chr
                         (Bigint.to_int
                            (Bigint.logand i (Bigint.of_int64 0xFFL)))))
                   stack;
                 next ()
-            | VByte c ->
-                Stack.push (VByte c) stack;
+            | Gc.VByte c ->
+                Stack.push (Gc.VByte c) stack;
                 next ()
-            | VHeapRef id -> (
+            | Gc.VHeapRef id -> (
                 match Gc.get_string id with
                 | Some s ->
-                    if String.length s = 1 then Stack.push (VByte s.[0]) stack
+                    if String.length s = 1 then
+                      Stack.push (Gc.VByte s.[0]) stack
                     else runtime_error "BYTE: heap string length must be 1"
                 | None ->
                     runtime_error "BYTE: invalid heap reference for string")
-            | VFloat f ->
-                Stack.push (VByte (Char.chr (int_of_float f land 0xFF))) stack;
+            | Gc.VFloat f ->
+                Stack.push
+                  (Gc.VByte (Char.chr (int_of_float f land 0xFF)))
+                  stack;
                 next ()
-            | VArray vs ->
-                if List.for_all (function VInt _ -> true | _ -> false) vs then (
+            | Gc.VArray vs ->
+                if List.for_all (function Gc.VInt _ -> true | _ -> false) vs
+                then (
                   let byte_arr =
                     Array.of_list
                       (List.map
                          (function
-                           | VInt i ->
+                           | Gc.VInt i ->
                                Char.chr
                                  (Bigint.to_int
                                     (Bigint.logand i (Bigint.of_int64 0xFFL)))
                            | _ -> assert false)
                          vs)
                   in
-                  let vbyte_arr = Array.map (fun c -> VByte c) byte_arr in
-                  Stack.push (VArray (Array.to_list vbyte_arr)) stack;
+                  let vbyte_arr = Array.map (fun c -> Gc.VByte c) byte_arr in
+                  Stack.push (Gc.VArray (Array.to_list vbyte_arr)) stack;
                   next ())
                 else runtime_error "BYTE: array contains non-integer elements"
             | _ -> runtime_error "BYTE: unsupported type for byte conversion")
-        | PLUSASSIGN ->
+        | Opcode.PLUSASSIGN ->
             push_trace "PLUSASSIGN";
             let value = force (pop1 stack) in
             let var = force (pop1 stack) in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None ->
@@ -963,20 +970,20 @@ let run instructions =
             let old_value = force (get_var frame.env name) in
             let result =
               match (old_value, value) with
-              | VFloat oldf, VFloat newf -> VFloat (oldf +. newf)
-              | VInt oldi, VInt newi -> VInt (Bigint.add oldi newi)
+              | Gc.VFloat oldf, Gc.VFloat newf -> Gc.VFloat (oldf +. newf)
+              | Gc.VInt oldi, Gc.VInt newi -> Gc.VInt (Bigint.add oldi newi)
               | _ -> runtime_error "PLUSASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             Stack.push result stack;
             next ()
-        | MINUSASSIGN ->
+        | Opcode.MINUSASSIGN ->
             push_trace "MINUSASSIGN";
             let value = force (pop1 stack) in
             let var = force (pop1 stack) in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None ->
@@ -987,19 +994,19 @@ let run instructions =
             let old_value = force (get_var frame.env name) in
             let result =
               match (old_value, value) with
-              | VFloat oldf, VFloat newf -> VFloat (oldf -. newf)
-              | VInt oldi, VInt newi -> VInt (Bigint.sub oldi newi)
+              | Gc.VFloat oldf, Gc.VFloat newf -> Gc.VFloat (oldf -. newf)
+              | Gc.VInt oldi, Gc.VInt newi -> Gc.VInt (Bigint.sub oldi newi)
               | _ -> runtime_error "MINUSASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             next ()
-        | STARASSIGN ->
+        | Opcode.STARASSIGN ->
             push_trace "STARASSIGN";
             let value = force (pop1 stack) in
             let var = force (pop1 stack) in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None ->
@@ -1010,19 +1017,19 @@ let run instructions =
             let old_value = force (get_var frame.env name) in
             let result =
               match (old_value, value) with
-              | VFloat oldf, VFloat newf -> VFloat (oldf *. newf)
-              | VInt oldi, VInt newi -> VInt (Bigint.mul oldi newi)
+              | Gc.VFloat oldf, Gc.VFloat newf -> Gc.VFloat (oldf *. newf)
+              | Gc.VInt oldi, Gc.VInt newi -> Gc.VInt (Bigint.mul oldi newi)
               | _ -> runtime_error "STARASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             next ()
-        | SLASHASSIGN ->
+        | Opcode.SLASHASSIGN ->
             push_trace "SLASHASSIGN";
             let value = force (pop1 stack) in
             let var = force (pop1 stack) in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None ->
@@ -1033,24 +1040,24 @@ let run instructions =
             let old_value = force (get_var frame.env name) in
             let result =
               match (old_value, value) with
-              | VFloat oldf, VFloat newf ->
+              | Gc.VFloat oldf, Gc.VFloat newf ->
                   if newf = 0.0 then
                     runtime_error "SLASHASSIGN: division by zero";
-                  VFloat (oldf /. newf)
-              | VInt oldi, VInt newi ->
+                  Gc.VFloat (oldf /. newf)
+              | Gc.VInt oldi, Gc.VInt newi ->
                   if newi = Bigint.zero then
                     runtime_error "SLASHASSIGN: division by zero";
-                  VInt (Bigint.div oldi newi)
+                  Gc.VInt (Bigint.div oldi newi)
               | _ -> runtime_error "SLASHASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             next ()
-        | LOAD_VAR_REF name ->
+        | Opcode.LOAD_VAR_REF name ->
             push_trace ("LOAD_VAR_REF " ^ name);
             let v = Gc.alloc_string_with_gc stack frame.env name in
             Stack.push v stack;
             next ()
-        | LENGTH ->
+        | Opcode.LENGTH ->
             push_trace "LENGTH";
             if Stack.is_empty stack then
               runtime_error "LENGTH expects a value on the stack"
@@ -1058,7 +1065,7 @@ let run instructions =
               let v = pop1 stack in
               let length =
                 match v with
-                | VHeapRef id -> (
+                | Gc.VHeapRef id -> (
                     match Gc.find_heap_obj id with
                     | Gc.HString s -> Bigint.of_int (String.length s)
                     | Gc.HBytes bytes_arr ->
@@ -1066,69 +1073,75 @@ let run instructions =
                     | _ ->
                         runtime_error
                           "LENGTH: heap reference is not a string or bytes")
-                | VArray items -> Bigint.of_int (List.length items)
-                | VTuple items -> Bigint.of_int (List.length items)
+                | Gc.VArray items -> Bigint.of_int (List.length items)
+                | Gc.VTuple items -> Bigint.of_int (List.length items)
                 | _ ->
                     runtime_error
                       "LENGTH expects a string, bytes, array, or tuple"
               in
-              Stack.push (VInt length) stack;
+              Stack.push (Gc.VInt length) stack;
               next ()
-        | BITWISENOT ->
+        | Opcode.BITWISENOT ->
             push_trace "BITWISE_NOT";
             let v = force (pop1 stack) in
             (match v with
-            | VInt i -> Stack.push (VInt (Bigint.lognot i)) stack
+            | Gc.VInt i -> Stack.push (Gc.VInt (Bigint.lognot i)) stack
             | _ -> runtime_error "BITWISE_NOT expects an int");
             next ()
-        | BITWISEAND ->
+        | Opcode.BITWISEAND ->
             push_trace "BITWISE_AND";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Bigint.logand a b)) stack
+            | Gc.VInt a, Gc.VInt b ->
+                Stack.push (Gc.VInt (Bigint.logand a b)) stack
             | _ -> runtime_error "BITWISE_AND expects int operands");
             next ()
-        | BITWISEOR ->
+        | Opcode.BITWISEOR ->
             push_trace "BITWISE_OR";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Bigint.logor a b)) stack
+            | Gc.VInt a, Gc.VInt b ->
+                Stack.push (Gc.VInt (Bigint.logor a b)) stack
             | _ -> runtime_error "BITWISE_OR expects int operands");
             next ()
-        | BITWISEXOR ->
+        | Opcode.BITWISEXOR ->
             push_trace "BITWISE_XOR";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (Bigint.logxor a b)) stack
+            | Gc.VInt a, Gc.VInt b ->
+                Stack.push (Gc.VInt (Bigint.logxor a b)) stack
             | _ -> runtime_error "BITWISE_XOR expects int operands");
             next ()
-        | LEFTSHIFT ->
+        | Opcode.LEFTSHIFT ->
             push_trace "LEFTSHIFT";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt a, VInt b -> Stack.push (VInt (safe_shift_left a b)) stack
+            | Gc.VInt a, Gc.VInt b ->
+                Stack.push (Gc.VInt (safe_shift_left a b)) stack
             | _ -> runtime_error "LEFTSHIFT expects int operands");
             next ()
-        | RIGHTSHIFT ->
+        | Opcode.RIGHTSHIFT ->
             push_trace "RIGHT_SHIFT";
             let a, b = pop2_safe stack in
             let a, b = (force a, force b) in
             (match (a, b) with
-            | VInt a, VInt b ->
-                Stack.push (VInt (Bigint.shift_right a (Bigint.to_int b))) stack
+            | Gc.VInt a, Gc.VInt b ->
+                Stack.push
+                  (Gc.VInt (Bigint.shift_right a (Bigint.to_int b)))
+                  stack
             | _ -> runtime_error "RIGHT_SHIFT expects int operands");
             next ()
-        | BITWISEANDASSIGN ->
+        | Opcode.BITWISEANDASSIGN ->
             push_trace "BITWISE_ANDASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None -> runtime_error "BITWISE_ANDASSIGN: invalid var ref")
@@ -1137,18 +1150,18 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Bigint.logand oldi newi)
+              | Gc.VInt oldi, Gc.VInt newi -> Gc.VInt (Bigint.logand oldi newi)
               | _ -> runtime_error "BITWISE_ANDASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             next ()
-        | BITWISEORASSIGN ->
+        | Opcode.BITWISEORASSIGN ->
             push_trace "BITWISE_ORASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None -> runtime_error "BITWISE_ORASSIGN: invalid var ref")
@@ -1157,18 +1170,18 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Bigint.logor oldi newi)
+              | Gc.VInt oldi, Gc.VInt newi -> Gc.VInt (Bigint.logor oldi newi)
               | _ -> runtime_error "BITWISE_ORASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             next ()
-        | BITWISEXORASSIGN ->
+        | Opcode.BITWISEXORASSIGN ->
             push_trace "BITWISE_XORASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None -> runtime_error "BITWISE_XORASSIGN: invalid var ref")
@@ -1177,18 +1190,18 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi -> VInt (Bigint.logxor oldi newi)
+              | Gc.VInt oldi, Gc.VInt newi -> Gc.VInt (Bigint.logxor oldi newi)
               | _ -> runtime_error "BITWISE_XORASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             next ()
-        | LEFTSHIFTASSIGN ->
+        | Opcode.LEFTSHIFTASSIGN ->
             push_trace "LEFT_SHIFTASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None -> runtime_error "LEFT_SHIFTASSIGN: invalid var ref")
@@ -1197,19 +1210,19 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi ->
-                  VInt (Bigint.shift_left oldi (Bigint.to_int newi))
+              | Gc.VInt oldi, Gc.VInt newi ->
+                  Gc.VInt (Bigint.shift_left oldi (Bigint.to_int newi))
               | _ -> runtime_error "LEFT_SHIFTASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             next ()
-        | RIGHTSHIFTASSIGN ->
+        | Opcode.RIGHTSHIFTASSIGN ->
             push_trace "RIGHT_SHIFTASSIGN";
             let value = pop1 stack in
             let var = pop1 stack in
             let name =
               match var with
-              | VHeapRef id -> (
+              | Gc.VHeapRef id -> (
                   match Gc.get_string id with
                   | Some name -> name
                   | None -> runtime_error "RIGHT_SHIFTASSIGN: invalid var ref")
@@ -1218,26 +1231,26 @@ let run instructions =
             let old_value = get_var frame.env name in
             let result =
               match (old_value, value) with
-              | VInt oldi, VInt newi ->
-                  VInt (Bigint.shift_right oldi (Bigint.to_int newi))
+              | Gc.VInt oldi, Gc.VInt newi ->
+                  Gc.VInt (Bigint.shift_right oldi (Bigint.to_int newi))
               | _ -> runtime_error "RIGHT_SHIFTASSIGN: type mismatch"
             in
             frame.env <- update_variable name result frame.env;
             next ()
-        | ASSERT -> (
+        | Opcode.ASSERT -> (
             push_trace "ASSERT";
             let cond = force (pop1 stack) in
             match cond with
-            | VBool true -> next ()
-            | VBool false -> runtime_error "Assertion failed"
+            | Gc.VBool true -> next ()
+            | Gc.VBool false -> runtime_error "Assertion failed"
             | _ -> runtime_error "ASSERT expects a boolean value")
-        | PANIC ->
+        | Opcode.PANIC ->
             push_trace "PANIC";
             if Stack.is_empty stack then
               runtime_error "PANIC attempted with empty stack"
             else
               let string_of_value = function
-                | VHeapRef id -> (
+                | Gc.VHeapRef id -> (
                     match Gc.get_string id with
                     | Some s -> s
                     | None -> (
@@ -1252,7 +1265,7 @@ let run instructions =
               let value = pop1 stack in
               Printf.eprintf "%s" (string_of_value value);
               exit 1
-        | LOAD_MODULE name ->
+        | Opcode.LOAD_MODULE name ->
             let m =
               match Hashtbl.find_opt stdlib_modules name with
               | Some modval -> modval
@@ -1260,35 +1273,35 @@ let run instructions =
             in
             Stack.push m stack;
             next ()
-        | LOAD_FIELD name -> (
+        | Opcode.LOAD_FIELD name -> (
             let module_or_obj = pop1 stack in
             match module_or_obj with
-            | VModule table -> (
+            | Gc.VModule table -> (
                 match Hashtbl.find_opt table name with
                 | Some v ->
                     Stack.push v stack;
                     next ()
                 | None -> failwith ("Unknown field " ^ name))
             | _ -> failwith "LOAD_FIELD expects a module or object")
-        | CLOSURE func_name ->
-            Stack.push (VClosure func_name) stack;
+        | Opcode.CLOSURE func_name ->
+            Stack.push (Gc.VClosure func_name) stack;
             next ()
-        | MAKE_RANGE ->
+        | Opcode.MAKE_RANGE ->
             let v = Stack.pop stack in
             let start =
               match v with
-              | VInt x -> x
+              | Gc.VInt x -> x
               | _ -> runtime_error "MAKE_RANGE expects int"
             in
             let range_val = Gc.alloc_range start Bigint.one None in
             let id =
               match range_val with
-              | VHeapRef id -> id
-              | _ -> runtime_error "alloc_range must return VHeapRef"
+              | Gc.VHeapRef id -> id
+              | _ -> runtime_error "alloc_range must return Gc.VHeapRef"
             in
-            Stack.push (VRange id) stack;
+            Stack.push (Gc.VRange id) stack;
             next ()
-        | ARRAYCONCAT -> (
+        | Opcode.ARRAYCONCAT -> (
             push_trace "ARRAYCONCAT";
             if Stack.length stack < 2 then
               runtime_error "ARRAYCONCAT requires two arrays on the stack"
@@ -1296,27 +1309,27 @@ let run instructions =
               let right = force (pop1 stack) in
               let left = force (pop1 stack) in
               match (left, right) with
-              | VArray l1, VArray l2 ->
-                  Stack.push (VArray (l1 @ l2)) stack;
+              | Gc.VArray l1, Gc.VArray l2 ->
+                  Stack.push (Gc.VArray (l1 @ l2)) stack;
                   next ()
               | _ -> runtime_error "ARRAYCONCAT expects two arrays")
-        | SLICE -> (
+        | Opcode.SLICE -> (
             let v_end = force (pop1 stack) in
             let v_start = force (pop1 stack) in
             let v_arr = force (pop1 stack) in
             match v_arr with
-            | VArray elements ->
+            | Gc.VArray elements ->
                 let len = List.length elements in
                 let s =
                   match v_start with
-                  | VInt s -> max 0 (Bigint.to_int s)
-                  | VUnit -> 0
+                  | Gc.VInt s -> max 0 (Bigint.to_int s)
+                  | Gc.VUnit -> 0
                   | _ -> runtime_error "SLICE: start index must be int or unit"
                 in
                 let e =
                   match v_end with
-                  | VInt e -> min len (Bigint.to_int e)
-                  | VUnit -> len
+                  | Gc.VInt e -> min len (Bigint.to_int e)
+                  | Gc.VUnit -> len
                   | _ -> runtime_error "SLICE: end index must be int or unit"
                 in
                 let slice =
@@ -1326,10 +1339,10 @@ let run instructions =
                     |> Seq.take (e - s)
                     |> List.of_seq
                 in
-                Stack.push (VArray slice) stack;
+                Stack.push (Gc.VArray slice) stack;
                 next ()
             | _ -> runtime_error "SLICE expects array as first argument")
-        | TYPE ->
+        | Opcode.TYPE ->
             push_trace "TYPE";
             if Stack.is_empty stack then
               runtime_error "TYPE expects a value on the stack"
@@ -1337,9 +1350,9 @@ let run instructions =
               let v = force (Stack.pop stack) in
               let type_str =
                 match v with
-                | VInt _ -> "int"
-                | VFloat _ -> "float"
-                | VHeapRef id -> (
+                | Gc.VInt _ -> "int"
+                | Gc.VFloat _ -> "float"
+                | Gc.VHeapRef id -> (
                     match Gc.get_string id with
                     | Some _ -> "string"
                     | None -> (
@@ -1349,20 +1362,86 @@ let run instructions =
                             match Gc.get_value id with
                             | Some _ -> "ref"
                             | None -> "unknown")))
-                | VByte _ -> "byte"
-                | VBool _ -> "bool"
-                | VUnit -> "unit"
-                | VArray _ -> "array"
-                | VTuple _ -> "tuple"
-                | VRange _ -> "range"
-                | VNative _ -> "native"
-                | VModule _ -> "module"
-                | VClosure _ -> "function"
-                | VThunk _ -> "thunk"
+                | Gc.VByte _ -> "byte"
+                | Gc.VBool _ -> "bool"
+                | Gc.VUnit -> "unit"
+                | Gc.VArray _ -> "array"
+                | Gc.VTuple _ -> "tuple"
+                | Gc.VRange _ -> "range"
+                | Gc.VNative _ -> "native"
+                | Gc.VModule _ -> "module"
+                | Gc.VClosure _ -> "function"
+                | Gc.VThunk _ -> "thunk"
+                | _ -> "unknown"
               in
               let v = Gc.alloc_string_with_gc stack frame.env type_str in
               Stack.push v stack;
               next ()
+        | Opcode.CALL_CLOSURE arg_count -> (
+            if Stack.length stack < arg_count + 1 then
+              runtime_error
+                ("CALL_CLOSURE requires " ^ string_of_int arg_count
+               ^ " arguments plus closure, but stack has only "
+                ^ string_of_int (Stack.length stack));
+
+            let closure_val = Stack.pop stack in
+            let args = pop_n [] arg_count in
+            match closure_val with
+            | Gc.VClosure func_name -> (
+                match Hashtbl.find_opt Bytecode.function_table func_name with
+                | None ->
+                    runtime_error
+                      ("CALL_CLOSURE: unknown closure function: " ^ func_name)
+                | Some function_body ->
+                    let param_names =
+                      List.map
+                        (fun (p : Ast.Stmt.parameter) -> p.Ast.Stmt.name)
+                        function_body.Bytecode.params
+                    in
+                    if List.length param_names <> arg_count then
+                      runtime_error
+                        ("CALL_CLOSURE: argument count mismatch, expected "
+                        ^ string_of_int (List.length param_names)
+                        ^ " but got " ^ string_of_int arg_count);
+                    let local_env =
+                      List.combine param_names
+                        (List.map (fun v -> (v, true)) args)
+                    in
+                    let roots = Gc.get_stack_roots stack in
+                    Gc.maybe_collect_gc roots local_env;
+                    let skip_header = 1 + arg_count in
+                    let body =
+                      List.drop skip_header function_body.Bytecode.bytecode
+                    in
+                    let code = Array.of_list body in
+                    frame.pc <- frame.pc + 1;
+                    push_frame code local_env)
+            | _ -> runtime_error "CALL_CLOSURE: top of stack is not a closure")
+        | Opcode.HEAD -> (
+            let v_arr = force (pop1 stack) in
+            match v_arr with
+            | Gc.VArray (h :: _) ->
+                Stack.push h stack;
+                next ()
+            | Gc.VArray [] -> runtime_error "HEAD: empty array"
+            | _ -> runtime_error "HEAD expects an array")
+        | Opcode.TAIL -> (
+            let v_arr = force (pop1 stack) in
+            match v_arr with
+            | Gc.VArray (_ :: t) ->
+                Stack.push (Gc.VArray t) stack;
+                next ()
+            | Gc.VArray [] -> Stack.push (Gc.VArray []) stack
+            | _ -> runtime_error "TAIL expects an array")
+        | Opcode.REVERSE -> (
+            let v_arr = force (pop1 stack) in
+            match v_arr with
+            | Gc.VArray elements ->
+                let reversed = List.rev elements in
+                Stack.push (Gc.VArray reversed) stack;
+                next ()
+            | _ -> runtime_error "REVERSE expects an array")
+        | _ -> failwith "Not Supported"
     done;
     flush_buffer ()
   with RuntimeError msg ->

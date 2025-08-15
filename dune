@@ -1,4 +1,9 @@
 (env
+ (dev
+  (ocamlopt_flags
+   (:standard -w +a -strict-sequence -short-paths -inline 0))
+  (flags
+   (:standard -safe-string -strict-formats)))
  (release
   (ocamlopt_flags
    (:standard -O3 -compact -unbox-closures -noassert -inline 100))

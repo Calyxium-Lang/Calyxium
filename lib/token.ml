@@ -1,4 +1,6 @@
-type t =
+type t = ..
+
+type t +=
   | Eq
   | Neq
   | Geq

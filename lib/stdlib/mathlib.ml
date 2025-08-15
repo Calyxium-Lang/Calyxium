@@ -5,5 +5,5 @@ module Math = struct
   let infinity = infinity
   let nan = nan
   let neg_infinity = neg_infinity
-  let sin (x : float) : float = Stdlib.sin x
+  let sin x = Stdlib.sin x
 end

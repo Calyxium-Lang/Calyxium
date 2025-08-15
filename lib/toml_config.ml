@@ -8,8 +8,8 @@ type project_config = {
   repository : string;
 }
 
-type run_config = { main : string; emit : string option; run : bool }
-type config = { project : project_config; run : run_config }
+type run_config = { main : string; emit : string option; should_run : bool }
+type config = { project : project_config; run_cfg : run_config }
 
 let parse_line line =
   let line = String.trim line in
@@ -99,7 +99,7 @@ let parse_file (filename : string) : config option =
       Some homepage,
       Some repository,
       Some main,
-      Some run ) ->
+      Some should_run ) ->
       let emit = get_string "run.emit" in
       Some
         {
@@ -113,7 +113,7 @@ let parse_file (filename : string) : config option =
               homepage;
               repository;
             };
-          run = { main; emit; run };
+          run_cfg = { main; emit; should_run };
         }
   | _ -> None
 

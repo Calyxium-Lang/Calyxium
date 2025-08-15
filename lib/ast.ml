@@ -1,5 +1,7 @@
 module rec Type : sig
-  type t =
+  type t = ..
+
+  type t +=
     | VarType of int
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
@@ -9,7 +11,9 @@ module rec Type : sig
     | Any
     | Infer
 end = struct
-  type t =
+  type t = ..
+
+  type t +=
     | VarType of int
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
@@ -22,8 +26,9 @@ end
 
 and Stmt : sig
   type parameter = { name : string; param_type : Type.t }
+  type t = ..
 
-  type t =
+  type t +=
     | BlockStmt of { body : t list }
     | FunctionDeclStmt of {
         name : string;
@@ -36,8 +41,9 @@ and Stmt : sig
     | RecordStmt of { name : string; fields : Expr.t list }
 end = struct
   type parameter = { name : string; param_type : Type.t }
+  type t = ..
 
-  type t =
+  type t +=
     | BlockStmt of { body : t list }
     | FunctionDeclStmt of {
         name : string;
@@ -51,7 +57,9 @@ end = struct
 end
 
 and Expr : sig
-  type t =
+  type t = ..
+
+  type t +=
     | IntExpr of { value : Bigint.t }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
@@ -86,8 +94,11 @@ and Expr : sig
     | ImportExpr of { module_name : string list }
     | ModuleExpr of { module_name : string; block : t list }
     | EnumExpr of { name : string; members : string list }
+    | LambdaExpr of { parameters : Stmt.parameter list; body : t }
 end = struct
-  type t =
+  type t = ..
+
+  type t +=
     | IntExpr of { value : Bigint.t }
     | FloatExpr of { value : float }
     | StringExpr of { value : string }
@@ -122,4 +133,5 @@ end = struct
     | ImportExpr of { module_name : string list }
     | ModuleExpr of { module_name : string; block : t list }
     | EnumExpr of { name : string; members : string list }
+    | LambdaExpr of { parameters : Stmt.parameter list; body : t }
 end
