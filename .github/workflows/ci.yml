@@ -27,7 +27,7 @@ jobs:
         with:
           ocaml-compiler: 5
 
-      - run: opam install dune
+      - run: opam install dune menhir
 
       - run: opam exec -- dune build --profile release
 
