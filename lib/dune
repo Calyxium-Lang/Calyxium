@@ -1,29 +1,11 @@
 (library
  (name calyxiumlib)
  (public_name calyxium.lib)
- (modules
-  ast
-  token
-  bigint
-  lexer
-  parser
-  subst
-  typechecker
-  opcode
-  bytecode
-  bytegen
-  gc
-  vm
-  color
-  error
-  help
-  version
-  init
-  formatter
-  pretty
-  toml_config)
+ (wrapped true)
  (libraries calyxium_stdlib unix))
 
 (ocamllex lexer)
 
-(ocamlyacc parser)
+(menhir
+ (modules parser)
+ (flags --unused-precedence-levels))

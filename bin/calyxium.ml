@@ -50,7 +50,7 @@ let parse_file ~flags file =
         ~col:(pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)
         ~source:(Calyxiumlib.Error.get_line file pos.Lexing.pos_lnum);
       exit 1
-  | exception Parsing.Parse_error ->
+  | exception Calyxiumlib.Parser.Error ->
       close_in in_channel;
       let pos = Lexing.lexeme_start_p lexbuf in
       Calyxiumlib.Error.print_error ~file ~msg:"Syntax Error"
@@ -102,7 +102,7 @@ let check_file file =
         ~col:(pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)
         ~source:(Calyxiumlib.Error.get_line file pos.Lexing.pos_lnum);
       exit 1
-  | Parsing.Parse_error ->
+  | Calyxiumlib.Parser.Error ->
       close_in in_channel;
       let pos = Lexing.lexeme_start_p lexbuf in
       Calyxiumlib.Error.print_error ~file ~msg:"Syntax Error"

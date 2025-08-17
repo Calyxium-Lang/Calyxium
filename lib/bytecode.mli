@@ -2,6 +2,7 @@ type function_info = {
   return_type : Ast.Type.t;
   params : Ast.Stmt.parameter list;
   bytecode : Opcode.opcode list;
+  body_code : Opcode.opcode array;
 }
 
 val function_table : (string, function_info) Hashtbl.t

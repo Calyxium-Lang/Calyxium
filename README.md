@@ -13,7 +13,7 @@
 
 <!-- TOC -->
 
-![Build Status](https://github.com/Calyxium-Lang/Calyxium/actions/workflows/ci.yml/badge.svg)
+![Build Status](https://github.com/calyxium-lang/calyxium/actions/workflows/ci.yml/badge.svg)
 
 ## Why
 Going to be real, Calyxium exists because I needed a project impressive enough to skip some classes in my math degree.
@@ -29,16 +29,21 @@ Follow these steps to install and build Calyxium:
 
 2. Clone the repository
     ```bash
-    git clone https://github.com/Calyxium-Lang/Calyxium.git
-    cd Calyxium
+    git clone https://github.com/calyxium-lang/calyxium.git
+    cd calyxium
+    ```
+    
+3. Install the dependency
+    ```bash
+    dune install menhir
     ```
 
-3. Build the projrct
+4. Build the projrct
     ```bash
     dune build --profile release
     ```
 
-4. Install the project
+5. Install the project
     ```bash
     dune install
     ```
@@ -51,12 +56,12 @@ print("Hello, world\n")
 To run your script:
 `calyxium main.cx`
 
-For more detailed documentation, visit the [official documentation](https://calyxium.cc/docs)
+For more detailed documentation, visit the [official documentation](https://calyxium-lang.github.io/docs)
 
 ## Contributing
 We welcome contributions! Whether it's a bug report, feature suggestion, or code contribution:
 
-- File issues via the [issue tracker](http://github.com/Calyxium-Lang/Calyxium/issues)
+- File issues via the [issue tracker](http://github.com/calyxium-lang/calyxium/issues)
 - For the repo and open a pull request
 
 Please follow [conventional commit and PR practices where possible](CONTRIBUTING.md).

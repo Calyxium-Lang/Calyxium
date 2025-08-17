@@ -1,12 +1,6 @@
-let println(n) {
-    print(n ^ "\n")
+let rec loop() {
+    print("Hello, world!\n")
+    loop()
 }
 
-let rec loop(cond) {
-    if cond then {
-        println("Hello, world!")
-        loop(cond)
-    }
-}
-
-loop(true)
+loop()

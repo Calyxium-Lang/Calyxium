@@ -2,7 +2,7 @@
 
 -- basic tests for pattern matching
 
-type Colors = {
+enum Colors = {
     Red, Blue, Green
 }
 
@@ -58,7 +58,7 @@ assert(check(5) == "small")
 assert(check(42) == "magic")
 assert(check(20) == "big")
 
-type Light =  {
+enum Light =  {
     Red, Yellow, Green
 }
 

@@ -2,7 +2,7 @@
 
 -- basic test for records
 
-type Person = {
+record Person = {
     let name = "John Doe" in
     let age = 30 in
 }
@@ -10,7 +10,7 @@ type Person = {
 assert(Person.name ^ "\n" == "John Doe\n")
 assert(to_string(Person.age) ^ "\n" == "30\n")
 
-type Car = {
+record Car = {
     let make = "Tesla" in
     let model = "Model S" in
     let year = 2023 in
@@ -20,14 +20,14 @@ assert(Car.make ^ " " ^ Car.model ^ "\n" == "Tesla Model S\n")
 assert(to_string(Car.year) ^ "\n" == "2023\n")
 
 
-type Ascii = {
+record Ascii = {
     let ascii_vals = [33, 34, 35] in
 }
 
 let ascii_str = to_string(to_byte(Ascii.ascii_vals)) in
 assert(ascii_str == "!\"#")
 
-type Config = {
+record Config = {
     let debug = true in
     let max_connections = 100 in
     let version = "1.0.0" in
@@ -37,7 +37,7 @@ assert(to_string(Config.debug) == "true")
 assert(to_string(Config.max_connections) == "100")
 assert(Config.version == "1.0.0")
 
-type Mixed = {
+record Mixed = {
     let flag = false in
     let count = 42 in
     let message = "Hello" in

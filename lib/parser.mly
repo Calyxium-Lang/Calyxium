@@ -21,13 +21,13 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Use Module True False Type In Lambda IntType FloatType StringType ByteType BoolType UnitType
-%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range Cons
+%token Recursive If Then Else Let Match With Use Module True False In Record Enum Lambda IntType FloatType StringType ByteType BoolType UnitType
+%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift
 %token BitWiseANDAssign BitWiseORAssign BitWiseXORAssign
 %token LeftShiftAssign RightShiftAssign
-%token Plus Minus Star Slash Mod Carot ArrConcat Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Semi Comma Not Pipe DeRef UnderScore Question
+%token Plus Minus Star Slash Mod Carot ArrConcat Assign Greater Less LParen RParen LBracket RBracket LBrace RBrace Dot Colon Comma Not Pipe DeRef UnderScore Question
 %token <string> Ident
 %token <Bigint.t> Int
 %token <float> Float
@@ -54,9 +54,12 @@ stmt:
   | RecordStmt { $1 }
   | expr { Ast.Stmt.ExprStmt $1 }
 
+case:
+  | Pipe match_pattern MapsTo stmt_list { ($2, $4) }
+
 case_list:
-  | Pipe match_pattern MapsTo stmt_list case_list { ($2, $4) :: $5 }
-  | Pipe match_pattern MapsTo stmt_list { [($2, $4)] }
+  | case case_list { $1 :: $2 }
+  | case { [$1] }
 
 match_pattern:
   | expr         { Some $1 }
@@ -106,9 +109,9 @@ match_expr:
   | Match expr With case_list %prec LowPrec { Ast.Expr.MatchExpr { expr = $2; cases = $4 } }
 
 let_in_expr:
-  | Let Ident Colon type_expr Assign expr In %prec LowPrec { Ast.Expr.VarDeclExpr { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
+  | Let single_ident Colon type_expr Assign expr In %prec LowPrec { Ast.Expr.VarDeclExpr { identifier = $2; assigned_value = Some $6; explicit_type = $4 } }
   | Let ident_list Colon type_expr Assign expr_list In %prec LowPrec { Ast.Expr.MultiVarDeclExpr { identifier = $2; assigned_value = $6; explicit_type = $4 } }
-  | Let Ident Assign expr In %prec LowPrec { Ast.Expr.VarDeclExpr { identifier = $2; assigned_value = Some $4; explicit_type = Ast.Type.Infer } }
+  | Let single_ident Assign expr In %prec LowPrec { Ast.Expr.VarDeclExpr { identifier = $2; assigned_value = Some $4; explicit_type = Ast.Type.Infer } }
   | Let ident_list Assign expr_list In %prec LowPrec { Ast.Expr.MultiVarDeclExpr { identifier = $2; assigned_value = $4; explicit_type = Ast.Type.Infer } }
 
 lambda_expr:
@@ -118,7 +121,7 @@ module_expr:
   | Module Ident LBrace expr_list RBrace %prec LowPrec { Ast.Expr.ModuleExpr { module_name = $2; block = $4 } }
 
 enum_expr:
-  | Type Ident Assign LBrace enum_member_list RBrace %prec LowPrec { Ast.Expr.EnumExpr { name = $2; members = $5 } }
+  | Enum Ident Assign LBrace enum_member_list RBrace %prec LowPrec { Ast.Expr.EnumExpr { name = $2; members = $5 } }
 
 import_expr:
   | Use path %prec LowPrec { Ast.Expr.ImportExpr { module_name = $2 } }
@@ -252,8 +255,11 @@ argument_list:
   | expr { [$1] }
   | argument_list Comma expr { $1 @ [$3] }
 
+single_ident:
+  | Ident { $1 }
+
 ident_list:
-  | Ident { [$1] }
+  | Ident Comma Ident { [$1; $3] }
   | ident_list Comma Ident { $1 @ [$3] }
 
 path:
@@ -263,7 +269,7 @@ path:
 enum_member_list:
   | Ident Comma enum_member_list { $1 :: $3 }
   | Ident { [$1] }
-  
+
 FunctionDeclStmt:
   | Let Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = $7; body = $9 } }
   | Let Recursive Ident LParen parameter_list RParen Colon type_expr LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = $8; body = $10 } }
@@ -271,6 +277,7 @@ FunctionDeclStmt:
   | Let Ident LParen parameter_list RParen LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = $4; return_type = Ast.Type.Infer; body = $7 } }
   | Let Recursive Ident LParen parameter_list RParen LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = $5; return_type = Ast.Type.Infer; body = $8 } }
   | Let Ident LParen RParen LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $2; is_rec = false; parameters = []; return_type = Ast.Type.Infer; body = $6 } }
+  | Let Recursive Ident LParen RParen LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = []; return_type = Ast.Type.Infer; body = $7 } }
 
 RecordStmt:
-  | Type Ident Assign LBrace expr_list RBrace {Ast. Stmt.RecordStmt { name = $2; fields = $5; } }
+  | Record Ident Assign LBrace expr_list RBrace { Ast.Stmt.RecordStmt { name = $2; fields = $5; } }

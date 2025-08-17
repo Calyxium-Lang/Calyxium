@@ -2,6 +2,7 @@ type function_info = {
   return_type : Ast.Type.t;
   params : Ast.Stmt.parameter list;
   bytecode : Opcode.opcode list;
+  body_code : Opcode.opcode array;
 }
 
 let function_table = Hashtbl.create 10
@@ -83,7 +84,12 @@ let rec compile_stmt = function
         start_bytecode @ function_body @ [ Opcode.RETURN ]
       in
       Hashtbl.replace function_table name
-        { return_type; params = parameters; bytecode = full_function_bytecode };
+        {
+          return_type;
+          params = parameters;
+          bytecode = full_function_bytecode;
+          body_code = Array.of_list full_function_bytecode;
+        };
       []
   | Ast.Stmt.RecordStmt { name; fields } ->
       let register_struct prefix fields =
@@ -378,6 +384,7 @@ and compile_expr = function
           return_type = Ast.Type.Infer;
           params = parameters;
           bytecode = full_function_bytecode;
+          body_code = Array.of_list full_function_bytecode;
         };
       [ Opcode.CLOSURE func_name ]
   | _ -> failwith "Not Supported"

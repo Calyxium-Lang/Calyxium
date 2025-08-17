@@ -1,20 +1,80 @@
-let bubble_sort(arr) {
-    let rec pass(xs, i, acc, ch) {
-        if i + 1 >= length(xs) then (ch, acc @ (if i < length(xs) then [ xs[i] ] else [])) else {
-            let a = xs[i] in
-            let b = xs[i + 1] in
-            pass(xs, if a > b then i + 2 else i + 1, acc @ (if a > b then [ b, a ] else [ a ]), ch || a > b)
-        }
-    }
-    let rec sort(xs) {
-        let ch, xs' = pass(xs, 0, [], false) in
-        if ch then sort(xs') else xs'
-    }
-    sort(arr)
+-- let bubble_sort(arr) {
+--     let rec pass(xs, i, acc, ch) {
+--         if i + 1 >= length(xs) then (ch, acc @ (if i < length(xs) then [ xs[i] ] else [])) else {
+--             let a = xs[i] in
+--             let b = xs[i + 1] in
+--             pass(xs, if a > b then i + 2 else i + 1, acc @ (if a > b then [ b, a ] else [ a ]), ch || a > b)
+--         }
+--     }
+--     let rec sort(xs) {
+--         let ch, xs' = pass(xs, 0, [], false) in
+--         if ch then sort(xs') else xs'
+--     }
+--     sort(arr)
+-- }
+
+-- let arr = [ 5, 2, 9, 1, 3 ] in
+
+-- let sorted = bubble_sort(arr) in
+
+-- print(sorted)
+
+-- let number = 3 in
+-- let message = if number < 5 then "condition was true" else {
+--     let rec loop(num) { 
+--         if num == 3 then { 
+--             print("Three\n") 
+--             loop(num) 
+--         } 
+--     }
+--     loop(number / 2)
+-- } in
+
+-- print(message)
+
+let rec set(xs, i, v) {
+    if i == 0 then [v] @ tail(xs)
+    else [head(xs)] @ set(tail(xs), i - 1, v)
 }
 
-let arr = [ 5, 2, 9, 1, 3 ] in
+let rec get(xs, i) {
+    if i == 0 then head(xs)
+    else get(tail(xs), i - 1)
+}
 
-let sorted = bubble_sort(arr) in
+let rec mark_multiples(xs, p, i, limit) {
+    if i > limit then xs
+    else {
+        let xs' = set(xs, i, false) in
+        mark_multiples(xs', p, i + p, limit)
+    }
+}
 
-print(sorted)
+let rec sieve(xs, p, limit) {
+    if p * p > limit then xs
+    else if get(xs, p) then {
+        let xs' = mark_multiples(xs, p, p * p, limit) in
+        sieve(xs', p + 1, limit)
+    } else
+        sieve(xs, p + 1, limit)
+}
+
+let rec count_primes(xs, i, limit, acc) {
+    if i > limit then acc
+    else count_primes(xs, i + 1, limit, acc + (if get(xs, i) then 1 else 0))
+}
+
+let rec build_array(n, v) {
+    if n == 0 then []
+    else [v] @ build_array(n - 1, v)
+}
+
+let limit = 1000000 in
+let arr = build_array(limit + 1, true) in
+let arr1 = set(set(arr, 0, false), 1, false) in
+
+let arr' = sieve(arr1, 2, limit) in
+let total_primes = count_primes(arr', 2, limit, 0) in
+
+print("Total primes up to 1,000,000: ")
+print(total_primes)

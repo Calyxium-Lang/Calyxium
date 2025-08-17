@@ -652,32 +652,33 @@ let run instructions =
             push_frame code local_env
         | Opcode.TAIL_CALL function_name ->
             push_trace ("TAIL_CALL " ^ function_name);
-            let function_body = resolve_function_body function_name in
-            let param_names =
-              List.map
-                (fun (p : Ast.Stmt.parameter) -> p.Ast.Stmt.name)
-                function_body.Bytecode.params
-            in
-            let arg_count = List.length param_names in
 
-            if Stack.length stack < arg_count then
+            let fn = resolve_function_body function_name in
+            let arity = List.length fn.Bytecode.params in
+
+            if Stack.length stack < arity then
               runtime_error
                 ("TAIL_CALL to '" ^ function_name ^ "' requires "
-               ^ string_of_int arg_count ^ " arguments, but stack has only "
+               ^ string_of_int arity ^ " arguments, but stack has only "
                 ^ string_of_int (Stack.length stack));
 
-            let raw_args = pop_n [] arg_count in
-            let local_env =
-              List.combine param_names (List.map (fun v -> (v, true)) raw_args)
+            let args_rev = pop_n [] arity in
+            let args = List.rev args_rev in
+
+            let frame = Stack.top frame_stack in
+
+            let new_env =
+              List.map2
+                (fun (p : Ast.Stmt.parameter) v -> (p.Ast.Stmt.name, (v, true)))
+                fn.Bytecode.params args
             in
 
-            let skip_header = 1 + arg_count in
-            let body = List.drop skip_header function_body.Bytecode.bytecode in
-            let code = Array.of_list body in
-            let frame = Stack.top frame_stack in
-            frame.code <- code;
-            frame.pc <- 0;
-            frame.env <- local_env
+            let roots = Gc.get_stack_roots stack in
+            Gc.maybe_collect_gc roots new_env;
+
+            frame.env <- new_env;
+            frame.code <- fn.Bytecode.body_code;
+            frame.pc <- 0
         | Opcode.RETURN ->
             push_trace "RETURN";
             let return_value =
