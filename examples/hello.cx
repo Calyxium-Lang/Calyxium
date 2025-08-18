@@ -1,7 +1,6 @@
-let println(n: string): unit {
-    print(n ^ "\n")
+let rec loop() {
+    print("Hello, world!\n")
+    loop()
 }
 
-for (;;) {
-    println("Hello")
-}
+loop()

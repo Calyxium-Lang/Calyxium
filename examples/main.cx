@@ -1,3 +1,20 @@
-for (;;) {
-    print("Hello, world\n")
+let is_num(char) {
+    let char_int = to_int(char) in
+    (char_int >= 48) && (char_int <= 57)
 }
+
+let to_int_safe(x) {
+    let bytes = to_bytes(x) in
+
+    let rec collect_digits(i, acc) {
+        if i >= length(bytes) then acc else
+            let char = bytes[i] in
+            let acc2 = if is_num(char) then acc ^ (char |> to_string) else acc in
+            collect_digits(i + 1, acc2)
+    }
+
+    let result = collect_digits(0, "") in
+    print(result)
+}
+
+to_int_safe("1 hioe lfao jiosja 3 3849")

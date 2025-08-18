@@ -1,16 +1,50 @@
--- $Id: tests/bitwise.cx $
+-- Id: tests/bitwise.cx
 
-assert(~0 == -1)
+assert(lnot 0 == -1)
+assert(lnot -1 == 0)
+assert(lnot 1 == -2)
 
--- $ basic tests for bitwise operators $
-let a: int = 0xFFFFFFFFFFFFFFFF
-assert((a == -1) && ((a & -1) == a) && ((a & 35) == 35))
-let b: int = 0xFFFFFFFFFFFFFFFF 
-assert((b ` -1) == -1)
-assert(((b $ b) == 0) && ((b $ 0) == b) && ((b $ (~b)) == -1))
-assert((b >> 4) == -1)
-let c, d, e, f: int = 0xF0, 0xCC, 0xAA, 0xFD
-assert((c ` d $ e & f) == 0xF4)
-let g, h, i, j: int = 0xF0000000, 0xCC000000, 0xAA000000, 0xFD000000
-assert((g ` (h $ (i & j))) == 0xF4000000)
-assert((~ (~ g)) == g && (~ g) == ((-1) $ g) && (- h) == ((~ h) + 1))
+let a = 0xFFFFFFFFFFFFFFFF in
+assert((a == -1) && ((a land -1) == a) && ((a land 35) == 35))
+let b = 0xFFFFFFFFFFFFFFFF in
+assert((b lor -1) == -1)
+assert(((b lxor b) == 0) && ((b lxor 0) == b) && ((b lxor (lnot b)) == -1))
+
+let c, d, e, f = 0xF0, 0xCC, 0xAA, 0xFD in
+assert((c lor d lxor e land f) == 0xF4)
+let g, h, i, j = 0xF0000000, 0xCC000000, 0xAA000000, 0xFD000000 in
+assert((g lor (h lxor (i land j))) == 0xF4000000)
+assert((lnot (lnot g)) == g && (lnot g) == ((-1) lxor g) && (-h) == ((lnot h) + 1))
+
+let p1, p2, p3 = 1, 2, 4 in
+assert((p1 lor p2) == 3)
+assert((p1 lxor p3) == 5)
+assert((p3 land p2) == 0)
+assert((p3 lsl 2) == 16)
+assert((p3 lsr 2) == 1)
+
+let s = 0x12345678 in
+assert(((s lsl 4) lsr 4) == s)
+assert((s lsr 8) == 0x123456)
+
+let n1, n2 = -42, -123456 in
+assert((n1 lor n2) == lnot ((lnot n1) land (lnot n2)))
+assert((n1 lxor n2) == (lnot ((n1 land n2) lor (lnot n1 land lnot n2))))
+assert((n1 land -1) == n1)
+assert((n2 lsr 0) == n2)
+
+let m1, m2, m3 = 0xAAAAAAAAAAAAAAAA, 0x5555555555555555, 0x0F0F0F0F0F0F0F0F in
+assert((m1 land m2) == 0)
+assert((m1 lor m2) == -1)
+assert((m1 lxor m2) == -1)
+assert((m3 land m1) == 0x0A0A0A0A0A0A0A0A)
+
+let x = 0xF0F0 in
+let y = 0x00FF in
+let z = 0x1234 in
+assert((x lxor y land z lor (lnot z)) == ((x lxor (y land z)) lor (lnot z)))
+
+assert((1 lsl 63) == 9223372036854775808)
+assert((9223372036854775808 lsr 63) == 1)
+assert((1 lsl 0) == 1)
+assert((1 lsr 0) == 1)

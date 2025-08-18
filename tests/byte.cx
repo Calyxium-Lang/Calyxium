@@ -1,27 +1,91 @@
--- $Id: tests/byte.cx $
+-- Id: tests/byte.cx
 
--- $ basic test for bytes $
-let a: byte = 'A'
+-- basic single byte checks
+let a = 'A' in 
 assert(a == 'A')
 
-let arr: []byte = {'H', 'e', 'l', 'l', 'o'}
+let c = 'c' in
+let d = 'c' in
+assert(c == d)
+
+let arr = ['H', 'e', 'l', 'l', 'o'] in
 assert(arr[0] == 'H')
 assert(arr[4] == 'o')
 
-let c: byte = 'c'
-let d: byte = 'c'
-assert(c == d)
-
-let greeting: []byte = {'H', 'i'}
+let greeting = ['H', 'i'] in
 assert(greeting[0] == 'H')
 assert(greeting[1] == 'i')
 assert(to_string(greeting) == "Hi")
 
-let empty: []byte = {}
+let empty = [] in
 assert(length(empty) == 0)
 
-let byte_str: string = "Byte test"
-let byte_arr: []byte = to_bytes(byte_str)
+let byte_str = "Byte test" in
+let byte_arr = to_bytes(byte_str) in
 assert(length(byte_arr) == 9)
 assert(byte_arr[0] == 'B')
 assert(byte_arr[8] == 't')
+
+assert(to_int('0') == 48)
+assert(to_int('9') == 57)
+
+assert(to_int('A') == 65)
+assert(to_int('Z') == 90)
+
+assert(to_int('a') == 97)
+assert(to_int('z') == 122)
+
+assert(to_int('!') == 33)
+assert(to_int('@') == 64)
+assert(to_int('#') == 35)
+assert(to_int('$') == 36)
+assert(to_int('%') == 37)
+assert(to_int('&') == 38)
+
+assert(to_int(' ') == 32)
+assert(to_int('\n') == 10)
+assert(to_int('\t') == 9)
+
+assert(to_byte(10) == '\n')
+assert(to_byte(65) == 'A')
+assert(to_byte(122) == 'z')
+
+let ascii_vals = [33, 34, 35, 36, 37, 38, 39] in
+let ascii_str = to_string(to_byte(ascii_vals)) in
+assert(ascii_str == "!\"#$%&'")
+
+let upper = to_bytes("HELLO") in
+let lower = to_bytes("hello") in
+let rec check_case_down(i) {
+    if i < length(upper) then {
+        assert(to_int(upper[i]) + 32 == to_int(lower[i]))
+        check_case_down(i + 1)
+    }
+}
+check_case_down(0)
+
+let rec check_case_up(i) {
+    if i < length(lower) then {
+        assert(to_int(lower[i]) - 32 == to_int(upper[i]))
+        check_case_up(i + 1)
+    }
+}
+check_case_up(0)
+
+let s1 = "abc" in
+let s2 = "123" in
+let s_combined = s1 ^ s2 in
+assert(s_combined == "abc123")
+
+let original = "roundtrip" in
+let as_bytes = to_bytes(original) in
+let back_str = to_string(as_bytes) in
+assert(back_str == original)
+
+let rec check_ascii(i) {
+    if i < 16 then {
+        assert(to_int(to_byte(i)) == i)
+        check_ascii(i + 1)
+    }
+}
+check_ascii(0)

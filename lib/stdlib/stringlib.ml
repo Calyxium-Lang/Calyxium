@@ -1,5 +1,5 @@
 module String = struct
-  let contains (str : string) (substr : string) : bool =
+  let contains str substr =
     let len_str = String.length str in
     let len_sub = String.length substr in
     let rec aux i =
@@ -9,7 +9,7 @@ module String = struct
     in
     if len_sub = 0 then true else aux 0
 
-  let split (str : string) (sep : string) : string list =
+  let split str sep =
     let len = String.length str in
     let len_sep = String.length sep in
     if len_sep = 0 then failwith "split: empty separator"
@@ -27,11 +27,11 @@ module String = struct
       in
       aux [] 0
 
-  let replace (str : string) (target : string) (replacement : string) : string =
+  let replace str target replacement =
     let parts = split str target in
     String.concat replacement parts
 
-  let strip (str : string) : string =
+  let strip str =
     let is_space c = c = ' ' || c = '\n' || c = '\t' || c = '\r' in
     let len = String.length str in
     let rec left i =

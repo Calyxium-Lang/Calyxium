@@ -1,8 +1,5 @@
-let x: int = ref 10
-
+let x = ref 10
 x := 12
--- prints 12
-print(x)
+print(!x) -- prints 10
 
--- prints 10
-print(!x)
+print(x) -- prints 12

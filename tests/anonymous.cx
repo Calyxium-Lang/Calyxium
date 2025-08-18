@@ -1,0 +1,49 @@
+-- Id: tests/anonymous.cx
+
+-- basic test for anonymous functions
+
+assert(5 |> fn x -> x * x == 25)
+assert(3 |> fn y -> y + 7 == 10)
+assert(10 |> fn n -> n / 2 == 5) 
+assert(4 |> fn a -> a * a * a == 64)
+assert("hello" |> fn s -> s ^ " world" == "hello world")
+assert(8 |> fn x -> x % 3 == 2)
+assert(0 |> fn b -> (if b == 0 then 1 else 0) == 1)
+assert(7 |> fn x -> x + 1 |> fn y -> y * 2 == 16)
+
+let sqr = fn x -> x * x in
+assert((5 |> sqr) == 25)
+let add10 = fn n -> n + 10 in
+assert((7 |> add10) == 17)
+let greet = fn name -> "Hello, " ^ name in
+assert(("World" |> greet) == "Hello, World")
+
+let double = fn x -> x * 2 in
+assert((5 |> double) |> fn y -> y + 3 == 13)
+let triple = fn x -> x * 3 in
+assert((2 |> triple) |> fn z -> z - 1 == 5)
+
+let inc = fn n -> n + 1 in
+assert((5 |> inc) |> fn x -> x * 2 == 12)
+
+let concat_excl = fn s -> s ^ "!" in
+assert(("Hi" |> concat_excl) == "Hi!")
+
+assert(3 |> fn x -> x + 2 |> fn y -> y * 3 == 15)
+assert(4 |> fn a -> a * 2 |> fn b -> b + 7 |> fn c -> c / 3 == 5)
+assert(2 |> fn x -> x + 5 |> fn y -> y * y |> fn z -> z - 10 == 39)
+
+assert(5 |> fn x -> (if x > 0 then x else -x) == 5)
+assert(-3 |> fn n -> (if n < 0 then n * -1 else n) == 3)
+assert(0 |> fn v -> (if v == 0 then 42 else 0) == 42)
+
+assert("foo" |> fn s -> s ^ "bar" == "foobar")
+assert("cat" |> fn s -> s ^ "dog" |> fn t -> t ^ "!" == "catdog!")
+
+assert(9 |> fn x -> x % 4 == 1)
+assert(16 |> fn x -> x / 4 |> fn y -> y * 2 == 8)
+assert(7 |> fn n -> n + 2 |> fn m -> m - 3 == 6)
+
+assert(5 |> fn x -> x + 3 |> fn y -> y * 2 |> fn z -> z - 4 == 12)
+assert(2 |> fn a -> a * 5 |> fn b -> b + 10 |> fn c -> c / 2 == 10)
+assert(3 |> fn x -> x + 1 |> fn y -> y ** 2 |> fn z -> z - 1 == 15)

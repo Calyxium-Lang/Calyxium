@@ -1,5 +1,5 @@
-let swap(a: string, x: int): (int, string) {
-    return (x, a)
+let swap(a, x) {
+    (x, a)
 }
 
 print(swap("Hello", 5))

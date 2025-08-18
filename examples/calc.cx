@@ -1,8 +1,8 @@
-let a: float = input("Enter value a: ")
-let b: float = input("Enter value b: ")
-let op: byte = input("Enter operator: ")
+let a = input("Enter value a: ") in
+let b = input("Enter value b: ") in
+let op = input("Enter operator: ") in
 
-let safeDiv(a: float, b: float): unit {
+let safeDiv(a, b) {
     if b == 0.0 then panic("Can't divide by zero\n") else print(a / b)
 }
 

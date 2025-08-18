@@ -27,14 +27,9 @@ jobs:
         with:
           ocaml-compiler: 5
 
-      - name: Set-up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+      - run: opam install dune menhir
 
-      - run: opam install dune
+      - run: opam exec -- dune build --profile release
 
-      - run: opam exec -- dune build
-
-      - name: Run Python tests
-        run: python run_tests.py
+      - name: Run tests
+        run: opam exec -- dune runtest

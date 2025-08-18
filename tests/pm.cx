@@ -1,13 +1,14 @@
--- $Id: tests/pm.cx $
+-- Id: tests/pm.cx
 
--- $ basic tests for pattern matching $
-enum Colors {
+-- basic tests for pattern matching
+
+enum Colors = {
     Red, Blue, Green
 }
 
-let c: Colors = Colors.Green
+let c = Colors.Green in
 
-let result(): string {
+let result() {
     match c with
         | Colors.Red -> "Red"
         | Colors.Blue -> "Blue"
@@ -17,7 +18,7 @@ let result(): string {
 
 assert(result() == "Green")
 
-let numbers(n: int): string {
+let numbers(n) {
     match n with
         | 0 -> "zero"
         | 1 -> "one"
@@ -27,7 +28,7 @@ let numbers(n: int): string {
 assert(numbers(0) == "zero")
 assert(numbers(32) == "many")
 
-let pair(p: (int, int)): string {
+let pair(p) {
     match p with
         | (0, 0) -> "origin"
         | _ -> "somewhere" 
@@ -36,7 +37,7 @@ let pair(p: (int, int)): string {
 assert(pair((0, 0)) == "origin")
 assert(pair((1, 2)) == "somewhere")
 
-let parity(n: int): string {
+let parity(n) {
     match n % 2 with
         | 0 -> "even"
         | _ -> "odd"
@@ -45,7 +46,7 @@ let parity(n: int): string {
 assert(parity(4) == "even")
 assert(parity(5) == "odd")
 
-let check(n: int): string {
+let check(n) {
     if n > 10 then
         match n with
             | 42 -> "magic"
@@ -57,11 +58,11 @@ assert(check(5) == "small")
 assert(check(42) == "magic")
 assert(check(20) == "big")
 
-enum Light {
+enum Light =  {
     Red, Yellow, Green
 }
 
-let describe_light(l: Light): string {
+let describe_light(l) {
     match l with
         | Light.Red -> "stop"
         | Light.Green -> "go"
@@ -73,7 +74,7 @@ let describe_light(l: Light): string {
 assert(describe_light(Light.Red) == "stop")
 assert(describe_light(Light.Yellow) == "slow")
 
-let sign(n: int): string {
+let sign(n) {
     if n > 0 then "positive" else "non-positive"
 }
 
@@ -81,7 +82,7 @@ assert(sign(5) == "positive")
 assert(sign(0) == "non-positive")
 assert(sign(-3) == "non-positive")
 
-let nested(n: int): string {
+let nested(n) {
     if n > 0 then
         if n > 10 then "big positive" else "small positive" 
     else "non-positive"
@@ -91,7 +92,7 @@ assert(nested(5) == "small positive")
 assert(nested(20) == "big positive")
 assert(nested(0) == "non-positive")
 
-let fancy(n: int): string {
+let fancy(n) {
     if n < 0 then "negative" else match n with
         | 0 -> "zero"
         | _ -> "positive"
@@ -101,7 +102,7 @@ assert(fancy(-1) == "negative")
 assert(fancy(0) == "zero")
 assert(fancy(5) == "positive")
 
-let complex_match(x: (int, string)): string {
+let complex_match(x) {
     match x with
         | (0, "zero") -> "zero pair"
         | (1, "one") -> "one pair"
@@ -112,7 +113,7 @@ assert(complex_match((0, "zero")) == "zero pair")
 assert(complex_match((1, "one")) == "one pair")
 assert(complex_match((2, "two")) == "other pair")
 
-let nested_match(x: (int, (string, bool))): string {
+let nested_match(x) {
     match x with
         | (0, ("zero", true)) -> "zero true"
         | (1, ("one", false)) -> "one false"
@@ -123,7 +124,7 @@ assert(nested_match((0, ("zero", true))) == "zero true")
 assert(nested_match((1, ("one", false))) == "one false")
 assert(nested_match((2, ("two", true))) == "other")
 
-let then_branch(n: int): string {
+let then_branch(n) {
     if n > 0 then
         match n with
             | 1 -> "one"

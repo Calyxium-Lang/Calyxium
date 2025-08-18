@@ -1,4 +1,6 @@
-type t =
+type t = ..
+
+type t +=
   | Eq
   | Neq
   | Geq
@@ -20,6 +22,7 @@ type t =
   | Slash
   | Mod
   | Carot
+  | ArrConcat
   | Assign
   | Greater
   | Less
@@ -35,16 +38,18 @@ type t =
   | Comma
   | Not
   | Pipe
+  | DeRef
   | UnderScore
   | Function
+  | Question
   | Recursive
   | If
+  | Then
   | Else
   | Let
   | Match
   | With
   | Return
-  | For
   | Use
   | Module
   | True
@@ -57,8 +62,8 @@ type t =
   | ByteType
   | BoolType
   | UnitType
-  | Identifier of string
-  | Int of int64
+  | Ident of string
+  | Int of Bigint.t
   | Float of float
   | String of string
   | Byte of char
@@ -72,11 +77,11 @@ type t =
   | BitWiseNOT
   | LeftShift
   | RightShift
-  | RightShiftLogical
   | BitWiseANDAssign
   | BitWiseORAssign
   | BitWiseXORAssign
   | LeftShiftAssign
   | RightShiftAssign
   | Pipeline
+  | Range
   | EOF

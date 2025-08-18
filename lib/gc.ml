@@ -1,16 +1,13 @@
 open Opcode
 
-let interned_strings : (string, int) Hashtbl.t = Hashtbl.create 100
+let interned_strings = Hashtbl.create 100
 
-type heap_obj =
-  | HString of string
-  | HArray of float array
-  | HBytes of char array
-  | HClosure of string * opcode list * (string * (value * bool)) list
+type heap_obj = ..
+type value = ..
 
-and value =
+type value +=
   | VFloat of float
-  | VInt64 of int64
+  | VInt of Bigint.t
   | VBool of bool
   | VByte of char
   | VHeapRef of int
@@ -20,6 +17,15 @@ and value =
   | VModule of (string, value) Hashtbl.t
   | VNative of (value list -> value)
   | VClosure of string
+  | VThunk of (unit -> value)
+  | VRange of int
+
+type heap_obj +=
+  | HString of string
+  | HArray of float array
+  | HBytes of char array
+  | HClosure of string * opcode list * (string * (value * bool)) list
+  | HRange of { current : Bigint.t; step : Bigint.t; end_ : Bigint.t option }
 
 type generation = {
   objs : (int, heap_obj) Hashtbl.t;
@@ -47,14 +53,23 @@ let find_heap_obj id =
   with Not_found -> Hashtbl.find old_gen.objs id
 
 let get_string id =
-  match try Some (find_heap_obj id) with Not_found -> None with
+  let opt_obj = try Some (find_heap_obj id) with Not_found -> None in
+  match opt_obj with
   | Some (HString s) -> Some s
-  | _ -> None
+  | Some _ -> None
+  | None -> None
 
 let get_bytes id =
   match try Some (find_heap_obj id) with Not_found -> None with
   | Some (HBytes arr) -> Some arr
-  | _ -> None
+  | Some _ -> None
+  | None -> None
+
+let get_array id =
+  match try Some (find_heap_obj id) with Not_found -> None with
+  | Some (HArray arr) -> Some arr
+  | Some _ -> None
+  | None -> None
 
 let get_value id =
   match try Some (find_heap_obj id) with Not_found -> None with
@@ -65,12 +80,9 @@ let get_value id =
   | Some (HArray floats) ->
       Some (VArray (Array.to_list (Array.map (fun f -> VFloat f) floats)))
   | Some (HClosure (name, _, _)) -> Some (VClosure name)
+  | Some (HRange _) -> Some (VRange id)
+  | Some _ -> None
   | None -> None
-
-let get_array id =
-  match try Some (find_heap_obj id) with Not_found -> None with
-  | Some (HArray arr) -> Some arr
-  | _ -> None
 
 let mark id gen =
   if not (Hashtbl.mem gen.marked id) then Hashtbl.replace gen.marked id true
@@ -80,7 +92,7 @@ let mark_value v =
   Stack.push v stack;
   while not (Stack.is_empty stack) do
     match Stack.pop stack with
-    | VHeapRef id -> (
+    | VHeapRef id | VRange id -> (
         try
           ignore (Hashtbl.find young_gen.objs id);
           mark id young_gen
@@ -91,7 +103,7 @@ let mark_value v =
           with Not_found -> ()))
     | VArray values | VTuple values ->
         List.iter (fun v -> Stack.push v stack) values
-    | _ -> ()
+    | (_ : value) -> ()
   done
 
 let mark_env env = List.iter (fun (_, (v, _)) -> mark_value v) env
@@ -164,6 +176,11 @@ let alloc_array_with_gc stack env arr =
   let roots = get_stack_roots stack in
   maybe_collect_gc roots env;
   alloc_in_young (HArray arr)
+
+let alloc_range current step end_ =
+  let id = alloc_id () in
+  Hashtbl.add young_gen.objs id (HRange { current; step; end_ });
+  VHeapRef id
 
 let reset_heap () =
   Hashtbl.clear young_gen.objs;

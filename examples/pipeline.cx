@@ -1,9 +1,0 @@
-let double(x: int): int {
-    x * 2
-}
-
-let sqr(x: int): int {
-    x * x
-}
-
-3 |> double |> sqr |> print

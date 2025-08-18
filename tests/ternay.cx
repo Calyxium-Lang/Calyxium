@@ -1,23 +1,24 @@
--- $Id: tests/ternay.cx $
+-- Id: tests/ternay.cx
 
--- $ basic tests for ternay $
-let a, b: int = 10, 20
+-- basic tests for ternay
 
-let max: int = (a > b) ? a : b
+let a, b = 10, 20 in
+
+let max = (a > b) ? a : b in
 assert(max == 20)
 
-let min: int = (a < b) ? a : b
+let min = (a < b) ? a : b in
 assert(min == 10)
 
-let check: string = (a == 10) ? "yes" : "no"
+let check = (a == 10) ? "yes" : "no" in
 assert(check == "yes")
 
-let nested: int = (a == 10) ? ((b == 20) ? 100 : 200) : 300
+let nested = (a == 10) ? ((b == 20) ? 100 : 200) : 300 in
 assert(nested == 100)
 
-let complex: string = (a > b) ? ((b < 30) ? "A" : "B") : ((a < 5) ? "C" : "D")
+let complex = (a > b) ? ((b < 30) ? "A" : "B") : ((a < 5) ? "C" : "D") in
 assert(complex == "D")
 
-let condition: bool = true
-let result: string = (condition) ? "Condition is true" : "Condition is false"
+let condition = true in
+let result = (condition) ? "Condition is true" : "Condition is false" in
 assert(result == "Condition is true")

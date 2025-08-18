@@ -1,16 +1,37 @@
--- $Id: tests/enum.cx $
+-- Id: tests/enum.cx
 
--- $ basic tests for enum $
-enum Week {
+-- basic tests for enum
+
+enum Week = {
     Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
 }
 
-let week_names: []string = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
+let week_names = [ "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" ] in
 
-let week_to_string(day: Week): string {
+let week_to_string(day) {
     week_names[day]
 }
 
-let tuesday_str: string = week_to_string(Week.Tuesday)
+let tuesday_str = week_to_string(Week.Tuesday) in
 
 assert(tuesday_str == "Tuesday")
+
+assert(Week.Monday != Week.Tuesday)
+assert(Week.Sunday == Week.Sunday)
+
+let weekend = [ Week.Saturday, Week.Sunday ] in
+assert(week_to_string(weekend[0]) == "Saturday")
+assert(week_to_string(weekend[1]) == "Sunday")
+
+let describe_day(day) {
+    match day with
+    | Week.Monday -> "Start of the week"
+    | Week.Friday -> "End of workweek"
+    | Week.Saturday -> "Weekend"
+    | Week.Sunday -> "Weekend"
+    | _ -> "Midweek"
+}
+
+assert(describe_day(Week.Monday) == "Start of the week")
+assert(describe_day(Week.Wednesday) == "Midweek")
+assert(describe_day(Week.Saturday) == "Weekend")

@@ -1,5 +1,7 @@
-type opcode =
-  | LOAD_INT64 of int64
+type opcode = ..
+
+type opcode +=
+  | LOAD_INT of Bigint.t
   | LOAD_FLOAT of float
   | LOAD_STRING of string
   | LOAD_BYTE of char
@@ -43,6 +45,7 @@ type opcode =
   | FLOAT
   | INT
   | STRING
+  | BYTES
   | BYTE
   | PLUSASSIGN
   | MINUSASSIGN
@@ -55,7 +58,6 @@ type opcode =
   | BITWISENOT
   | LEFTSHIFT
   | RIGHTSHIFT
-  | RIGHTSHIFTLOGICAL
   | BITWISEANDASSIGN
   | BITWISEORASSIGN
   | BITWISEXORASSIGN
@@ -66,3 +68,11 @@ type opcode =
   | LOAD_FIELD of string
   | CLOSURE of string
   | PANIC
+  | MAKE_RANGE
+  | ARRAYCONCAT
+  | SLICE
+  | TYPE
+  | CALL_CLOSURE of int
+  | TAIL
+  | HEAD
+  | REVERSE

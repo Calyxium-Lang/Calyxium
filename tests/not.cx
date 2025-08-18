@@ -1,0 +1,60 @@
+-- Id: tests/not.cx
+
+-- basic tests for not
+
+assert(not true == false)
+assert(not false == true)
+assert(not (1 == 2) == true)
+assert(not (1 < 2) == false)
+assert(not (0 >= 0) == false)
+
+let negate_eq(x, y) {
+    not (x == y)
+}
+
+assert(negate_eq(1, 1) == false)
+assert(negate_eq(1, 2) == true)
+
+let logic(a) {
+    if not (a > 0) then "non-positive" else "positive"
+}
+
+assert(logic(0) == "non-positive")
+assert(logic(-5) == "non-positive")
+assert(logic(10) == "positive")
+
+assert(not not true == true)
+assert(not not false == false)
+assert(not not not true == false)
+assert(not not not not true == true)
+
+assert(not (true && false) == true)
+assert(not (true || false) == false)
+assert(not ((1 < 2) && (3 > 2)) == false)
+assert(not ((1 == 2) || (2 == 2)) == false)
+assert(not ((5 <= 10) && not (10 < 5)) == false)
+
+let describe(x) {
+    if not (x == 0) then "non-zero" else "zero"
+}
+
+assert(describe(0) == "zero")
+assert(describe(5) == "non-zero")
+assert(describe(-1) == "non-zero")
+
+let deep_not(b) {
+    not not not not b
+}
+
+assert(deep_not(true) == true)
+assert(deep_not(false) == false)
+
+let rec loop_count_inner(i, count) {
+    if i == 3 then count else loop_count_inner(i + 1, count + 1)
+}
+
+let loop_count() {
+    loop_count_inner(0, 0)
+}
+
+assert(loop_count() == 3)

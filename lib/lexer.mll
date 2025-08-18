@@ -4,11 +4,14 @@
   let at_line_start = ref true
 }
 
-let whitespace = [' ' '\t']
+let whitespace = [' ' '\t' '\r']
 let newline = '\n'
-let identifier = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let identifier = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
 let digits = ['0'-'9']+
-let floats = digits '.' digits+
+let sign = ['+' '-']
+let float1 = digits '.' digits ['e' 'E'] sign? digits
+let float2 = digits '.' digits
+let float3 = digits ['e' 'E'] sign? digits
 
 rule token = parse
   | whitespace               { token lexbuf }
@@ -35,6 +38,7 @@ rule token = parse
   | "|>"                     { at_line_start := false; Pipeline }
   | "<<="                    { at_line_start := false; LeftShiftAssign }
   | ">>="                    { at_line_start := false; RightShiftAssign }
+  | ".."                     { at_line_start := false; Range }
 
   | "+"                      { at_line_start := false; Plus }
   | "-"                      { at_line_start := false; Minus }
@@ -42,6 +46,7 @@ rule token = parse
   | "/"                      { at_line_start := false; Slash }
   | "%"                      { at_line_start := false; Mod }
   | "^"                      { at_line_start := false; Carot }
+  | "@"                      { at_line_start := false; ArrConcat }
   | "="                      { at_line_start := false; Assign }
   | ">"                      { at_line_start := false; Greater }
   | "<"                      { at_line_start := false; Less }
@@ -53,19 +58,18 @@ rule token = parse
   | "}"                      { at_line_start := false; RBrace }
   | "."                      { at_line_start := false; Dot }
   | ":"                      { at_line_start := false; Colon }
-  | ";"                      { at_line_start := false; Semi }
   | ","                      { at_line_start := false; Comma }
-  | "!"                      { at_line_start := false; Not }
+  | "not"                    { at_line_start := false; Not }
   | "|"                      { at_line_start := false; Pipe }
+  | "!"                      { at_line_start := false; DeRef }
   | "_"                      { at_line_start := false; UnderScore }
   | "?"                      { at_line_start := false; Question }
-  | "`"                      { at_line_start := false; BitWiseOR }
-  | "&"                      { at_line_start := false; BitWiseAND }
-  | "~"                      { at_line_start := false; BitWiseNOT }
-  | "$"                      { at_line_start := false; BitWiseXOR }
-  | "<<"                     { at_line_start := false; LeftShift }
-  | ">>"                     { at_line_start := false; RightShift }
-  | ">>>"                    { at_line_start := false; RightShiftLogical }
+  | "lor"                    { at_line_start := false; BitWiseOR }
+  | "land"                   { at_line_start := false; BitWiseAND }
+  | "lnot"                   { at_line_start := false; BitWiseNOT }
+  | "lxor"                   { at_line_start := false; BitWiseXOR }
+  | "lsl"                    { at_line_start := false; LeftShift }
+  | "lsr"                    { at_line_start := false; RightShift }
 
   | "rec"                    { at_line_start := false; Recursive }
   | "if"                     { at_line_start := false; If }
@@ -74,22 +78,26 @@ rule token = parse
   | "let"                    { at_line_start := false; Let }
   | "match"                  { at_line_start := false; Match }
   | "with"                   { at_line_start := false; With }
-  | "for"                    { at_line_start := false; For }
   | "use"                    { at_line_start := false; Use }
   | "mod"                    { at_line_start := false; Module }
   | "true"                   { at_line_start := false; True }
   | "false"                  { at_line_start := false; False }
+  | "in"                     { at_line_start := false; In }
+  | "fn"                     { at_line_start := false; Lambda }
+  | "record"                 { at_line_start := false; Record }
   | "enum"                   { at_line_start := false; Enum }
 
-  | "int"                    { at_line_start := false; Int64Type }
+  | "int"                    { at_line_start := false; IntType }
   | "float"                  { at_line_start := false; FloatType }
   | "string"                 { at_line_start := false; StringType }
   | "byte"                   { at_line_start := false; ByteType }
   | "bool"                   { at_line_start := false; BoolType }
   | "unit"                   { at_line_start := false; UnitType }
 
-  | floats as f              { at_line_start := false; Float (float_of_string f) }
-  | digits as d              { at_line_start := false; Int64 (Int64.of_string d) }
+  | float1 as f              { at_line_start := false; Float (float_of_string f) }
+  | float2 as f              { at_line_start := false; Float (float_of_string f) }
+  | float3 as f              { at_line_start := false; Float (float_of_string f) }
+  | digits as d              { at_line_start := false; Int (Bigint.of_string d) }
   | identifier as id         { at_line_start := false; Ident id }
 
   | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\''  { at_line_start := false; let c = match esc with | 'n' -> '\n' | 't' -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | '0' -> '\000' | _ -> esc in Byte c }
@@ -97,8 +105,8 @@ rule token = parse
   | '\''                    { raise (LexerError ("Unterminated character literal", Lexing.lexeme_start_p lexbuf)) }
   | '"'                     { at_line_start := false; read_string (Buffer.create 16) lexbuf }
   | eof                     { EOF }
-  | "0b" ['0'-'1']+ as bin  { at_line_start := false; let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in Int64 (Int64.of_int (parse 2 0)) }
-  | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+ as hex { at_line_start := false; let len = String.length hex in let rec parse i acc = if i = len then acc else let v = match hex.[i] with | '0'..'9' -> int_of_char hex.[i] - int_of_char '0' | 'a'..'f' -> 10 + int_of_char hex.[i] - int_of_char 'a' | 'A'..'F' -> 10 + int_of_char hex.[i] - int_of_char 'A' | _ -> failwith "Invalid hex digit" in parse (i + 1) ((acc lsl 4) lor v) in Int64 (Int64.of_int (parse 2 0)) }
+  | "0b" ['0'-'1']+ as bin  { at_line_start := false; let len = String.length bin in let rec parse i acc = if i = len then acc else let bit = if bin.[i] = '1' then 1 else 0 in parse (i + 1) ((acc lsl 1) lor bit) in Int (Bigint.of_int (parse 2 0)) }
+  | "0x" ['0'-'9' 'a'-'f' 'A'-'F']+ as hex { at_line_start := false; let len = String.length hex in let rec parse i acc = if i = len then acc else let v = match hex.[i] with | '0'..'9' -> int_of_char hex.[i] - int_of_char '0' | 'a'..'f' -> 10 + int_of_char hex.[i] - int_of_char 'a' | 'A'..'F' -> 10 + int_of_char hex.[i] - int_of_char 'A' | _ -> failwith "Invalid hex digit" in parse (i + 1) ((acc lsl 4) lor v) in Int (Bigint.of_int (parse 2 0)) }
   | _                       { let c = Lexing.lexeme_char lexbuf 0 in let msg = Printf.sprintf "Unrecognized character: '%c'" c in raise (LexerError (msg, Lexing.lexeme_start_p lexbuf)) }
 
 and read_string buf = parse
