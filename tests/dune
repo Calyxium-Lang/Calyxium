@@ -1,5 +1,17 @@
+(test
+ (name typechecker_test)
+ (libraries calyxium_stdlib calyxiumlib))
+
+(test
+ (name lexer_test)
+ (libraries calyxium_stdlib calyxiumlib))
+
+(test
+ (name gc_test)
+ (libraries calyxium_stdlib calyxiumlib))
+
 (rule
- (alias runtest)
+ (alias cx_tests)
  (deps
   %{bin:calyxium}
   (glob_files *.cx))
@@ -8,3 +20,8 @@
    bash
    -c
    "set -e; for f in *.cx; do calyxium \"$f\" > /dev/null; echo Passed: $f; done")))
+
+(alias
+ (name runtest)
+ (deps
+  (alias cx_tests)))

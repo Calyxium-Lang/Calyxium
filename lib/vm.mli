@@ -8,13 +8,12 @@ type frame = {
   mutable env : (string * (Gc.value * bool)) list;
 }
 
-val output_buffer : string list ref
+val output_buffer : Buffer.t
 val stdlib_modules : (string, Gc.value) Hashtbl.t
-val trace : trace_entry list ref
+val trace : trace_entry Queue.t
 val push_trace : string -> unit
 val clear_trace : unit -> unit
 val flush_buffer : unit -> unit
-val max_buffer_size : int
 val safe_push_output : string -> unit
 val init_stdlib : unit -> unit
 val print_trace : string -> unit

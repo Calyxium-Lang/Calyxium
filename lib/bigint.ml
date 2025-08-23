@@ -527,3 +527,5 @@ let to_int64 x =
         in
         if x.sign >= 0 then v else Int64.neg v
     | _ -> failwith "to_int64: overflow"
+
+let pp fmt b = Format.fprintf fmt "%s" (to_string b)

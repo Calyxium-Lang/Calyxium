@@ -1,6 +1,1 @@
-let rec loop() {
-    print("Hello, world!\n")
-    loop()
-}
-
-loop()
+print("Hello, world!\n")

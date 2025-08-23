@@ -35,6 +35,11 @@ val allocation_threshold : int ref
 val young_gen : generation
 val old_gen : generation
 val next_id : int ref
+val obj_size : 'a -> int
+val heap_memory : unit -> int * int
+val print_heap_memory : unit -> unit
+val heap_size : unit -> int * int
+val print_heap_stats : unit -> unit
 val alloc_id : unit -> int
 val alloc_in_young : heap_obj -> value
 val find_heap_obj : int -> heap_obj

@@ -3,7 +3,7 @@ let rec ensure_dir_exists_rec path =
   else
     let parent = Filename.dirname path in
     if parent <> path then ensure_dir_exists_rec parent;
-    Unix.mkdir path 0o755
+    try Unix.mkdir path 0o755 with Unix.Unix_error (Unix.EEXIST, _, _) -> ()
 
 let parse_emit_flag flags file =
   let rec find = function

@@ -1,5 +1,0 @@
-let swap(a, x) {
-    (x, a)
-}
-
-print(swap("Hello", 5))

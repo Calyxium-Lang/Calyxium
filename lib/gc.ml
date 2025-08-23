@@ -1,6 +1,7 @@
 open Opcode
 
-let interned_strings = Hashtbl.create 100
+let interned_strings = Hashtbl.create 1_000_000
+let new_interned_strings = Hashtbl.create 1_000_000
 
 type heap_obj = ..
 type value = ..
@@ -33,10 +34,30 @@ type generation = {
 }
 
 let allocation_count = ref 0
-let allocation_threshold = ref 1000
+let allocation_threshold = ref 10_000
 let young_gen = { objs = Hashtbl.create 128; marked = Hashtbl.create 128 }
 let old_gen = { objs = Hashtbl.create 512; marked = Hashtbl.create 512 }
 let next_id = ref 0
+let obj_size v = Obj.reachable_words (Obj.repr v) * Sys.word_size / 8
+
+let heap_memory () =
+  let sum_tbl tbl = Hashtbl.fold (fun _ obj acc -> acc + obj_size obj) tbl 0 in
+  let young_mem = sum_tbl young_gen.objs in
+  let old_mem = sum_tbl old_gen.objs in
+  (young_mem, old_mem)
+
+let print_heap_memory () =
+  let y, o = heap_memory () in
+  Printf.printf "Heap memory: young=%dB, old=%dB\n%!" y o
+
+let heap_size () =
+  let young_count = Hashtbl.length young_gen.objs in
+  let old_count = Hashtbl.length old_gen.objs in
+  (young_count, old_count)
+
+let print_heap_stats () =
+  let y, o = heap_size () in
+  Printf.printf "Heap: young=%d, old=%d\n%!" y o
 
 let alloc_id () =
   let id = !next_id in
@@ -120,28 +141,29 @@ let sweep gen =
 let mark_and_promote roots env =
   Hashtbl.clear young_gen.marked;
   Hashtbl.clear old_gen.marked;
+
   List.iter mark_value roots;
   mark_env env;
 
   Hashtbl.iter
-    (fun _str id ->
+    (fun _ id ->
       mark id young_gen;
       mark id old_gen)
-    interned_strings;
+    new_interned_strings;
 
-  let to_promote = ref [] in
-  Hashtbl.iter
-    (fun id obj ->
-      if Hashtbl.mem young_gen.marked id then
-        to_promote := (id, obj) :: !to_promote)
-    young_gen.objs;
-
+  let to_promote =
+    Hashtbl.fold
+      (fun id obj acc ->
+        if Hashtbl.mem young_gen.marked id then (id, obj) :: acc else acc)
+      young_gen.objs []
+  in
   List.iter
     (fun (id, obj) ->
       Hashtbl.replace old_gen.objs id obj;
       Hashtbl.remove young_gen.objs id)
-    !to_promote;
+    to_promote;
 
+  Hashtbl.clear new_interned_strings;
   sweep young_gen;
   sweep old_gen
 
@@ -163,6 +185,7 @@ let alloc_string_with_gc stack env s =
       let id = alloc_id () in
       Hashtbl.add young_gen.objs id (HString s);
       Hashtbl.add interned_strings s id;
+      Hashtbl.add new_interned_strings s id;
       VHeapRef id
 
 let alloc_bytes_with_gc stack env bytes_arr =
@@ -187,4 +210,5 @@ let reset_heap () =
   Hashtbl.clear young_gen.marked;
   Hashtbl.clear old_gen.objs;
   Hashtbl.clear old_gen.marked;
+  Hashtbl.clear new_interned_strings;
   next_id := 0

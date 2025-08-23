@@ -8,26 +8,19 @@ type frame = {
   mutable env : (string * (Gc.value * bool)) list;
 }
 
-let output_buffer = ref []
+let output_buffer = Buffer.create 1024
 let stdlib_modules = Hashtbl.create 16
-let trace = ref []
-let push_trace instr = trace := { instr } :: !trace
-let clear_trace () = trace := []
+let trace = Queue.create ()
+let push_trace instr = Queue.push { instr } trace
+let clear_trace () = Queue.clear trace
 
 let flush_buffer () =
-  List.iter print_string (List.rev !output_buffer);
-  output_buffer := [];
-  flush stdout
-
-let max_buffer_size = 1000
+  Buffer.output_buffer stdout output_buffer;
+  Buffer.clear output_buffer
 
 let safe_push_output s =
-  output_buffer := s :: !output_buffer;
-  if List.length !output_buffer >= 10 then flush_buffer ();
-  if List.length !output_buffer >= max_buffer_size then (
-    flush_buffer ();
-    Printf.eprintf
-      "Warning: output buffer flushed early to prevent overflow.\n%!")
+  Buffer.add_string output_buffer s;
+  if Buffer.length output_buffer >= 1000 then flush_buffer ()
 
 let init_stdlib () =
   List.iter
@@ -38,9 +31,9 @@ let init_stdlib () =
     Init.stdlib_definitions
 
 let print_trace msg =
-  match !trace with
-  | { instr; _ } :: _ -> prerr_endline ("Error at '" ^ instr ^ "': " ^ msg)
-  | [] -> prerr_endline ("Error: " ^ msg)
+  match Queue.peek_opt trace with
+  | Some { instr } -> prerr_endline ("Error at '" ^ instr ^ "': " ^ msg)
+  | None -> prerr_endline ("Error: " ^ msg)
 
 let runtime_error msg = raise (RuntimeError msg)
 let stack = Stack.create ()
@@ -197,8 +190,7 @@ let rec force v = match v with Gc.VThunk f -> force (f ()) | v -> v
 let reset_vm_state () =
   Stack.clear stack;
   global_env := [];
-  clear_trace ();
-  output_buffer := []
+  clear_trace ()
 
 let run instructions =
   clear_trace ();

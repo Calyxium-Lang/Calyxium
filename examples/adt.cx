@@ -1,9 +1,0 @@
-type Result[T] =
-    | Ok(T)
-    | Error(string)
-
-let safeDiv(a, b) {
-    if b == 0.0 then Error("Can't divide by zero") else Ok(a / b)
-}
-
-print(safeDiv(5.0, 0.0))
