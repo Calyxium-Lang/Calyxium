@@ -710,7 +710,10 @@ let run instructions =
                     if Float.is_nan f then "NaN"
                     else if Float.is_infinite f then
                       if f > 0.0 then "inf" else "-inf"
-                    else if Float.floor f = f then Printf.sprintf "%.1f" f
+                    else if Float.floor f = f then
+                      if abs_float f >= 1e6 then Printf.sprintf "%.6e" f
+                      else Printf.sprintf "%.1f" f
+                    else if abs_float f >= 1e6 then Printf.sprintf "%.6e" f
                     else Printf.sprintf "%g" f
                 | Gc.VInt i -> Bigint.to_string i
                 | Gc.VHeapRef id -> (

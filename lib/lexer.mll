@@ -7,7 +7,7 @@
 let whitespace = [' ' '\t' '\r']
 let newline = '\n'
 let identifier = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
-let digits = ['0'-'9']+
+let digits = ['0'-'9' '_']+
 let sign = ['+' '-']
 let float1 = digits '.' digits ['e' 'E'] sign? digits
 let float2 = digits '.' digits
