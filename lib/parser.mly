@@ -21,7 +21,7 @@
 %nonassoc IfThenElse
 %nonassoc LowPrec
 
-%token Recursive If Then Else Let Match With Use Module True False In Record Enum Lambda IntType FloatType StringType ByteType BoolType UnitType
+%token Recursive If Then Else Let Match With Use Module True False In Type Lambda IntType FloatType StringType ByteType BoolType UnitType
 %token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift
@@ -82,7 +82,7 @@ type_expr:
   | UnitType { Ast.Type.SymbolType { value = "unit"} }
   | LBracket RBracket type_expr { Ast.Type.ArrayType { element_type = $3 } }
   | Ident { Ast.Type.SymbolType { value = $1 } }
-  | LParen type_expr_list RParen { match $2 with | [single] -> single | multiple -> Ast.Type.TupleType multiple }
+  | LParen type_expr_list RParen { match $2 with | [single] -> single | multiple -> Ast.Type.TupleType (multiple, None) }
 
 type_expr_list:
   | type_expr Comma type_expr_list { $1 :: $3 }
@@ -121,7 +121,7 @@ module_expr:
   | Module Ident LBrace expr_list RBrace %prec LowPrec { Ast.Expr.ModuleExpr { module_name = $2; block = $4 } }
 
 enum_expr:
-  | Enum Ident Assign LBrace enum_member_list RBrace %prec LowPrec { Ast.Expr.EnumExpr { name = $2; members = $5 } }
+  | Type Ident Assign LBrace enum_member_list RBrace %prec LowPrec { Ast.Expr.EnumExpr { name = $2; members = $5 } }
 
 import_expr:
   | Use path %prec LowPrec { Ast.Expr.ImportExpr { module_name = $2 } }
@@ -257,10 +257,11 @@ argument_list:
 
 single_ident:
   | Ident { $1 }
+  | UnderScore { "_" }
 
 ident_list:
-  | Ident Comma Ident { [$1; $3] }
-  | ident_list Comma Ident { $1 @ [$3] }
+  | single_ident Comma single_ident { [$1; $3] }
+  | ident_list Comma single_ident { $1 @ [$3] }
 
 path:
   | path Dot Ident { $1 @ [$3] }
@@ -280,4 +281,4 @@ FunctionDeclStmt:
   | Let Recursive Ident LParen RParen LBrace stmt_list RBrace { Ast.Stmt.FunctionDeclStmt { name = $3; is_rec = true; parameters = []; return_type = Ast.Type.Infer; body = $7 } }
 
 RecordStmt:
-  | Record Ident Assign LBrace expr_list RBrace { Ast.Stmt.RecordStmt { name = $2; fields = $5; } }
+  | Type Ident Assign LBrace expr_list RBrace { Ast.Stmt.RecordStmt { name = $2; fields = $5; } }

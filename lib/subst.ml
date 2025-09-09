@@ -17,7 +17,10 @@ let rec apply s ty =
           ty'')
   | ArrayType { element_type } ->
       ArrayType { element_type = apply s element_type }
-  | TupleType lst -> TupleType (List.map (apply s) lst)
+  | TupleType (lst, rest) ->
+      let lst' = List.map (apply s) lst in
+      let rest' = Option.map (apply s) rest in
+      TupleType (lst', rest')
   | FunctionType (params, ret) ->
       FunctionType (List.map (apply s) params, apply s ret)
   | RecordType fields ->

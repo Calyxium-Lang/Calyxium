@@ -544,38 +544,42 @@ let run instructions =
             let collection_val = pop1 stack in
             let index =
               match force index_val with
-              | Gc.VInt i -> Bigint.to_int i
+              | Gc.VInt i -> i
               | _ -> runtime_error "Expected int for index in LOAD_INDEX"
             in
             let collection = force collection_val in
             let item =
               match collection with
               | Gc.VArray items ->
-                  if index < 0 || index >= List.length items then
-                    runtime_error
-                      ("Index out of bounds in LOAD_INDEX: "
-                     ^ string_of_int index)
-                  else List.nth items index
+                  if
+                    Bigint.lt index Bigint.zero
+                    || Bigint.ge index (Bigint.of_int (List.length items))
+                  then runtime_error "Index out of bounds in LOAD_INDEX (array)"
+                  else List.nth items (Bigint.to_int index)
               | Gc.VTuple items ->
-                  if index < 0 || index >= List.length items then
-                    runtime_error
-                      ("Index out of bounds in LOAD_INDEX: "
-                     ^ string_of_int index)
-                  else List.nth items index
+                  if
+                    Bigint.lt index Bigint.zero
+                    || Bigint.ge index (Bigint.of_int (List.length items))
+                  then runtime_error "Index out of bounds in LOAD_INDEX (tuple)"
+                  else List.nth items (Bigint.to_int index)
               | Gc.VHeapRef id -> (
                   match Gc.find_heap_obj id with
                   | Gc.HString s ->
-                      if index < 0 || index >= String.length s then
+                      if
+                        Bigint.lt index Bigint.zero
+                        || Bigint.ge index (Bigint.of_int (String.length s))
+                      then
                         runtime_error
-                          ("Index out of bounds in LOAD_INDEX (string): "
-                         ^ string_of_int index)
-                      else Gc.VByte s.[index]
+                          "Index out of bounds in LOAD_INDEX (string)"
+                      else Gc.VByte s.[Bigint.to_int index]
                   | Gc.HBytes arr ->
-                      if index < 0 || index >= Array.length arr then
+                      if
+                        Bigint.lt index Bigint.zero
+                        || Bigint.ge index (Bigint.of_int (Array.length arr))
+                      then
                         runtime_error
-                          ("Index out of bounds in LOAD_INDEX (bytes): "
-                         ^ string_of_int index)
-                      else Gc.VByte arr.(index)
+                          "Index out of bounds in LOAD_INDEX (bytes)"
+                      else Gc.VByte arr.(Bigint.to_int index)
                   | _ ->
                       runtime_error
                         "Expected array, tuple, string, bytes, or range for \
@@ -583,14 +587,18 @@ let run instructions =
               | Gc.VRange id -> (
                   match Gc.find_heap_obj id with
                   | Gc.HRange { current; step; end_ } -> (
+                      let index_big =
+                        match force index_val with
+                        | Gc.VInt i -> i
+                        | _ -> runtime_error "Expected int for range index"
+                      in
                       let elem =
-                        Bigint.add current
-                          (Bigint.mul step (Bigint.of_int index))
+                        Bigint.add current (Bigint.mul step index_big)
                       in
                       match end_ with
                       | Some e
-                        when (step >= Bigint.zero && elem > e)
-                             || (step < Bigint.zero && elem < e) ->
+                        when (step >= Bigint.zero && Bigint.gt elem e)
+                             || (step < Bigint.zero && Bigint.lt elem e) ->
                           runtime_error
                             "Index out of bounds in LOAD_INDEX for range"
                       | _ -> Gc.VInt elem)
@@ -710,7 +718,10 @@ let run instructions =
                     if Float.is_nan f then "NaN"
                     else if Float.is_infinite f then
                       if f > 0.0 then "inf" else "-inf"
-                    else if Float.floor f = f then Printf.sprintf "%.1f" f
+                    else if Float.floor f = f then
+                      if abs_float f >= 1e6 then Printf.sprintf "%.6e" f
+                      else Printf.sprintf "%.1f" f
+                    else if abs_float f >= 1e6 then Printf.sprintf "%.6e" f
                     else Printf.sprintf "%g" f
                 | Gc.VInt i -> Bigint.to_string i
                 | Gc.VHeapRef id -> (
@@ -1434,6 +1445,22 @@ let run instructions =
                 Stack.push (Gc.VArray reversed) stack;
                 next ()
             | _ -> runtime_error "REVERSE expects an array")
+        | Opcode.FST -> (
+            let v_tuple = force (pop1 stack) in
+            match v_tuple with
+            | Gc.VTuple (a :: _) ->
+                Stack.push a stack;
+                next ()
+            | Gc.VTuple [] -> runtime_error "FST: empty tuple"
+            | _ -> runtime_error "FST expects a tuple")
+        | Opcode.SND -> (
+            let v_tuple = force (pop1 stack) in
+            match v_tuple with
+            | Gc.VTuple (_ :: snd :: _) ->
+                Stack.push snd stack;
+                next ()
+            | Gc.VTuple [] -> runtime_error "SND: empty tuple"
+            | _ -> runtime_error "SND excpects a tuple")
         | _ -> failwith "Not Supported"
     done;
     flush_buffer ()

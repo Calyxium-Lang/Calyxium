@@ -2,7 +2,7 @@
 
 -- basic tests for enum
 
-enum Week = {
+type Week = {
     Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday
 }
 

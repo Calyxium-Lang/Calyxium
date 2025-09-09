@@ -1,4 +1,4 @@
-let limb_bits = 32
+let limb_bits = 30
 let base = 1 lsl limb_bits
 let base_mask = base - 1
 
@@ -22,12 +22,12 @@ let normalize { sign; limbs } =
 
 let sign x = x.sign
 
-let of_int (n : int) : t =
+let of_int n =
   if n = 0 then zero
   else if n > 0 then { sign = 1; limbs = [| n land base_mask |] }
   else { sign = -1; limbs = [| -n land base_mask |] }
 
-let of_int64 (n : int64) : t =
+let of_int64 n =
   if n = 0L then zero
   else
     let sign = if n < 0L then -1 else 1 in
@@ -41,8 +41,10 @@ let to_int x =
   if is_zero x then 0
   else
     match x.limbs with
-    | [| v |] -> if x.sign = 1 then v else -v
-    | _ -> failwith "BigInt.to_int: overflow"
+    | [| l |] -> if x.sign >= 0 then l else -l
+    | _ ->
+        let acc = x.limbs.(0) in
+        if x.sign >= 0 then acc else -acc
 
 let cmp_mag a b =
   let la = Array.length a in
@@ -68,6 +70,9 @@ let compare a b =
 
 let equal a b = compare a b = 0
 let gt a b = compare a b > 0
+let lt a b = compare a b < 0
+let ge a b = compare a b >= 0
+let le a b = compare a b <= 0
 let neg x = if x.sign = 0 then x else { x with sign = -x.sign }
 let abs x = if x.sign >= 0 then x else neg x
 let make_from_sign_and_limbs s limbs = normalize { sign = s; limbs }
@@ -304,9 +309,10 @@ let div_rem a b =
       Array.blit r_unshifted 0 rem_arr 0 rem_len;
 
       let q_t =
-        make_from_sign_and_limbs (if a.sign * b.sign >= 0 then 1 else -1) q
+        normalize
+          (make_from_sign_and_limbs (if a.sign * b.sign >= 0 then 1 else -1) q)
       in
-      let r_t = make_from_sign_and_limbs a.sign rem_arr in
+      let r_t = normalize (make_from_sign_and_limbs a.sign rem_arr) in
       (q_t, r_t)
 
 let div a b = fst (div_rem a b)

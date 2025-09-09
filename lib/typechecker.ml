@@ -8,12 +8,16 @@ let fresh_tyvar () =
   incr fresh_var_counter;
   Ast.Type.VarType id
 
+let option_exists f = function Some x -> f x | None -> false
+
 let rec occurs_check s id ty =
   let ty = Subst.apply s ty in
   match ty with
   | Ast.Type.VarType v -> v = id
   | Ast.Type.ArrayType { element_type } -> occurs_check s id element_type
-  | Ast.Type.TupleType ts -> List.exists (occurs_check s id) ts
+  | Ast.Type.TupleType (ts, rest) ->
+      List.exists (occurs_check s id) ts
+      || option_exists (occurs_check s id) rest
   | Ast.Type.FunctionType (params, ret) ->
       List.exists (occurs_check s id) params || occurs_check s id ret
   | Ast.Type.RecordType fields ->
@@ -30,8 +34,11 @@ let rec string_of_type = function
   | Ast.Type.SymbolType { value } -> value
   | Ast.Type.ArrayType { element_type } ->
       "[" ^ string_of_type element_type ^ "]"
-  | Ast.Type.TupleType types ->
-      "(" ^ String.concat ", " (List.map string_of_type types) ^ ")"
+  | Ast.Type.TupleType (types, rest) -> (
+      let base = String.concat ", " (List.map string_of_type types) in
+      match rest with
+      | None -> "(" ^ base ^ ")"
+      | Some t -> "(" ^ base ^ ", " ^ string_of_type t ^ " ...)")
   | Ast.Type.FunctionType (params, ret) ->
       let params_str = String.concat " * " (List.map string_of_type params) in
       Printf.sprintf "(%s -> %s)" params_str (string_of_type ret)
@@ -64,9 +71,27 @@ let rec unify_with_subst subst t1 t2 =
   | ( Ast.Type.ArrayType { element_type = e1 },
       Ast.Type.ArrayType { element_type = e2 } ) ->
       unify_with_subst subst e1 e2
-  | Ast.Type.TupleType xs, Ast.Type.TupleType ys
-    when List.length xs = List.length ys ->
-      List.iter2 (unify_with_subst subst) xs ys
+  | Ast.Type.TupleType (xs, rest1), Ast.Type.TupleType (ys, rest2) -> (
+      match (xs, ys) with
+      | xh :: xt, yh :: yt ->
+          unify_with_subst subst xh yh;
+          unify_with_subst subst
+            (Ast.Type.TupleType (xt, rest1))
+            (Ast.Type.TupleType (yt, rest2))
+      | [], _ -> (
+          match rest1 with
+          | Some r1 ->
+              unify_with_subst subst r1 (Ast.Type.TupleType (ys, rest2))
+          | None ->
+              if ys = [] then match rest2 with Some _ -> () | None -> ()
+              else raise (UnifyError "Tuple arity mismatch"))
+      | _, [] -> (
+          match rest2 with
+          | Some r2 ->
+              unify_with_subst subst (Ast.Type.TupleType (xs, rest1)) r2
+          | None ->
+              if xs = [] then match rest1 with Some _ -> () | None -> ()
+              else raise (UnifyError "Tuple arity mismatch")))
   | Ast.Type.FunctionType (ps1, r1), Ast.Type.FunctionType (ps2, r2)
     when List.length ps1 = List.length ps2 ->
       List.iter2 (unify_with_subst subst) ps1 ps2;
@@ -101,7 +126,9 @@ let unify t1 t2 =
 let rec ftv_type = function
   | Ast.Type.VarType id -> [ id ]
   | Ast.Type.ArrayType { element_type } -> ftv_type element_type
-  | Ast.Type.TupleType ts -> List.concat_map ftv_type ts
+  | Ast.Type.TupleType (ts, rest) -> (
+      let ftvs = List.concat_map ftv_type ts in
+      match rest with None -> ftvs | Some t -> ftvs @ ftv_type t)
   | Ast.Type.FunctionType (ps, r) -> List.concat_map ftv_type (r :: ps)
   | Ast.Type.RecordType fs -> List.concat_map (fun (_, t) -> ftv_type t) fs
   | _ -> []
@@ -131,7 +158,10 @@ let instantiate_scheme (quantified_vars, tp) =
     | Ast.Type.VarType _ -> t
     | Ast.Type.ArrayType { element_type } ->
         Ast.Type.ArrayType { element_type = inst element_type }
-    | Ast.Type.TupleType ts -> Ast.Type.TupleType (List.map inst ts)
+    | Ast.Type.TupleType (ts, rest) ->
+        let ts' = List.map inst ts in
+        let rest' = Option.map inst rest in
+        Ast.Type.TupleType (ts', rest')
     | Ast.Type.FunctionType (ps, r) ->
         Ast.Type.FunctionType (List.map inst ps, inst r)
     | Ast.Type.RecordType fs ->
@@ -146,8 +176,14 @@ let rec can_compare t1 t2 =
   | _, Ast.Type.Any -> true
   | Ast.Type.SymbolType { value = v1 }, Ast.Type.SymbolType { value = v2 } ->
       v1 = v2
-  | Ast.Type.TupleType ts1, Ast.Type.TupleType ts2 ->
-      List.length ts1 = List.length ts2 && List.for_all2 can_compare ts1 ts2
+  | Ast.Type.TupleType (ts1, rest1), Ast.Type.TupleType (ts2, rest2) -> (
+      List.length ts1 = List.length ts2
+      && List.for_all2 can_compare ts1 ts2
+      &&
+      match (rest1, rest2) with
+      | None, None -> true
+      | Some r1, Some r2 -> can_compare r1 r2
+      | _ -> false)
   | ( Ast.Type.ArrayType { element_type = et1 },
       Ast.Type.ArrayType { element_type = et2 } ) ->
       can_compare et1 et2
@@ -261,6 +297,22 @@ let builtins =
       [ ([ Ast.Type.ArrayType { element_type = Ast.Type.Any } ], Ast.Type.Any) ];
     mk_builtin "reverse"
       [ ([ Ast.Type.ArrayType { element_type = Ast.Type.Any } ], Ast.Type.Any) ];
+    mk_builtin "fst"
+      [
+        ( [
+            Ast.Type.TupleType
+              ([ Ast.Type.VarType 0 ], Some (Ast.Type.VarType 1));
+          ],
+          Ast.Type.VarType 0 );
+      ];
+    mk_builtin "snd"
+      [
+        ( [
+            Ast.Type.TupleType
+              ([ Ast.Type.VarType 0 ], Some (Ast.Type.VarType 1));
+          ],
+          Ast.Type.VarType 1 );
+      ];
   ]
 
 let rec type_eq expected actual =
@@ -273,8 +325,14 @@ let rec type_eq expected actual =
   | ( Ast.Type.ArrayType { element_type = e1 },
       Ast.Type.ArrayType { element_type = e2 } ) ->
       type_eq e1 e2
-  | Ast.Type.TupleType xs, Ast.Type.TupleType ys ->
-      List.length xs = List.length ys && List.for_all2 type_eq xs ys
+  | Ast.Type.TupleType (xs, rest1), Ast.Type.TupleType (ys, rest2) -> (
+      List.length xs = List.length ys
+      && List.for_all2 type_eq xs ys
+      &&
+      match (rest1, rest2) with
+      | None, None -> true
+      | Some r1, Some r2 -> type_eq r1 r2
+      | _ -> false)
   | Ast.Type.VarType _, _ | _, Ast.Type.VarType _ -> true
   | Ast.Type.SymbolType { value = "*" }, _ -> true
   | _, Ast.Type.SymbolType { value = "*" } -> true
@@ -429,7 +487,7 @@ and check_expr env func_env expr =
             (ty :: types_acc, env_new))
           elements ([], env)
       in
-      (Ast.Type.TupleType element_types, env')
+      (Ast.Type.TupleType (element_types, None), env')
   | Ast.Expr.VarExpr name -> (
       try
         let ty = List.assoc name env in
@@ -623,17 +681,27 @@ and check_expr env func_env expr =
 
       match at with
       | Ast.Type.ArrayType { element_type } -> (element_type, env'')
-      | Ast.Type.TupleType element_types -> (
+      | Ast.Type.TupleType (element_types, rest) -> (
           match index with
-          | Ast.Expr.IntExpr { value } ->
+          | Ast.Expr.IntExpr { value } -> (
               let idx = Bigint.to_int value in
-              if idx < 0 || idx >= List.length element_types then
+              let len = List.length element_types in
+              if idx < 0 then
                 raise
                   (TypeError
                      ("Tuple index out of bounds:\n" ^ "  Index: "
-                    ^ string_of_int idx ^ "\n  Tuple size: "
-                     ^ string_of_int (List.length element_types)));
-              (List.nth element_types idx, env'')
+                    ^ string_of_int idx ^ "\n  Tuple size: " ^ string_of_int len
+                     ))
+              else if idx < len then (List.nth element_types idx, env'')
+              else
+                match rest with
+                | Some rest_ty -> (rest_ty, env'')
+                | None ->
+                    raise
+                      (TypeError
+                         ("Tuple index out of bounds:\n" ^ "  Index: "
+                        ^ string_of_int idx ^ "\n  Tuple size: "
+                        ^ string_of_int len)))
           | _ ->
               raise
                 (TypeError
@@ -646,7 +714,7 @@ and check_expr env func_env expr =
           | Ast.Expr.IntExpr { value } ->
               let idx = Bigint.to_int value in
               let fresh_elems = List.init (idx + 1) (fun _ -> fresh_tyvar ()) in
-              let tuple_ty = Ast.Type.TupleType fresh_elems in
+              let tuple_ty = Ast.Type.TupleType (fresh_elems, None) in
               unify_with_subst subst_tbl (Ast.Type.VarType id) tuple_ty;
               let element_types =
                 List.map (Subst.apply subst_tbl) fresh_elems
@@ -1028,7 +1096,7 @@ and check_expr env func_env expr =
         | [ Ast.Expr.TupleExpr elements ] -> (elements, env)
         | [ Ast.Expr.VarExpr name ] -> (
             match List.assoc_opt name env with
-            | Some (Ast.Type.TupleType element_types) ->
+            | Some (Ast.Type.TupleType (element_types, None)) ->
                 let exprs =
                   List.mapi
                     (fun i _ ->
@@ -1050,7 +1118,7 @@ and check_expr env func_env expr =
             let expr_type, env2 = check_expr env func_env expr in
             let subst = Subst.empty () in
             match Subst.apply subst expr_type with
-            | Ast.Type.TupleType element_types ->
+            | Ast.Type.TupleType (element_types, None) ->
                 let exprs =
                   List.mapi
                     (fun i _ ->
@@ -1066,7 +1134,7 @@ and check_expr env func_env expr =
                 let fresh_elems =
                   List.init (List.length identifier) (fun _ -> fresh_tyvar ())
                 in
-                let tuple_ty = Ast.Type.TupleType fresh_elems in
+                let tuple_ty = Ast.Type.TupleType (fresh_elems, None) in
                 unify_with_subst subst expr_type tuple_ty;
                 let element_types = List.map (Subst.apply subst) fresh_elems in
                 let exprs =
@@ -1103,8 +1171,9 @@ and check_expr env func_env expr =
       in
       let env3 =
         match explicit_type with
-        | Ast.Type.TupleType declared_types ->
+        | Ast.Type.TupleType (declared_types, None) ->
             let type_count = List.length declared_types in
+            let id_count = List.length identifier in
             if type_count <> id_count then
               raise
                 (TypeError

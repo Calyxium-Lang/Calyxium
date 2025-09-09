@@ -58,8 +58,16 @@ let token_to_string = function
 let rec string_of_type t =
   match t with
   | Ast.Type.SymbolType { value } -> value
-  | Ast.Type.TupleType ts ->
-      "(" ^ String.concat ", " (List.map string_of_type ts) ^ ")"
+  | Ast.Type.TupleType (ts, rest) ->
+      let ts_str = String.concat ", " (List.map string_of_type ts) in
+      let rest_str =
+        match rest with
+        | Some r ->
+            if ts = [] then "..." ^ string_of_type r
+            else ", ..." ^ string_of_type r
+        | None -> ""
+      in
+      "(" ^ ts_str ^ rest_str ^ ")"
   | Ast.Type.FunctionType (params, ret) ->
       let params_str = String.concat ", " (List.map string_of_type params) in
       Printf.sprintf "(%s) -> %s" params_str (string_of_type ret)

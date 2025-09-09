@@ -1,9 +1,13 @@
 let bubble_sort(arr) {
     let rec pass(xs, i, acc, ch) {
-        if i + 1 >= length(xs) then (ch, acc @ (if i < length(xs) then [ xs[i] ] else [])) else {
+        if i + 1 >= length(xs) then (ch, reverse(acc) @ (if i < length(xs) then [ xs[i] ] else []))
+        else {
             let a = xs[i] in
             let b = xs[i + 1] in
-            pass(xs, if a > b then i + 2 else i + 1, acc @ (if a > b then [ b, a ] else [ a ]), ch || a > b)
+            if a > b then
+                pass(xs, i + 2, [ a, b ] @ acc, true)
+            else
+                pass(xs, i + 1, [ a ] @ acc, ch)
         }
     }
     let rec sort(xs) {

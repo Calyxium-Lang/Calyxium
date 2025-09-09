@@ -1,4 +1,4 @@
-# Calyxium: **An Interpreted Multi-Paradigm Programming Language**
+# Calyxium: **A multi-paradigm, memory-safe, monomorphic, strongly typed language with ad-hoc polymorphism.**
 
 <!-- TOC -->
 
@@ -16,7 +16,17 @@
 ![Build Status](https://github.com/calyxium-lang/calyxium/actions/workflows/ci.yml/badge.svg)
 
 ## Why
-Going to be real, Calyxium exists because I needed a project impressive enough to skip some classes in my math degree.
+Calyxium is designed with safety and clarity first:
+- **Generational Mark/Sweep Garbage Collector**: Automatic memory management ensures memory safety without manual intervention.
+- **Type Safety with Explicitnes**: Strong static typing with support for both polymorphism and monomorphism. You can rely on inference or declare explicit types for precision
+    ```
+    let x = 10 in
+    let y: int = 10 in
+    ```
+- **Immutable by Default**: Values cannot be mutated, reducing bugs from shared state. Mutation is only possible through explicit **refs**, making mutability intentional and controlled.
+- **Ad-Hoc Polymorphism**: Flexible polymorphism without sacrificing type safety, allowing expressive yet predictable code.  
+
+Calyxium exists to provide a modern, safe, and expressive programming language that balances functional purity with pragmatic expressiveness.
 
 ## Installation
 Follow these steps to install and build Calyxium:
@@ -38,7 +48,7 @@ Follow these steps to install and build Calyxium:
     dune install menhir
     ```
 
-4. Build the projrct
+4. Build the project
     ```bash
     dune build --profile release
     ```
@@ -49,14 +59,8 @@ Follow these steps to install and build Calyxium:
     ```
 
 ## Getting Started
-Create a new Calyxium script with the `.cx` extension. Here's a basic example:
-```
-print("Hello, world\n")
-```
-To run your script:
-`calyxium main.cx`
 
-For more detailed documentation, visit the [official documentation](https://calyxium-lang.github.io/docs)
+For detailed documentation, visit the [official documentation](https://calyxium-lang.github.io/docs)
 
 ## Contributing
 We welcome contributions! Whether it's a bug report, feature suggestion, or code contribution:

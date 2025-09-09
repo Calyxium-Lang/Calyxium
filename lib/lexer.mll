@@ -7,7 +7,7 @@
 let whitespace = [' ' '\t' '\r']
 let newline = '\n'
 let identifier = ['a'-'z' 'A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_' '\'']*
-let digits = ['0'-'9']+
+let digits = ['0'-'9' '_']+
 let sign = ['+' '-']
 let float1 = digits '.' digits ['e' 'E'] sign? digits
 let float2 = digits '.' digits
@@ -84,8 +84,7 @@ rule token = parse
   | "false"                  { at_line_start := false; False }
   | "in"                     { at_line_start := false; In }
   | "fn"                     { at_line_start := false; Lambda }
-  | "record"                 { at_line_start := false; Record }
-  | "enum"                   { at_line_start := false; Enum }
+  | "type"                   { at_line_start := false; Type }
 
   | "int"                    { at_line_start := false; IntType }
   | "float"                  { at_line_start := false; FloatType }

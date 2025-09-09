@@ -5,7 +5,7 @@ module rec Type : sig
     | VarType of int
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
-    | TupleType of t list
+    | TupleType of t list * t option
     | FunctionType of t list * t
     | RecordType of (string * t) list
     | Any
@@ -17,7 +17,7 @@ end = struct
     | VarType of int
     | SymbolType of { value : string }
     | ArrayType of { element_type : t }
-    | TupleType of t list
+    | TupleType of t list * t option
     | FunctionType of t list * t
     | RecordType of (string * t) list
     | Any

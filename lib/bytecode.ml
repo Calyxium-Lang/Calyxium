@@ -25,6 +25,8 @@ let builtins =
     ("head", fun args -> args @ [ Opcode.HEAD ]);
     ("tail", fun args -> args @ [ Opcode.TAIL ]);
     ("reverse", fun args -> args @ [ Opcode.REVERSE ]);
+    ("fst", fun args -> args @ [ Opcode.FST ]);
+    ("snd", fun args -> args @ [ Opcode.SND ]);
   ]
 
 let gensym =
