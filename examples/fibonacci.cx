@@ -1,8 +1,15 @@
-let fib(n) {
-    let rec aux(n, a, b) {
-        if n == 0 then a else aux(n - 1, b, a + b)
+let rec fib_pair(n) {
+    if n == 0 then (0, 1) else {
+        let a, b = fib_pair(n / 2) in
+        let c = a * (2 * b - a) in
+        let d = a * a + b * b in
+        if n % 2 == 0 then (c, d) else (d, c + d)
     }
-    aux(n, 0, 1)
 }
 
-print(fib(10_000))
+let fib(n) {
+    let f, _ = fib_pair(n) in
+    f
+}
+
+print(to_string(fib(100)) ^ "\n")

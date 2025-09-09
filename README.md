@@ -48,7 +48,7 @@ Follow these steps to install and build Calyxium:
     dune install menhir
     ```
 
-4. Build the projrct
+4. Build the project
     ```bash
     dune build --profile release
     ```
@@ -59,14 +59,8 @@ Follow these steps to install and build Calyxium:
     ```
 
 ## Getting Started
-Create a new Calyxium script with the `.cx` extension. Here's a basic example:
-```
-print("Hello, world\n")
-```
-To run your script:
-`calyxium main.cx`
 
-For more detailed documentation, visit the [official documentation](https://calyxium-lang.github.io/docs)
+For detailed documentation, visit the [official documentation](https://calyxium-lang.github.io/docs)
 
 ## Contributing
 We welcome contributions! Whether it's a bug report, feature suggestion, or code contribution:

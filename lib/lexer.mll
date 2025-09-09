@@ -84,8 +84,7 @@ rule token = parse
   | "false"                  { at_line_start := false; False }
   | "in"                     { at_line_start := false; In }
   | "fn"                     { at_line_start := false; Lambda }
-  | "record"                 { at_line_start := false; Record }
-  | "enum"                   { at_line_start := false; Enum }
+  | "type"                   { at_line_start := false; Type }
 
   | "int"                    { at_line_start := false; IntType }
   | "float"                  { at_line_start := false; FloatType }

@@ -18,6 +18,9 @@ val sign : t -> int
 val compare : t -> t -> int
 val equal : t -> t -> bool
 val gt : t -> t -> bool
+val lt : t -> t -> bool
+val ge : t -> t -> bool
+val le : t -> t -> bool
 val neg : t -> t
 val abs : t -> t
 val make_from_sign_and_limbs : int -> int array -> t

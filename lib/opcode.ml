@@ -76,3 +76,5 @@ type opcode +=
   | TAIL
   | HEAD
   | REVERSE
+  | FST
+  | SND
