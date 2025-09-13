@@ -99,6 +99,7 @@ rule token = parse
 
   | '\'' '\\' (['n' 't' '\\' '\'' '\"'] as esc) '\''  { at_line_start := false; let c = match esc with | 'n' -> '\n' | 't' -> '\t' | '\\' -> '\\' | '\'' -> '\'' | '\"' -> '\"' | '0' -> '\000' | _ -> esc in Byte c }
   | '\'' ([^'\n' '\\'] as c) '\''  { at_line_start := false; Byte c }
+  | '\'' '\\' (['a'-'z' 'A'-'Z' '0'-'9'] as invalid) '\'' { raise (LexerError (Printf.sprintf "Invalid escape sequence '\\%c'" invalid, Lexing.lexeme_start_p lexbuf)) }
   | '\''                    { raise (LexerError ("Unterminated character literal", Lexing.lexeme_start_p lexbuf)) }
   | '"'                     { at_line_start := false; read_string (Buffer.create 16) lexbuf }
   | eof                     { EOF }
@@ -111,6 +112,7 @@ and read_string buf = parse
   | '\n'                    { raise (LexerError ("Unterminated string literal", Lexing.lexeme_start_p lexbuf)) }
   | eof                     { raise (LexerError ("Unterminated string literal", Lexing.lexeme_start_p lexbuf)) }
   | '\\' (['\\' '"' 'n' 't'] as esc) { Buffer.add_char buf ( match esc with | '\\' -> '\\' | '"' -> '"' | 'n' -> '\n' | 't' -> '\t' | _ -> esc ); read_string buf lexbuf }
+  | '\\' (['a'-'z' 'A'-'Z' '0'-'9'] as invalid) { raise (LexerError (Printf.sprintf "Invalid escape sequence '\\%c' in string literal" invalid, Lexing.lexeme_start_p lexbuf)) }
   | _ as c                  { Buffer.add_char buf c; read_string buf lexbuf }
 
 and read_comment = parse
