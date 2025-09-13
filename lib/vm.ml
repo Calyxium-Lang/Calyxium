@@ -405,30 +405,6 @@ let run instructions =
             in
             Stack.push result stack;
             next ()
-        | Opcode.LESS_EQUAL ->
-            push_trace "LESS_EQUAL";
-            let a, b = pop2_safe stack in
-            let a, b = (force a, force b) in
-            let result =
-              match (a, b) with
-              | Gc.VFloat a, Gc.VFloat b -> Gc.VBool (a <= b)
-              | Gc.VInt a, Gc.VInt b -> Gc.VBool (Bigint.compare a b <= 0)
-              | _ -> runtime_error "LESS_EQUAL expects two floats or int"
-            in
-            Stack.push result stack;
-            next ()
-        | Opcode.GREATER_EQUAL ->
-            push_trace "GREATER_EQUAL";
-            let a, b = pop2_safe stack in
-            let a, b = (force a, force b) in
-            let result =
-              match (a, b) with
-              | Gc.VFloat a, Gc.VFloat b -> Gc.VBool (a >= b)
-              | Gc.VInt a, Gc.VInt b -> Gc.VBool (Bigint.compare a b >= 0)
-              | _ -> runtime_error "GREATER_EQUAL expects two floats or int"
-            in
-            Stack.push result stack;
-            next ()
         | Opcode.NOT_EQUAL ->
             push_trace "NOT_EQUAL";
             let a, b = pop2_safe stack in

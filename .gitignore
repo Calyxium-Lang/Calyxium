@@ -17,7 +17,6 @@ Thumbs.db
 !*/
 bin/calyxium_js.ml
 lib/js
-lib/ir.ml
 CHANGELOG.md
 
 # === Build system caches ===

@@ -7,7 +7,7 @@
 %left BitWiseOR
 %left BitWiseXOR
 %left BitWiseAND
-%nonassoc Eq Neq Geq Leq Greater Less
+%nonassoc Eq Neq Greater Less
 %left LeftShift RightShift
 %left Pipeline
 %right Lambda
@@ -22,7 +22,7 @@
 %nonassoc LowPrec
 
 %token Recursive If Then Else Let Match With Use Module True False In Type Lambda IntType FloatType StringType ByteType BoolType UnitType
-%token Eq Neq Geq Leq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range
+%token Eq Neq LogicalOr LogicalAnd Pow Dec Inc MapsTo PlusAssign MinusAssign StarAssign SlashAssign Pipeline Range
 %token BitWiseOR BitWiseAND BitWiseXOR BitWiseNOT
 %token LeftShift RightShift
 %token BitWiseANDAssign BitWiseORAssign BitWiseXORAssign
@@ -175,8 +175,6 @@ equality_expr:
   | relational_expr { $1 }
   | equality_expr Eq relational_expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Eq; right = $3 } }
   | equality_expr Neq relational_expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Neq; right = $3 } }
-  | equality_expr Geq relational_expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Geq; right = $3 } }
-  | equality_expr Leq relational_expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Leq; right = $3 } }
   | equality_expr Greater relational_expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Greater; right = $3 } }
   | equality_expr Less relational_expr { Ast.Expr.BinaryExpr { left = $1; operator = Token.Less; right = $3 } }
 

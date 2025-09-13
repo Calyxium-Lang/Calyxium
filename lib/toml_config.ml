@@ -140,7 +140,7 @@ name = "%s"
 version = "0.1.0"
 description = "A Calyxium Project"
 authors = ["Your Name <you@example.com>"]
-license = "MIT"
+license = "LICENSE"
 homepage = "https://example.com/%s/home"
 repository = "https://example.com/%s"
 

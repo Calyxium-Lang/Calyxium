@@ -6,7 +6,7 @@ assert(not true == false)
 assert(not false == true)
 assert(not (1 == 2) == true)
 assert(not (1 < 2) == false)
-assert(not (0 >= 0) == false)
+assert(not (0 > 0 || 0 == 0) == false)
 
 let negate_eq(x, y) {
     not (x == y)
@@ -32,7 +32,7 @@ assert(not (true && false) == true)
 assert(not (true || false) == false)
 assert(not ((1 < 2) && (3 > 2)) == false)
 assert(not ((1 == 2) || (2 == 2)) == false)
-assert(not ((5 <= 10) && not (10 < 5)) == false)
+assert(not ((5 < 10 || 5 == 10) && not (10 < 5)) == false)
 
 let describe(x) {
     if not (x == 0) then "non-zero" else "zero"

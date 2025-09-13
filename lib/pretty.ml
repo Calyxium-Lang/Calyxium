@@ -4,8 +4,6 @@ let indent () = String.make (!indent_level * 4) ' '
 let token_to_string = function
   | Token.Eq -> "=="
   | Token.Neq -> "!="
-  | Token.Leq -> "<="
-  | Token.Geq -> ">="
   | Token.LogicalAnd -> "&&"
   | Token.LogicalOr -> "||"
   | Token.Pow -> "**"

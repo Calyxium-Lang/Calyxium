@@ -4,7 +4,7 @@ let pi = 3.141592653589 in
 let e = 2.718281828459 in
 
 let rec fact(n) {
-    if n <= 1 then 1.0 else to_float(n) * fact(n - 1)
+    if n < 1 || n == 1 then 1.0 else to_float(n) * fact(n - 1)
 }
 
 let pow(base, exp) {
@@ -12,7 +12,7 @@ let pow(base, exp) {
 }
 
 let abs(x) {
-    (x <= 0.0) ? -x : x
+    (x < 0.0 || x == 0.0) ? -x : x
 }
 
 let degToRad(deg) {
@@ -24,7 +24,7 @@ let radToDeg(rad) {
 }
 
 let rec sin_iter(x, n, terms, acc) {
-    if n >= terms then acc else {
+    if n > terms || n == terms then acc else {
         let sign = ((n % 2) == 0) ? 1.0 : -1.0 in
         let term = sign * pow(x, to_float(2 * n + 1)) / fact(2 * n + 1) in
         sin_iter(x, n + 1, terms, acc + term)
@@ -40,7 +40,7 @@ let csc(x, terms) {
 }
 
 let rec arcsin_iter(x, n, terms, acc) {
-    if n >= terms then acc else {
+    if n > terms || n == terms then acc else {
         let num = fact(2 * n) in
         let denom = pow(4.0, to_float(n)) * pow(fact(n), 2.0) * to_float(2 * n + 1) in
         let term = (num / denom) * pow(x, to_float(2 * n + 1)) in
@@ -55,7 +55,7 @@ let arcsin(x, terms) {
 }
 
 let rec cos_iter(x, n, terms, acc) {
-    if n >= terms then acc else {
+    if n > terms || n == terms then acc else {
         let sign = ((n % 2) == 0) ? 1.0 : -1.0 in
         let term = sign * pow(x, to_float(2 * n)) / fact(2 * n) in
         cos_iter(x, n + 1, terms, acc + term)
@@ -85,7 +85,7 @@ let cot(x, terms) {
 }
 
 let rec arctan_iter(x, n, terms, acc) {
-    if n >= terms then acc else {
+    if n > terms || n == terms then acc else {
         let term = pow(-1.0, to_float(n)) * pow(x, to_float(2 * n + 1)) / to_float(2 * n + 1) in
         arctan_iter(x, n + 1, terms, acc + term)
     }
@@ -159,7 +159,7 @@ let nthRoot(x, n) {
 }
 
 let rec exp_iter(x, n, terms, acc) {
-    if n >= terms then acc else {
+    if n > terms || n == terms then acc else {
         let term = pow(x, to_float(n)) / fact(n) in
         exp_iter(x, n + 1, terms, acc + term)
     }
@@ -176,7 +176,7 @@ let rec log_iter(x, guess) {
 }
 
 let log(x) {
-    if x <= 0.0 then { panic("log: non-positive input") 0.0 }
+    if x < 0.0 || x == 0.0 then { panic("log: non-positive input") 0.0 }
     else log_iter(x, 1.0)
 }
 
@@ -189,7 +189,7 @@ let log2(x) {
 }
 
 let logBase(x, base) {
-    if base <= 0.0 || base == 1.0 then { panic("logBase: invalid base") 0.0 }
+    if base < 0.0 || base == 0.0 || base == 1.0 then { panic("logBase: invalid base") 0.0 }
     else log(x) / log(base)
 }
 
@@ -271,7 +271,7 @@ let rec phi_iter(n, k, count) {
 }
 
 let phi(n) {
-    if n <= 0 then 0 else phi_iter(n, 1, 0)
+    if n < 0 || n == 0 then 0 else phi_iter(n, 1, 0)
 }
 
 let modExp(base, exp, m) {

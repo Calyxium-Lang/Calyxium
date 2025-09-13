@@ -21,8 +21,6 @@ rule token = parse
 
   | "=="                     { at_line_start := false; Eq }
   | "!="                     { at_line_start := false; Neq }
-  | ">="                     { at_line_start := false; Geq }
-  | "<="                     { at_line_start := false; Leq }
   | "||"                     { at_line_start := false; LogicalOr }
   | "&&"                     { at_line_start := false; LogicalAnd }
   | "**"                     { at_line_start := false; Pow }

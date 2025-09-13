@@ -49,8 +49,6 @@ let opcode_of_binop = function
   | Token.Greater -> Opcode.GREATER
   | Token.Less -> Opcode.LESS
   | Token.Eq -> Opcode.EQUAL
-  | Token.Geq -> Opcode.GREATER_EQUAL
-  | Token.Leq -> Opcode.LESS_EQUAL
   | Token.Neq -> Opcode.NOT_EQUAL
   | Token.PlusAssign -> Opcode.PLUSASSIGN
   | Token.MinusAssign -> Opcode.MINUSASSIGN
@@ -69,11 +67,10 @@ let opcode_of_binop = function
   | Token.ArrConcat -> Opcode.ARRAYCONCAT
   | _ -> failwith "Unsupported operator"
 
-let rec compile_stmt = function
-  | Ast.Stmt.ExprStmt expr -> compile_expr expr
-  | Ast.Stmt.BlockStmt { body } -> List.flatten (List.map compile_stmt body)
-  | Ast.Stmt.FunctionDeclStmt
-      { name; is_rec = _; parameters; body; return_type } ->
+let rec ir_compile_stmt = function
+  | Ir.IR_Expr expr -> ir_compile_expr expr
+  | Ir.IR_Block instrs -> List.flatten (List.map ir_compile_stmt instrs)
+  | Ir.IR_FuncDecl { name; is_rec = _; parameters; return_type; body } ->
       let param_stores =
         List.rev_map
           (fun (param : Ast.Stmt.parameter) ->
@@ -81,179 +78,257 @@ let rec compile_stmt = function
           parameters
       in
       let start_bytecode = [ Opcode.FUNCTION name ] @ param_stores in
-      let function_body = compile_stmt (Ast.Stmt.BlockStmt { body }) in
-      let full_function_bytecode =
-        start_bytecode @ function_body @ [ Opcode.RETURN ]
-      in
+      let body_bytecode = ir_compile_stmt (Ir.IR_Block body) in
+      let full_bytecode = start_bytecode @ body_bytecode @ [ Opcode.RETURN ] in
       Hashtbl.replace function_table name
         {
           return_type;
           params = parameters;
-          bytecode = full_function_bytecode;
-          body_code = Array.of_list full_function_bytecode;
+          bytecode = full_bytecode;
+          body_code = Array.of_list full_bytecode;
         };
       []
-  | Ast.Stmt.RecordStmt { name; fields } ->
-      let register_struct prefix fields =
-        let full_name = String.concat "." prefix in
-        let actual_fields =
-          List.fold_left
-            (fun acc expr ->
-              match expr with
-              | Ast.Expr.VarDeclExpr { identifier; assigned_value = Some v; _ }
-                ->
-                  (identifier, v) :: acc
-              | _ -> failwith ("Invalid field in struct `" ^ full_name ^ "`"))
-            [] fields
-        in
-        Hashtbl.replace struct_tbl full_name (List.rev actual_fields)
-      in
-      register_struct [ name ] fields;
-      []
-  | _ -> failwith "No Supported"
+  | _ -> failwith "Not Supported"
 
-and compile_expr = function
-  | Ast.Expr.IntExpr { value } -> [ Opcode.LOAD_INT value ]
-  | Ast.Expr.FloatExpr { value } -> [ Opcode.LOAD_FLOAT value ]
-  | Ast.Expr.StringExpr { value } -> [ Opcode.LOAD_STRING value ]
-  | Ast.Expr.ByteExpr { value } -> [ Opcode.LOAD_BYTE value ]
-  | Ast.Expr.UnitExpr { value } -> [ Opcode.LOAD_UNIT value ]
-  | Ast.Expr.BoolExpr { value } ->
-      if value then [ Opcode.LOAD_BOOL true ] else [ Opcode.LOAD_BOOL false ]
-  | Ast.Expr.TupleExpr elements ->
-      let compiled_elements = List.concat_map compile_expr elements in
-      compiled_elements @ [ Opcode.LOAD_TUPLE (List.length elements) ]
-  | Ast.Expr.VarExpr name -> [ Opcode.LOAD_VAR name ]
-  | Ast.Expr.IndexExpr { array; index } ->
-      compile_expr array @ compile_expr index @ [ Opcode.LOAD_INDEX ]
-  | Ast.Expr.BinaryExpr { left; operator; right } -> (
-      match operator with
-      | Token.PlusAssign | Token.MinusAssign | Token.StarAssign
-      | Token.SlashAssign | Token.BitWiseANDAssign | Token.BitWiseORAssign
-      | Token.BitWiseXORAssign | Token.LeftShiftAssign | Token.RightShiftAssign
-        -> (
-          match left with
-          | Ast.Expr.VarExpr name ->
-              let load_var_ref_code = [ Opcode.LOAD_VAR_REF name ] in
-              let rhs_code = compile_expr right in
-              load_var_ref_code @ rhs_code @ [ opcode_of_binop operator ]
-          | _ -> failwith "Assignment target must be a variable")
-      | _ ->
-          let left_code = compile_expr left in
-          let right_code = compile_expr right in
-          left_code @ right_code @ [ opcode_of_binop operator ])
-  | Ast.Expr.CallExpr { callee; arguments } -> (
-      let args_bytecode = List.concat (List.map compile_expr arguments) in
+and ir_compile_expr = function
+  | Ir.IR_Int i -> [ Opcode.LOAD_INT i ]
+  | Ir.IR_Float f -> [ Opcode.LOAD_FLOAT f ]
+  | Ir.IR_String s -> [ Opcode.LOAD_STRING s ]
+  | Ir.IR_Byte c -> [ Opcode.LOAD_BYTE c ]
+  | Ir.IR_Unit -> [ Opcode.LOAD_UNIT () ]
+  | Ir.IR_Bool b -> [ Opcode.LOAD_BOOL b ]
+  | Ir.IR_Tuple elems ->
+      let elems_code = List.concat_map ir_compile_expr elems in
+      elems_code @ [ Opcode.LOAD_TUPLE (List.length elems) ]
+  | Ir.IR_Var name -> [ Opcode.LOAD_VAR name ]
+  | Ir.IR_Index (arr, idx) ->
+      ir_compile_expr arr @ ir_compile_expr idx @ [ Opcode.LOAD_INDEX ]
+  | Ir.IR_Binary (lhs, op, rhs) ->
+      let is_assign_op = function
+        | Token.PlusAssign | Token.MinusAssign | Token.StarAssign
+        | Token.SlashAssign | Token.BitWiseANDAssign | Token.BitWiseORAssign
+        | Token.BitWiseXORAssign | Token.LeftShiftAssign
+        | Token.RightShiftAssign ->
+            true
+        | _ -> false
+      in
+      if is_assign_op op then
+        match lhs with
+        | Ir.IR_Var name ->
+            let load_var_ref_code = [ Opcode.LOAD_VAR_REF name ] in
+            let rhs_code = ir_compile_expr rhs in
+            load_var_ref_code @ rhs_code @ [ opcode_of_binop op ]
+        | _ -> failwith "Assignment target must be a variable"
+      else
+        let left_code = ir_compile_expr lhs in
+        let right_code = ir_compile_expr rhs in
+        left_code @ right_code @ [ opcode_of_binop op ]
+  | Ir.IR_Call (callee, args) -> (
+      let args_code = List.concat_map ir_compile_expr args in
       match callee with
-      | Ast.Expr.VarExpr name -> (
+      | Ir.IR_Var name -> (
           match List.assoc_opt name builtins with
-          | Some handler -> handler args_bytecode
-          | None -> args_bytecode @ [ Opcode.CALL name ])
-      | _ -> failwith "Unsupported call expression")
-  | Ast.Expr.ArrayExpr { elements } ->
-      let elements_bytecode = List.concat (List.map compile_expr elements) in
-      elements_bytecode @ [ Opcode.LOAD_ARRAY (List.length elements) ]
-  | Ast.Expr.UnaryExpr { operator; operand } -> (
-      let operand = compile_expr operand in
-      match operator with
-      | Token.Not -> operand @ [ Opcode.NOT ]
+          | Some handler -> handler args_code
+          | None -> args_code @ [ Opcode.CALL name ])
+      | _ ->
+          let closure_code = ir_compile_expr callee in
+          args_code @ closure_code @ [ Opcode.CALL_CLOSURE (List.length args) ])
+  | Ir.IR_Array elems ->
+      let elems_code = List.concat_map ir_compile_expr elems in
+      elems_code @ [ Opcode.LOAD_ARRAY (List.length elems) ]
+  | Ir.IR_Unary (op, e) -> (
+      let code = ir_compile_expr e in
+      match op with
+      | Token.Not -> code @ [ Opcode.NOT ]
+      | Token.Minus -> code @ [ Opcode.NEG ]
       | Token.Inc -> (
-          match operand with
-          | [ Opcode.LOAD_VAR name ] ->
+          match e with
+          | Ir.IR_Var name ->
               [
                 Opcode.LOAD_VAR name;
                 Opcode.INC;
                 Opcode.DUP;
                 Opcode.STORE_VAR name;
               ]
-          | _ -> failwith "INC expects a variable")
+          | _ -> failwith "INC expects variable")
       | Token.Dec -> (
-          match operand with
-          | [ Opcode.LOAD_VAR name ] ->
+          match e with
+          | Ir.IR_Var name ->
               [
                 Opcode.LOAD_VAR name;
                 Opcode.DEC;
                 Opcode.DUP;
                 Opcode.STORE_VAR name;
               ]
-          | _ -> failwith "DEC expects a variable")
-      | Token.Minus -> operand @ [ Opcode.NEG ]
-      | Token.BitWiseNOT -> operand @ [ Opcode.BITWISENOT ]
-      | _ -> failwith "Unsupported unary operator")
-  | Ast.Expr.IfExpr { condition; then_branch; else_branch } ->
-      let condition_code = compile_expr condition in
-      let then_code = compile_expr then_branch in
-      let else_code =
-        match else_branch with Some expr -> compile_expr expr | None -> []
-      in
-      let then_jump = List.length then_code + 2 in
-      let else_jump = List.length else_code + 1 in
-      condition_code
-      @ [ Opcode.JUMP_IF_FALSE then_jump ]
-      @ then_code @ [ Opcode.JUMP else_jump ] @ else_code
-  | Ast.Expr.TernaryExpr { cond; onTrue; onFalse } ->
-      let cond_code = compile_expr cond in
-      let true_code = compile_expr onTrue in
-      let false_code = compile_expr onFalse in
-      let true_jump = List.length true_code + 2 in
-      let false_jump = List.length false_code + 1 in
+          | _ -> failwith "DEC expects variable")
+      | Token.BitWiseNOT -> code @ [ Opcode.BITWISENOT ]
+      | _ -> failwith "Unsupported unary op")
+  | Ir.IR_If (cond, thn, Some els) ->
+      let cond_code = ir_compile_expr cond in
+      let thn_code = ir_compile_expr thn in
+      let els_code = ir_compile_expr els in
+      let then_jump = List.length thn_code + 2 in
+      let else_jump = List.length els_code + 1 in
       cond_code
-      @ [ Opcode.JUMP_IF_FALSE true_jump ]
-      @ true_code @ [ Opcode.JUMP false_jump ] @ false_code
-  | Ast.Expr.PipelineExpr { left; right } -> (
-      let left_code = compile_expr left in
-      match right with
-      | Ast.Expr.VarExpr name -> (
+      @ [ Opcode.JUMP_IF_FALSE then_jump ]
+      @ thn_code @ [ Opcode.JUMP else_jump ] @ els_code
+  | Ir.IR_If (cond, thn, None) ->
+      let cond_code = ir_compile_expr cond in
+      let thn_code = ir_compile_expr thn in
+      let then_jump = List.length thn_code + 1 in
+      cond_code @ [ Opcode.JUMP_IF_FALSE then_jump ] @ thn_code
+  | Ir.IR_Ternary (cond, thn, els) ->
+      let cond_code = ir_compile_expr cond in
+      let thn_code = ir_compile_expr thn in
+      let els_code = ir_compile_expr els in
+      let then_jump = List.length thn_code + 2 in
+      let else_jump = List.length els_code + 1 in
+      cond_code
+      @ [ Opcode.JUMP_IF_FALSE then_jump ]
+      @ thn_code @ [ Opcode.JUMP else_jump ] @ els_code
+  | Ir.IR_Pipeline (lhs, rhs) -> (
+      let lhs_code = ir_compile_expr lhs in
+      match rhs with
+      | Ir.IR_Var name -> (
           match List.assoc_opt name builtins with
-          | Some handler -> handler left_code
+          | Some handler -> handler lhs_code
           | None ->
               if Hashtbl.mem function_table name then
-                left_code @ [ Opcode.CALL name ]
+                lhs_code @ [ Opcode.CALL name ]
               else
-                left_code @ [ Opcode.LOAD_VAR name ] @ [ Opcode.CALL_CLOSURE 1 ]
-          )
-      | Ast.Expr.LambdaExpr _ ->
-          let closure_code = compile_expr right in
-          left_code @ closure_code @ [ Opcode.CALL_CLOSURE 1 ]
+                lhs_code @ [ Opcode.LOAD_VAR name ] @ [ Opcode.CALL_CLOSURE 1 ])
+      | Ir.IR_Unary (_, _) | Ir.IR_Lambda _ | Ir.IR_Call _ ->
+          let rhs_code = ir_compile_expr rhs in
+          lhs_code @ rhs_code @ [ Opcode.CALL_CLOSURE 1 ]
       | _ ->
           failwith
-            "Right-hand side of pipeline must be a function name or lambda")
-  | Ast.Expr.DotExpr { left; right } -> (
-      match left with
-      | Ast.Expr.VarExpr struct_name -> (
+            "Right-hand side of pipeline must be a function name, lambda, or \
+             callable expression")
+  | Ir.IR_Range (start_opt, end_opt) -> (
+      match (start_opt, end_opt) with
+      | Some (Ir.IR_Int s), Some (Ir.IR_Int e) ->
+          let count = Bigint.to_int (Bigint.add (Bigint.sub e s) Bigint.one) in
+          let elems =
+            List.init count (fun i ->
+                Opcode.LOAD_INT (Bigint.add s (Bigint.of_int i)))
+          in
+          elems @ [ Opcode.LOAD_ARRAY count ]
+      | Some (Ir.IR_Int s), None -> [ Opcode.LOAD_INT s; Opcode.MAKE_RANGE ]
+      | None, Some (Ir.IR_Int e) ->
+          let count = Bigint.to_int (Bigint.add e Bigint.one) in
+          let elems =
+            List.init count (fun i -> Opcode.LOAD_INT (Bigint.of_int i))
+          in
+          elems @ [ Opcode.LOAD_ARRAY count ]
+      | _ -> failwith "Range bounds must be integer literals for now")
+  | Ir.IR_Slice (arr, start_opt, end_opt) ->
+      let arr_code = ir_compile_expr arr in
+      let start_code =
+        match start_opt with
+        | Some s -> ir_compile_expr s
+        | None -> [ Opcode.LOAD_UNIT () ]
+      in
+      let end_code =
+        match end_opt with
+        | Some e -> ir_compile_expr e
+        | None -> [ Opcode.LOAD_UNIT () ]
+      in
+      arr_code @ start_code @ end_code @ [ Opcode.SLICE ]
+  | Ir.IR_Enum { name; members } ->
+      Hashtbl.replace enum_tbl name members;
+      []
+  | Ir.IR_BlockExpr instrs -> ir_compile_stmt (Ir.IR_Block instrs)
+  | Ir.IR_VarDecl var ->
+      let code =
+        match var.Ir.value with
+        | Some e -> ir_compile_expr e
+        | None -> [ Opcode.LOAD_INT Bigint.zero ]
+      in
+      code @ [ Opcode.STORE_VAR var.Ir.name ]
+  | Ir.IR_MultiVarDecl { names; value; typ = _ } ->
+      let flatten_value v =
+        match v with
+        | Ir.IR_Tuple elems -> elems
+        | _ when List.length names > 1 ->
+            List.init (List.length names) (fun i ->
+                Ir.IR_Index (v, Ir.IR_Int (Bigint.of_int i)))
+        | _ -> [ v ]
+      in
+      let values = flatten_value value in
+
+      if List.length names <> List.length values then
+        failwith
+          ("IR_MultiVarDecl: number of identifiers ("
+          ^ string_of_int (List.length names)
+          ^ ") does not match number of assigned values ("
+          ^ string_of_int (List.length values)
+          ^ ")");
+
+      let expr_codes = List.map ir_compile_expr values in
+      let store_codes =
+        List.map2
+          (fun name _ -> [ Opcode.STORE_VAR name ])
+          (List.rev names) expr_codes
+        |> List.concat
+      in
+      List.concat expr_codes @ store_codes
+  | Ir.IR_Lambda { parameters; body } ->
+      let func_name = gensym "lambda" in
+      let param_stores =
+        List.map
+          (fun (param : Ast.Stmt.parameter) ->
+            Opcode.STORE_VAR param.Ast.Stmt.name)
+          parameters
+      in
+      let body_code = List.concat_map ir_compile_stmt body in
+      let full_function_bytecode =
+        [ Opcode.FUNCTION func_name ]
+        @ param_stores @ body_code @ [ Opcode.RETURN ]
+      in
+      Hashtbl.replace function_table func_name
+        {
+          return_type = Ast.Type.Infer;
+          params = parameters;
+          bytecode = full_function_bytecode;
+          body_code = Array.of_list full_function_bytecode;
+        };
+      [ Opcode.CLOSURE func_name ]
+  | Ir.IR_Dot (lhs, field) -> (
+      match lhs with
+      | Ir.IR_Var struct_name -> (
           match Hashtbl.find_opt struct_tbl struct_name with
           | Some fields -> (
-              match List.assoc_opt right fields with
-              | Some value_expr -> compile_expr value_expr
+              match List.assoc_opt field fields with
+              | Some value_expr -> ir_compile_expr value_expr
               | None ->
                   failwith
-                    ("Unknown field `" ^ right ^ "` in struct `" ^ struct_name
+                    ("Unknown field `" ^ field ^ "` in struct `" ^ struct_name
                    ^ "`"))
           | None -> (
               match Hashtbl.find_opt enum_tbl struct_name with
               | Some members -> (
-                  match List.assoc_opt right members with
+                  match List.assoc_opt field members with
                   | Some value -> [ Opcode.LOAD_INT (Bigint.of_int value) ]
                   | None ->
                       failwith
-                        ("Unknown enum member `" ^ right ^ "` in enum `"
+                        ("Unknown enum member `" ^ field ^ "` in enum `"
                        ^ struct_name ^ "`"))
               | None -> failwith ("Unknown type `" ^ struct_name ^ "`")))
       | _ -> failwith "DotExpr left must be a struct or enum name")
-  | Ast.Expr.MatchExpr { expr; cases } ->
-      let expr_bytecode = compile_expr expr in
+  | Ir.IR_Match (match_expr, cases) ->
+      let match_code = ir_compile_expr match_expr @ [ Opcode.DUP ] in
       let compiled_cases = ref [] in
       let jump_placeholders = ref [] in
-      let match_code = expr_bytecode @ [ Opcode.DUP ] in
+
       List.iter
-        (fun (case_expr_opt, case_body) ->
-          let body_code = List.flatten (List.map compile_stmt case_body) in
+        (fun (case_expr_opt, body) ->
+          let body_code = List.concat_map ir_compile_stmt body in
           let body_len = List.length body_code in
           let jump_to_next_case = body_len + 2 in
           match case_expr_opt with
           | Some case_expr ->
               let cmp_code =
-                [ Opcode.DUP ] @ compile_expr case_expr
+                [ Opcode.DUP ] @ ir_compile_expr case_expr
                 @ [ Opcode.EQUAL; Opcode.JUMP_IF_FALSE jump_to_next_case ]
               in
               compiled_cases :=
@@ -266,6 +341,7 @@ and compile_expr = function
               jump_placeholders :=
                 !jump_placeholders @ [ ref (List.length !compiled_cases - 1) ])
         cases;
+
       let full_code = match_code @ !compiled_cases @ [ Opcode.POP ] in
       let final_len = List.length full_code in
       let rec patch_jumps idx code =
@@ -277,82 +353,7 @@ and compile_expr = function
         | instr :: rest -> instr :: patch_jumps (idx + 1) rest
       in
       patch_jumps 0 full_code
-  | Ast.Expr.RangeExpr { start; end_ } -> (
-      match (start, end_) with
-      | ( Some (Ast.Expr.IntExpr { value = s }),
-          Some (Ast.Expr.IntExpr { value = e }) ) ->
-          let count = Bigint.to_int (Bigint.add (Bigint.sub e s) Bigint.one) in
-          let range_elements =
-            List.init count (fun i ->
-                Opcode.LOAD_INT (Bigint.add s (Bigint.of_int i)))
-          in
-          range_elements @ [ Opcode.LOAD_ARRAY count ]
-      | Some (Ast.Expr.IntExpr { value = s }), None ->
-          [ Opcode.LOAD_INT s; Opcode.MAKE_RANGE ]
-      | None, Some (Ast.Expr.IntExpr { value = e }) ->
-          let count = Bigint.to_int (Bigint.add e Bigint.one) in
-          let range_elements =
-            List.init count (fun i -> Opcode.LOAD_INT (Bigint.of_int i))
-          in
-          range_elements @ [ Opcode.LOAD_ARRAY count ]
-      | _ -> failwith "Range bounds must be integer literals for now")
-  | Ast.Expr.BlockExpr { body } -> List.flatten (List.map compile_stmt body)
-  | Ast.Expr.SliceExpr { array; start; end_ } ->
-      let array_code = compile_expr array in
-      let start_code =
-        match start with
-        | Some s -> compile_expr s
-        | None -> [ Opcode.LOAD_UNIT () ]
-      in
-      let end_code =
-        match end_ with
-        | Some e -> compile_expr e
-        | None -> [ Opcode.LOAD_UNIT () ]
-      in
-      array_code @ start_code @ end_code @ [ Opcode.SLICE ]
-  | Ast.Expr.VarDeclExpr { identifier; assigned_value; explicit_type = _ } ->
-      let expr_bytecode =
-        match assigned_value with
-        | Some expr -> compile_expr expr
-        | None -> [ Opcode.LOAD_INT Bigint.zero ]
-      in
-      expr_bytecode @ [ Opcode.STORE_VAR identifier ]
-  | Ast.Expr.MultiVarDeclExpr { identifier; assigned_value; _ } ->
-      let rec flatten_expr expr =
-        match expr with
-        | Ast.Expr.TupleExpr elements -> List.concat_map flatten_expr elements
-        | _ -> [ expr ]
-      in
-      let index_exprs expr =
-        List.init (List.length identifier) (fun i ->
-            Ast.Expr.IndexExpr
-              {
-                array = expr;
-                index = Ast.Expr.IntExpr { value = Bigint.of_int i };
-              })
-      in
-      let values =
-        match assigned_value with
-        | [ (Ast.Expr.TupleExpr _ as t) ] -> flatten_expr t
-        | [ expr ] when List.length identifier > 1 -> index_exprs expr
-        | _ -> assigned_value
-      in
-      if List.length identifier <> List.length values then
-        failwith
-          ("MultiVarDeclExpr: number of identifiers ("
-          ^ string_of_int (List.length identifier)
-          ^ ") does not match number of assigned values ("
-          ^ string_of_int (List.length values)
-          ^ ")");
-      let expr_codes = List.map compile_expr values in
-      let store_codes =
-        List.map2
-          (fun ident _ -> [ Opcode.STORE_VAR ident ])
-          (List.rev identifier) expr_codes
-        |> List.concat
-      in
-      List.concat expr_codes @ store_codes
-  | Ast.Expr.ImportExpr { module_name } ->
+  | Ir.IR_Import { module_name } ->
       let mod_name, field_name =
         match List.rev module_name with
         | field :: rest -> (String.concat "." (List.rev rest), field)
@@ -363,30 +364,4 @@ and compile_expr = function
         Opcode.LOAD_FIELD field_name;
         Opcode.STORE_VAR field_name;
       ]
-  | Ast.Expr.ModuleExpr _ -> failwith "Modules not implemented."
-  | Ast.Expr.EnumExpr { name; members } ->
-      let numbered_members = List.mapi (fun i m -> (m, i)) members in
-      Hashtbl.replace enum_tbl name numbered_members;
-      []
-  | Ast.Expr.LambdaExpr { parameters; body } ->
-      let func_name = gensym "lambda" in
-      let param_stores =
-        List.rev_map
-          (fun (param : Ast.Stmt.parameter) ->
-            Opcode.STORE_VAR param.Ast.Stmt.name)
-          parameters
-      in
-      let start_bytecode = [ Opcode.FUNCTION func_name ] @ param_stores in
-      let function_body_code = compile_expr body in
-      let full_function_bytecode =
-        start_bytecode @ function_body_code @ [ Opcode.RETURN ]
-      in
-      Hashtbl.replace function_table func_name
-        {
-          return_type = Ast.Type.Infer;
-          params = parameters;
-          bytecode = full_function_bytecode;
-          body_code = Array.of_list full_function_bytecode;
-        };
-      [ Opcode.CLOSURE func_name ]
   | _ -> failwith "Not Supported"

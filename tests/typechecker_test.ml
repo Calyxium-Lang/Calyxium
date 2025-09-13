@@ -1,4 +1,4 @@
-open Calyxiumlib.Typechecker
+open Calyxiumlib
 
 let var_decl ?assigned_type name expr =
   Calyxiumlib.Ast.Expr.VarDeclExpr
@@ -19,7 +19,7 @@ let test_case name f =
     f ();
     Printf.printf "Passed: %s\n" name
   with
-  | TypeError msg ->
+  | Types.TypeError msg ->
       Printf.printf "[FAIL] %s: %s\n" name msg;
       exit 1
   | e ->
@@ -40,7 +40,7 @@ let () =
         Calyxiumlib.Ast.Stmt.ExprStmt (var_decl "x" (Some (int_expr 42)))
       in
       let env, _ =
-        Calyxiumlib.Typechecker.check_stmt empty_env empty_func_env stmt
+        Calyxiumlib.Check_expr.check_stmt empty_env empty_func_env stmt
       in
       match List.assoc_opt "x" env with
       | Some (Calyxiumlib.Ast.Type.SymbolType { value = "int" }) -> ()
@@ -53,7 +53,7 @@ let () =
              (Some (Calyxiumlib.Ast.Expr.StringExpr { value = "oops" })))
       in
       let _ =
-        Calyxiumlib.Typechecker.check_stmt
+        Calyxiumlib.Check_expr.check_stmt
           [ ("y", Calyxiumlib.Ast.Type.SymbolType { value = "int" }) ]
           empty_func_env stmt
       in
@@ -90,7 +90,7 @@ let () =
           }
       in
       let _, func_env =
-        Calyxiumlib.Typechecker.check_stmt empty_env empty_func_env fn_stmt
+        Calyxiumlib.Check_expr.check_stmt empty_env empty_func_env fn_stmt
       in
       match List.assoc_opt "add" func_env with
       | Some _ -> ()
@@ -99,7 +99,7 @@ let () =
   test_case "int literal type" (fun () ->
       let expr = int_expr 100 in
       let typ, _env =
-        Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr
+        Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr
       in
       match typ with
       | Calyxiumlib.Ast.Type.SymbolType { value = "int" } -> ()
@@ -108,7 +108,7 @@ let () =
   test_case "string literal type" (fun () ->
       let expr = Calyxiumlib.Ast.Expr.StringExpr { value = "hello" } in
       let typ, _env =
-        Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr
+        Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr
       in
       match typ with
       | Calyxiumlib.Ast.Type.SymbolType { value = "string" } -> ()
@@ -117,7 +117,7 @@ let () =
   test_case "bool literal" (fun () ->
       let expr = Calyxiumlib.Ast.Expr.BoolExpr { value = true } in
       let typ, _env =
-        Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr
+        Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr
       in
       match typ with
       | Calyxiumlib.Ast.Type.SymbolType { value = "bool" } -> ()
@@ -133,7 +133,7 @@ let () =
           }
       in
       let typ, _env =
-        Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr
+        Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr
       in
       match typ with
       | Calyxiumlib.Ast.Type.SymbolType { value = "int" } -> ()
@@ -149,7 +149,7 @@ let () =
           }
       in
       let typ, _env =
-        Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr
+        Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr
       in
       match typ with
       | Calyxiumlib.Ast.Type.SymbolType { value = "int" } -> ()
@@ -165,11 +165,10 @@ let () =
           }
       in
       try
-        ignore
-          (Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr);
+        ignore (Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr);
         failwith "Expected type error"
       with
-      | TypeError _ -> ()
+      | Types.TypeError _ -> ()
       | _ -> failwith "Unexpected exception");
 
   test_case "binary op inference" (fun () ->
@@ -186,7 +185,7 @@ let () =
           }
       in
       let typ, _env =
-        Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr
+        Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr
       in
       match typ with
       | Calyxiumlib.Ast.Type.SymbolType { value = "int" } -> ()
@@ -197,14 +196,14 @@ let () =
         Calyxiumlib.Ast.Stmt.ExprStmt (var_decl "x" (Some (int_expr 10)))
       in
       let env1, _ =
-        Calyxiumlib.Typechecker.check_stmt empty_env empty_func_env stmt1
+        Calyxiumlib.Check_expr.check_stmt empty_env empty_func_env stmt1
       in
 
       let stmt2 =
         Calyxiumlib.Ast.Stmt.ExprStmt (var_decl "x" (Some (int_expr 20)))
       in
       let env2, _ =
-        Calyxiumlib.Typechecker.check_stmt env1 empty_func_env stmt2
+        Calyxiumlib.Check_expr.check_stmt env1 empty_func_env stmt2
       in
 
       match List.assoc_opt "x" env2 with
@@ -221,11 +220,10 @@ let () =
           }
       in
       try
-        ignore
-          (Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr);
+        ignore (Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr);
         failwith "Expected type error not raised"
       with
-      | TypeError _ -> ()
+      | Types.TypeError _ -> ()
       | _ -> failwith "Unexpected exception on binary op type error");
 
   test_case "if expression inference" (fun () ->
@@ -238,7 +236,7 @@ let () =
           }
       in
       let typ, _env =
-        Calyxiumlib.Typechecker.check_expr empty_env empty_func_env expr
+        Calyxiumlib.Check_expr.check_expr empty_env empty_func_env expr
       in
       match typ with
       | Calyxiumlib.Ast.Type.SymbolType { value = "int" } -> ()
@@ -299,7 +297,7 @@ let () =
           }
       in
       let _, func_env =
-        Calyxiumlib.Typechecker.check_stmt empty_env empty_func_env fact_stmt
+        Calyxiumlib.Check_expr.check_stmt empty_env empty_func_env fact_stmt
       in
       match List.assoc_opt "fact" func_env with
       | Some _ -> ()

@@ -27,8 +27,11 @@ let parse_file ~flags file =
   | ast -> (
       close_in in_channel;
       try
+        let ir = Calyxiumlib.Ir.ast_to_ir ast in
         let stdlib_used = Calyxiumlib.Typechecker.typecheck_program [ ast ] in
-        let bytecode = Calyxiumlib.Bytecode.compile_stmt ast in
+        let bytecode =
+          List.concat_map Calyxiumlib.Bytecode.ir_compile_stmt ir
+        in
 
         (match parse_emit_flag flags file with
         | Some output_path ->
@@ -40,7 +43,7 @@ let parse_file ~flags file =
           Calyxiumlib.Vm.init_stdlib ();
         if not (List.mem "--no-run" flags) then
           ignore (Calyxiumlib.Vm.run bytecode)
-      with Calyxiumlib.Typechecker.TypeError msg ->
+      with Calyxiumlib.Types.TypeError msg ->
         Printf.eprintf "%s%s%s: %s%s\n" Calyxiumlib.Color.red file
           Calyxiumlib.Color.reset msg Calyxiumlib.Color.reset;
         exit 1)
@@ -91,7 +94,7 @@ let check_file file =
     Printf.printf "%sTypecheck successful:%s %s\n" Calyxiumlib.Color.green
       Calyxiumlib.Color.reset file
   with
-  | Calyxiumlib.Typechecker.TypeError msg ->
+  | Calyxiumlib.Types.TypeError msg ->
       close_in in_channel;
       Printf.eprintf "%sTypecheck error in %s:%s %s\n" Calyxiumlib.Color.red
         file Calyxiumlib.Color.reset msg;
@@ -199,7 +202,9 @@ let () =
                   in
                   close_in in_channel;
                   let _ = Calyxiumlib.Typechecker.typecheck_program [ ast ] in
-                  Calyxiumlib.Bytecode.compile_stmt ast
+                  let ir = Calyxiumlib.Ir.ast_to_ir ast in
+                  Calyxiumlib.Bytecode.ir_compile_stmt
+                    (Calyxiumlib.Ir.IR_Block ir)
                 in
 
                 (match emit with

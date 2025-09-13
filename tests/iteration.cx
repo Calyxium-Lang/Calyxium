@@ -41,7 +41,7 @@ assert(sum2 == 9)
 
 let arr = [1..5] in
 let rec loop6(i, acc) {
-    if i >= length(arr) then acc else loop6(i + 1, acc + arr[i])
+    if i > length(arr) || i == length(arr) then acc else loop6(i + 1, acc + arr[i])
 }
 let arr_sum = loop6(0, 0) in
 assert(arr_sum == 15)

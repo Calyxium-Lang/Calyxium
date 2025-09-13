@@ -3,8 +3,6 @@ type t = ..
 type t +=
   | Eq
   | Neq
-  | Geq
-  | Leq
   | LogicalOr
   | LogicalAnd
   | Pow
