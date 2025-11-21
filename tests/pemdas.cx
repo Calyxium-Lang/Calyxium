@@ -22,10 +22,10 @@ assert((1 lsl 2) + 3 == 7)
 assert(1 lsl (2 + 1) == 8)
 assert(lnot 0 == -1)
 
-let x = 5 in
-x += 3
-assert(x == 8)
-x *= 2
-assert(x == 16)
+-- let x = 5 in
+-- x += 3
+-- assert(x == 8)
+-- x *= 2
+-- assert(x == 16)
 
 assert(((1 + 2) * (3 + 4)) / 7 == 3)

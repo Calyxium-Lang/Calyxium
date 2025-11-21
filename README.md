@@ -45,7 +45,7 @@ Follow these steps to install and build Calyxium:
     
 3. Install the dependency
     ```bash
-    dune install menhir
+    opam install menhir
     ```
 
 4. Build the project

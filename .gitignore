@@ -11,10 +11,6 @@ Thumbs.db
 #*#
 
 # === Build artifacts ===
-!*.ml
-!*.mli
-!*.md
-!*/
 bin/calyxium_js.ml
 lib/js
 CHANGELOG.md

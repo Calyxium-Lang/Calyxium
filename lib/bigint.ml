@@ -534,4 +534,10 @@ let to_int64 x =
         if x.sign >= 0 then v else Int64.neg v
     | _ -> failwith "to_int64: overflow"
 
+let to_char x =
+  let i = to_int x in
+  if i < 0 || i > 255 then
+    invalid_arg ("Bigint.to_char: value out of byte range " ^ string_of_int i)
+  else Char.chr i
+
 let pp fmt b = Format.fprintf fmt "%s" (to_string b)

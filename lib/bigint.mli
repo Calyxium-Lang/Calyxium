@@ -48,4 +48,5 @@ val of_string : string -> t
 val to_float : t -> float
 val of_float : float -> t
 val to_int64 : t -> int64
+val to_char : t -> char
 val pp : Format.formatter -> t -> unit

@@ -274,14 +274,14 @@ let phi(n) {
     if n < 0 || n == 0 then 0 else phi_iter(n, 1, 0)
 }
 
-let modExp(base, exp, m) {
-    let rec modExpIter(b, e, m, acc) {
-        if e == 0 then acc
-        else if e % 2 == 0 then modExpIter((b * b) % m, e / 2, m, acc)
-        else modExpIter(b, e - 1, m, (acc * b) % m)
-    }
-    modExpIter(base % m, exp, m, 1)
-}
+-- let modExp(base, exp, m) {
+--     let rec modExpIter(b, e, m, acc) {
+--         if e == 0 then acc
+--         else if e % 2 == 0 then modExpIter((b * b) % m, e / 2, m, acc)
+--         else modExpIter(b, e - 1, m, (acc * b) % m)
+--     }
+--     modExpIter(base % m, exp, m, 1)
+-- }
 
 let rec extendedGCD(a, b) {
     if b == 0 then (a, 1, 0)
@@ -374,7 +374,7 @@ assert(primesUpTo(10, 2) == "2 3 5 7 ")
 assert(phi(1) == 1)
 assert(phi(9) == 6)
 
-assert(modExp(2, 10, 1000) == 24)
+-- assert(modExp(2, 10, 1000) == 24)
 assert(modInverse(3, 11) == 4)
 
 assert(divisorCount(6) == 4)

@@ -17,6 +17,7 @@ let parse_emit_flag flags file =
   find flags
 
 let parse_file ~flags file =
+  let has_flag flag flags = List.exists (( = ) flag) flags in
   let in_channel = open_in file in
   let file_size = in_channel_length in_channel in
   if file_size = 0 then (
@@ -28,7 +29,11 @@ let parse_file ~flags file =
       close_in in_channel;
       try
         let ir = Calyxiumlib.Ir.ast_to_ir ast in
-        let stdlib_used = Calyxiumlib.Typechecker.typecheck_program [ ast ] in
+        let ir =
+          if has_flag "--no-opt" flags then ir
+          else Calyxiumlib.Optimize.optimize ir
+        in
+        let stdlib_used = Calyxiumlib.Typechecker.typecheck_program ir in
         let bytecode =
           List.concat_map Calyxiumlib.Bytecode.ir_compile_stmt ir
         in
@@ -89,8 +94,9 @@ let check_file file =
   let lexbuf = Lexing.from_channel in_channel in
   try
     let ast = Calyxiumlib.Parser.program Calyxiumlib.Lexer.token lexbuf in
+    let ir = Calyxiumlib.Ir.ast_to_ir ast in
     close_in in_channel;
-    ignore (Calyxiumlib.Typechecker.typecheck_program [ ast ]);
+    ignore (Calyxiumlib.Typechecker.typecheck_program ir);
     Printf.printf "%sTypecheck successful:%s %s\n" Calyxiumlib.Color.green
       Calyxiumlib.Color.reset file
   with
@@ -201,8 +207,8 @@ let () =
                     Calyxiumlib.Parser.program Calyxiumlib.Lexer.token lexbuf
                   in
                   close_in in_channel;
-                  let _ = Calyxiumlib.Typechecker.typecheck_program [ ast ] in
                   let ir = Calyxiumlib.Ir.ast_to_ir ast in
+                  let _ = Calyxiumlib.Typechecker.typecheck_program ir in
                   Calyxiumlib.Bytecode.ir_compile_stmt
                     (Calyxiumlib.Ir.IR_Block ir)
                 in

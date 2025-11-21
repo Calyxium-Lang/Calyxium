@@ -1,3 +1,5 @@
+let ( let* ) = Result.bind
+
 let typecheck_program stmts : bool =
   let env =
     [
@@ -6,11 +8,21 @@ let typecheck_program stmts : bool =
     ]
   in
   let func_env = Check_expr.collect_functions stmts in
-  let _final_env, _final_func_env =
+
+  let final_result =
     List.fold_left
-      (fun (e, f) stmt -> Check_expr.check_stmt e f stmt)
-      (env, func_env) stmts
+      (fun acc stmt ->
+        let* e, f = acc in
+        Check_expr.check_stmt e f stmt)
+      (Ok (env, func_env))
+      stmts
   in
-  let used = !Builtins.stdlib_used in
-  Builtins.stdlib_used := false;
-  used
+
+  match final_result with
+  | Ok (_final_env, _final_func_env) ->
+      let used = !Builtins.stdlib_used in
+      Builtins.stdlib_used := false;
+      used
+  | Error err ->
+      Printf.eprintf "Type error: %s\n" (Check_expr.string_of_type_error err);
+      false

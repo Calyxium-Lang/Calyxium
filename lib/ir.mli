@@ -1,17 +1,19 @@
 type instr = ..
 type expr = ..
-type var = { name : string; typ : Ast.Type.t; value : expr option }
+type var = { var_name : string; typ : Ast.Type.t; value : expr option }
+
+type func_decl = {
+  name : string;
+  is_rec : bool;
+  parameters : Ast.Stmt.parameter list;
+  return_type : Ast.Type.t;
+  body : instr list;
+}
 
 type instr +=
   | IR_Expr of expr
   | IR_Block of instr list
-  | IR_FuncDecl of {
-      name : string;
-      is_rec : bool;
-      parameters : Ast.Stmt.parameter list;
-      return_type : Ast.Type.t;
-      body : instr list;
-    }
+  | IR_FuncDecl of func_decl
 
 type expr +=
   | IR_Int of Bigint.t

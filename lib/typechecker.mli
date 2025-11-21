@@ -1,1 +1,1 @@
-val typecheck_program : Ast.Stmt.t list -> bool
+val typecheck_program : Ir.instr list -> bool

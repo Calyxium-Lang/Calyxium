@@ -70,7 +70,7 @@ let opcode_of_binop = function
 let rec ir_compile_stmt = function
   | Ir.IR_Expr expr -> ir_compile_expr expr
   | Ir.IR_Block instrs -> List.flatten (List.map ir_compile_stmt instrs)
-  | Ir.IR_FuncDecl { name; is_rec = _; parameters; return_type; body } ->
+  | Ir.IR_FuncDecl { Ir.name; is_rec = _; parameters; return_type; body } ->
       let param_stores =
         List.rev_map
           (fun (param : Ast.Stmt.parameter) ->
@@ -244,7 +244,7 @@ and ir_compile_expr = function
         | Some e -> ir_compile_expr e
         | None -> [ Opcode.LOAD_INT Bigint.zero ]
       in
-      code @ [ Opcode.STORE_VAR var.Ir.name ]
+      code @ [ Opcode.STORE_VAR var.Ir.var_name ]
   | Ir.IR_MultiVarDecl { names; value; typ = _ } ->
       let flatten_value v =
         match v with

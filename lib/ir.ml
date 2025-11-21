@@ -1,17 +1,19 @@
 type instr = ..
 type expr = ..
-type var = { name : string; typ : Ast.Type.t; value : expr option }
+type var = { var_name : string; typ : Ast.Type.t; value : expr option }
+
+type func_decl = {
+  name : string;
+  is_rec : bool;
+  parameters : Ast.Stmt.parameter list;
+  return_type : Ast.Type.t;
+  body : instr list;
+}
 
 type instr +=
   | IR_Expr of expr
   | IR_Block of instr list
-  | IR_FuncDecl of {
-      name : string;
-      is_rec : bool;
-      parameters : Ast.Stmt.parameter list;
-      return_type : Ast.Type.t;
-      body : instr list;
-    }
+  | IR_FuncDecl of func_decl
 
 type expr +=
   | IR_Int of Bigint.t
@@ -55,8 +57,16 @@ let rec ast_to_ir_expr = function
       IR_Binary (ast_to_ir_expr left, operator, ast_to_ir_expr right)
   | Ast.Expr.UnaryExpr { operator; operand } ->
       IR_Unary (operator, ast_to_ir_expr operand)
-  | Ast.Expr.CallExpr { callee; arguments } ->
-      IR_Call (ast_to_ir_expr callee, List.map ast_to_ir_expr arguments)
+  | Ast.Expr.CallExpr { callee; arguments } -> (
+      let ir_args = List.map ast_to_ir_expr arguments in
+      match (callee, ir_args) with
+      | Ast.Expr.VarExpr "to_byte", [ IR_Int n ] -> IR_Byte (Bigint.to_char n)
+      | Ast.Expr.VarExpr "to_byte", [ IR_Array lst ] ->
+          IR_Array
+            (List.map
+               (function IR_Int n -> IR_Byte (Bigint.to_char n) | x -> x)
+               lst)
+      | _ -> IR_Call (ast_to_ir_expr callee, ir_args))
   | Ast.Expr.ArrayExpr { elements } ->
       IR_Array (List.map ast_to_ir_expr elements)
   | Ast.Expr.IndexExpr { array; index } ->
@@ -71,7 +81,7 @@ let rec ast_to_ir_expr = function
   | Ast.Expr.VarDeclExpr { identifier; assigned_value; explicit_type } ->
       IR_VarDecl
         {
-          name = identifier;
+          var_name = identifier;
           typ = explicit_type;
           value = Option.map ast_to_ir_expr assigned_value;
         }

@@ -14,4 +14,6 @@ Options:
                         You can optionally specify the output file or path.
   --run-bytecode        Execute a bytecode file with the `.cxc` extension.
   --no-run              Compile without executing the output.
+
+  --no-opt              Execute the code without optimizations.
 |}
