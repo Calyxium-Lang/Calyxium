@@ -22,7 +22,7 @@ jobs:
       - run: opam install odoc
 
       - name: Build Documentation
-      - run: opam exec -- dune build @doc
+        run: opam exec -- dune build @doc
       
       - name: Deploy to Github Pages
         uses: peaceiris/actions-gh-pages@v3
