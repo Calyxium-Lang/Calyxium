@@ -19,7 +19,7 @@ jobs:
         with:
           ocaml-compiler: 5
 
-      - run: opam install odoc
+      - run: opam install odoc menhir
 
       - name: Build Documentation
         run: opam exec -- dune build @doc
