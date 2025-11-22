@@ -1,3 +1,10 @@
+open Calyxium_ir
+open Calyxium_typechecker
+open Calyxium_vm
+open Calyxium_parser
+open Calyxium_util
+open Calyxium_error
+
 let rec ensure_dir_exists_rec path =
   if Sys.file_exists path then ()
   else
@@ -24,57 +31,50 @@ let parse_file ~flags file =
     close_in in_channel;
     exit 1);
   let lexbuf = Lexing.from_channel in_channel in
-  match Calyxiumlib.Parser.program Calyxiumlib.Lexer.token lexbuf with
+  match Calyxium_parser.Parser.program Calyxium_parser.Lexer.token lexbuf with
   | ast -> (
       close_in in_channel;
       try
-        let ir = Calyxiumlib.Ir.ast_to_ir ast in
+        let ir = Ir.ast_to_ir ast in
         let ir =
-          if has_flag "--no-opt" flags then ir
-          else Calyxiumlib.Optimize.optimize ir
+          if has_flag "--no-opt" flags then ir else Optimize.optimize ir
         in
-        let stdlib_used = Calyxiumlib.Typechecker.typecheck_program ir in
-        let bytecode =
-          List.concat_map Calyxiumlib.Bytecode.ir_compile_stmt ir
-        in
+        let stdlib_used = Typechecker.typecheck_program ir in
+        let bytecode = List.concat_map Bytecode.ir_compile_stmt ir in
 
         (match parse_emit_flag flags file with
         | Some output_path ->
-            Calyxiumlib.Bytegen.save_bytecode_to_file output_path bytecode;
+            Bytegen.save_bytecode_to_file output_path bytecode;
             Printf.printf "Bytecode saved to %s\n" output_path
         | None -> ());
 
-        if stdlib_used && not (List.mem "--no-run" flags) then
-          Calyxiumlib.Vm.init_stdlib ();
-        if not (List.mem "--no-run" flags) then
-          ignore (Calyxiumlib.Vm.run bytecode)
-      with Calyxiumlib.Types.TypeError msg ->
-        Printf.eprintf "%s%s%s: %s%s\n" Calyxiumlib.Color.red file
-          Calyxiumlib.Color.reset msg Calyxiumlib.Color.reset;
+        if stdlib_used && not (List.mem "--no-run" flags) then Vm.init_stdlib ();
+        if not (List.mem "--no-run" flags) then ignore (Vm.run bytecode)
+      with Types.TypeError msg ->
+        Printf.eprintf "%s%s%s: %s%s\n" Color.red file Color.reset msg
+          Color.reset;
         exit 1)
-  | exception Calyxiumlib.Lexer.LexerError (msg, pos) ->
+  | exception Calyxium_parser.Lexer.LexerError (msg, pos) ->
       close_in in_channel;
-      Calyxiumlib.Error.print_error ~file ~msg ~line:pos.Lexing.pos_lnum
+      Error.print_error ~file ~msg ~line:pos.Lexing.pos_lnum
         ~col:(pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)
-        ~source:(Calyxiumlib.Error.get_line file pos.Lexing.pos_lnum);
+        ~source:(Error.get_line file pos.Lexing.pos_lnum);
       exit 1
-  | exception Calyxiumlib.Parser.Error ->
+  | exception Calyxium_parser.Parser.Error ->
       close_in in_channel;
       let pos = Lexing.lexeme_start_p lexbuf in
-      Calyxiumlib.Error.print_error ~file ~msg:"Syntax Error"
-        ~line:pos.Lexing.pos_lnum
+      Error.print_error ~file ~msg:"Syntax Error" ~line:pos.Lexing.pos_lnum
         ~col:(pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)
-        ~source:(Calyxiumlib.Error.get_line file pos.Lexing.pos_lnum);
+        ~source:(Error.get_line file pos.Lexing.pos_lnum);
       exit 1
   | exception Failure msg ->
       close_in in_channel;
-      Printf.eprintf "%s%s%s\n" Calyxiumlib.Color.red msg
-        Calyxiumlib.Color.reset;
+      Printf.eprintf "%s%s%s\n" Color.red msg Color.reset;
       exit 1
   | exception e ->
       close_in in_channel;
-      Printf.eprintf "Unexpected error: %s%s%s\n" Calyxiumlib.Color.red
-        (Printexc.to_string e) Calyxiumlib.Color.reset;
+      Printf.eprintf "Unexpected error: %s%s%s\n" Color.red
+        (Printexc.to_string e) Color.reset;
       exit 1
 
 let split_flags_and_files args =
@@ -93,41 +93,38 @@ let check_file file =
   let in_channel = open_in file in
   let lexbuf = Lexing.from_channel in_channel in
   try
-    let ast = Calyxiumlib.Parser.program Calyxiumlib.Lexer.token lexbuf in
-    let ir = Calyxiumlib.Ir.ast_to_ir ast in
+    let ast = Parser.program Lexer.token lexbuf in
+    let ir = Ir.ast_to_ir ast in
     close_in in_channel;
-    ignore (Calyxiumlib.Typechecker.typecheck_program ir);
-    Printf.printf "%sTypecheck successful:%s %s\n" Calyxiumlib.Color.green
-      Calyxiumlib.Color.reset file
+    ignore (Typechecker.typecheck_program ir);
+    Printf.printf "%sTypecheck successful:%s %s\n" Color.green Color.reset file
   with
-  | Calyxiumlib.Types.TypeError msg ->
+  | Types.TypeError msg ->
       close_in in_channel;
-      Printf.eprintf "%sTypecheck error in %s:%s %s\n" Calyxiumlib.Color.red
-        file Calyxiumlib.Color.reset msg;
+      Printf.eprintf "%sTypecheck error in %s:%s %s\n" Color.red file
+        Color.reset msg;
       exit 1
-  | Calyxiumlib.Lexer.LexerError (msg, pos) ->
+  | Lexer.LexerError (msg, pos) ->
       close_in in_channel;
-      Calyxiumlib.Error.print_error ~file ~msg ~line:pos.Lexing.pos_lnum
+      Error.print_error ~file ~msg ~line:pos.Lexing.pos_lnum
         ~col:(pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)
-        ~source:(Calyxiumlib.Error.get_line file pos.Lexing.pos_lnum);
+        ~source:(Error.get_line file pos.Lexing.pos_lnum);
       exit 1
-  | Calyxiumlib.Parser.Error ->
+  | Parser.Error ->
       close_in in_channel;
       let pos = Lexing.lexeme_start_p lexbuf in
-      Calyxiumlib.Error.print_error ~file ~msg:"Syntax Error"
-        ~line:pos.Lexing.pos_lnum
+      Error.print_error ~file ~msg:"Syntax Error" ~line:pos.Lexing.pos_lnum
         ~col:(pos.Lexing.pos_cnum - pos.Lexing.pos_bol + 1)
-        ~source:(Calyxiumlib.Error.get_line file pos.Lexing.pos_lnum);
+        ~source:(Error.get_line file pos.Lexing.pos_lnum);
       exit 1
   | Failure msg ->
       close_in in_channel;
-      Printf.eprintf "%s%s%s\n" Calyxiumlib.Color.red msg
-        Calyxiumlib.Color.reset;
+      Printf.eprintf "%s%s%s\n" Color.red msg Color.reset;
       exit 1
   | e ->
       close_in in_channel;
-      Printf.eprintf "Unexpected error: %s%s%s\n" Calyxiumlib.Color.red
-        (Printexc.to_string e) Calyxiumlib.Color.reset;
+      Printf.eprintf "Unexpected error: %s%s%s\n" Color.red
+        (Printexc.to_string e) Color.reset;
       exit 1
 
 let () =
@@ -164,38 +161,35 @@ let () =
                      []))
                  paths)
       in
-      List.iter Calyxiumlib.Formatter.format_file cx_files
+      List.iter Formatter.format_file cx_files
   | "check" :: files ->
       if files = [] then (
         prerr_endline "No files provided for type checking.";
         exit 1);
       List.iter check_file files
-  | "new" :: name :: _ -> Calyxiumlib.Toml_config.create_project name
+  | "new" :: name :: _ -> Toml_config.create_project name
   | "new" :: [] ->
       prerr_endline "Please provide a project name. Usage: calyxium new <name>";
       exit 1
   | _ -> (
       let flags, files = split_flags_and_files args in
       match (flags, files) with
-      | [ "--help" ], _ -> print_endline Calyxiumlib.Help.usage
+      | [ "--help" ], _ -> print_endline Help.usage
       | [ "--version" ], _ ->
-          Printf.printf "Calyxium version %s\n"
-            (Calyxiumlib.Version.version_string ());
+          Printf.printf "Calyxium version %s\n" (Version.version_string ());
           exit 0
       | "--run-bytecode" :: _, bytecode_file :: _ ->
-          let bytecode =
-            Calyxiumlib.Bytegen.load_bytecode_from_file bytecode_file
-          in
-          ignore (Calyxiumlib.Vm.run bytecode)
+          let bytecode = Bytegen.load_bytecode_from_file bytecode_file in
+          ignore (Vm.run bytecode)
       | [], [] ->
           if Sys.file_exists "calyxium.toml" then (
-            match Calyxiumlib.Toml_config.parse_file "calyxium.toml" with
+            match Toml_config.parse_file "calyxium.toml" with
             | Some config ->
-                let { Calyxiumlib.Toml_config.run_cfg; _ } = config in
+                let { Toml_config.run_cfg; _ } = config in
                 let {
-                  Calyxiumlib.Toml_config.main;
-                  Calyxiumlib.Toml_config.emit;
-                  Calyxiumlib.Toml_config.should_run = run_flag;
+                  Toml_config.main;
+                  Toml_config.emit;
+                  Toml_config.should_run = run_flag;
                 } =
                   run_cfg
                 in
@@ -203,32 +197,29 @@ let () =
                 let bytecode =
                   let in_channel = open_in main in
                   let lexbuf = Lexing.from_channel in_channel in
-                  let ast =
-                    Calyxiumlib.Parser.program Calyxiumlib.Lexer.token lexbuf
-                  in
+                  let ast = Parser.program Lexer.token lexbuf in
                   close_in in_channel;
-                  let ir = Calyxiumlib.Ir.ast_to_ir ast in
-                  let _ = Calyxiumlib.Typechecker.typecheck_program ir in
-                  Calyxiumlib.Bytecode.ir_compile_stmt
-                    (Calyxiumlib.Ir.IR_Block ir)
+                  let ir = Ir.ast_to_ir ast in
+                  let _ = Typechecker.typecheck_program ir in
+                  Bytecode.ir_compile_stmt (Ir.IR_Block ir)
                 in
 
                 (match emit with
                 | Some path ->
                     ensure_dir_exists_rec (Filename.dirname path);
-                    Calyxiumlib.Bytegen.save_bytecode_to_file path bytecode;
+                    Bytegen.save_bytecode_to_file path bytecode;
                     Printf.printf "Bytecode saved to %s\n" path
                 | None -> ());
 
                 if run_flag then (
-                  Calyxiumlib.Vm.init_stdlib ();
-                  ignore (Calyxiumlib.Vm.run bytecode))
+                  Vm.init_stdlib ();
+                  ignore (Vm.run bytecode))
             | None ->
                 prerr_endline "Invalid or incomplete calyxium.toml file.";
                 exit 1)
           else (
             prerr_endline "No input files or calyxium.toml provided.\n";
-            print_endline Calyxiumlib.Help.usage;
+            print_endline Help.usage;
             exit 1)
       | _, [] ->
           prerr_endline "No input files provided.";

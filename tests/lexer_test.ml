@@ -1,20 +1,20 @@
 [@@@ocaml.warning "-4"]
 
 open Printf
+open Calyxium_parser
 
 let run_lexer input =
   let lexbuf = Lexing.from_string input in
   let rec loop acc =
     try
-      let tok = Calyxiumlib.Lexer.token lexbuf in
-      if tok = Calyxiumlib.Parser.EOF then List.rev acc else loop (tok :: acc)
+      let tok = Lexer.token lexbuf in
+      if tok = Parser.EOF then List.rev acc else loop (tok :: acc)
     with e ->
       failwith (Printf.sprintf "Lexer exception: %s" (Printexc.to_string e))
   in
   loop []
 
-let is_ident token s =
-  match token with Calyxiumlib.Parser.Ident x -> x = s | _ -> false
+let is_ident token s = match token with Parser.Ident x -> x = s | _ -> false
 
 let test_case name f =
   try
@@ -35,7 +35,7 @@ let () =
       let tokens = run_lexer "let x = 42 in" in
       match tokens with
       | t1 :: t2 :: _ ->
-          if t1 = Calyxiumlib.Parser.Let && is_ident t2 "x" then ()
+          if t1 = Parser.Let && is_ident t2 "x" then ()
           else failwith "Lexer failed to tokenize let expressions"
       | _ -> failwith "Lexer failed to tokenize let expressions");
 
@@ -43,7 +43,7 @@ let () =
       let tokens = run_lexer "if true then 1 else 0" in
       match tokens with
       | t1 :: t2 :: _ :: _ ->
-          if t1 = Calyxiumlib.Parser.If && t2 = Calyxiumlib.Parser.True then ()
+          if t1 = Parser.If && t2 = Parser.True then ()
           else failwith "Lexer failed to tokenize if expression"
       | _ -> failwith "Lexer failed to tokenize if expression");
 
@@ -51,32 +51,31 @@ let () =
       let tokens = run_lexer "let add(a, b) { a + b }" in
       match tokens with
       | t1 :: _ ->
-          if t1 = Calyxiumlib.Parser.Let then ()
-          else failwith "Lexer failed for fn"
+          if t1 = Parser.Let then () else failwith "Lexer failed for fn"
       | _ -> failwith "Lexer failed for function");
 
   test_case "int literal" (fun () ->
       let tokens = run_lexer "12345" in
       match tokens with
-      | Calyxiumlib.Parser.Int _ :: _ -> ()
+      | Parser.Int _ :: _ -> ()
       | _ -> failwith "Lexer failed for int literal");
 
   test_case "float literal" (fun () ->
       let tokens = run_lexer "3.14" in
       match tokens with
-      | Calyxiumlib.Parser.Float _ :: _ -> ()
+      | Parser.Float _ :: _ -> ()
       | _ -> failwith "Lexer failed for float literal");
 
   test_case "string literal" (fun () ->
       let tokens = run_lexer "\"hello\"" in
       match tokens with
-      | Calyxiumlib.Parser.String _ :: _ -> ()
+      | Parser.String _ :: _ -> ()
       | _ -> failwith "Lexer failed for string literal");
 
   test_case "bool literal" (fun () ->
       let tokens = run_lexer "true false" in
       match tokens with
-      | Calyxiumlib.Parser.True :: Calyxiumlib.Parser.False :: _ -> ()
+      | Parser.True :: Parser.False :: _ -> ()
       | _ -> failwith "Lexer failed for bool literals");
 
   test_case "binary operators" (fun () ->
@@ -84,9 +83,7 @@ let () =
       let ops =
         List.filter
           (function
-            | Calyxiumlib.Parser.Plus | Calyxiumlib.Parser.Minus
-            | Calyxiumlib.Parser.Star | Calyxiumlib.Parser.Slash ->
-                true
+            | Parser.Plus | Parser.Minus | Parser.Star | Parser.Slash -> true
             | _ -> false)
           tokens
       in
@@ -96,9 +93,8 @@ let () =
   test_case "parentheses and commas" (fun () ->
       let tokens = run_lexer "(a, b)" in
       match tokens with
-      | Calyxiumlib.Parser.LParen :: Calyxiumlib.Parser.Ident _
-        :: Calyxiumlib.Parser.Comma :: Calyxiumlib.Parser.Ident _
-        :: Calyxiumlib.Parser.RParen :: _ ->
+      | Parser.LParen :: Parser.Ident _ :: Parser.Comma :: Parser.Ident _
+        :: Parser.RParen :: _ ->
           ()
       | _ -> failwith "Lexer failed for parentheses and commas");
 

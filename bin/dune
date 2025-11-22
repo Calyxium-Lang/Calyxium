@@ -1,7 +1,12 @@
 (executable
  (name calyxium)
  (public_name calyxium)
- (libraries calyxium_stdlib calyxiumlib))
+ (libraries
+  calyxium_stdlib
+  calyxium_lib
+  calyxium_ir
+  calyxium_typechecker
+  calyxium_error))
 
 ; (executable
 ;  (name calyxium_js)

@@ -1,0 +1,38 @@
+name: Generate Odoc Documentation
+
+on:
+  push:
+    branches:
+      - trunk
+      - branch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tree
+        uses: actions/checkout@v4
+      
+      - name: Set-up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: 5
+
+      - run: opam install odoc
+
+      - name: Build Documentation
+      - run: opam exec -- dune build @doc
+      
+      - name: Deploy to Github Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_build/default/_doc/_html
+          publish_branch: gh-pages
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'Update OCaml documentation'
+          keep_files: false
+          force_orphan: true
+          enable_jekyll: false

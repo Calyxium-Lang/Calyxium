@@ -1,0 +1,4 @@
+(library
+ (name calyxium_util)
+ (public_name calyxium.util)
+ (libraries calyxium_parser unix))

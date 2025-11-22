@@ -1,0 +1,10 @@
+(library
+ (name calyxium_parser)
+ (public_name calyxium.parser)
+ (libraries unix))
+
+(ocamllex lexer)
+
+(menhir
+ (modules parser)
+ (flags --unused-precedence-levels))

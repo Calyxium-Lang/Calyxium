@@ -1,11 +1,11 @@
 (library
- (name calyxiumlib)
+ (name calyxium_lib)
  (public_name calyxium.lib)
- (wrapped true)
- (libraries calyxium_stdlib unix))
-
-(ocamllex lexer)
-
-(menhir
- (modules parser)
- (flags --unused-precedence-levels))
+ (libraries
+  calyxium_stdlib
+  calyxium_ir
+  calyxium_parser
+  calyxium_typechecker
+  calyxium_vm
+  calyxium_util
+  unix))

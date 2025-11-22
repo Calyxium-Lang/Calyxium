@@ -1,0 +1,4 @@
+(library
+ (name calyxium_error)
+ (public_name calyxium.error)
+ (libraries calyxium_util unix))

@@ -1,10 +1,10 @@
 (test
  (name lexer_test)
- (libraries calyxium_stdlib calyxiumlib))
+ (libraries calyxium_stdlib calyxium_lib))
 
 (test
  (name gc_test)
- (libraries calyxium_stdlib calyxiumlib))
+ (libraries calyxium_stdlib calyxium_vm))
 
 (rule
  (alias cx_tests)

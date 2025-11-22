@@ -1,0 +1,4 @@
+(library
+ (name calyxium_typechecker)
+ (public_name calyxium.typechecker)
+ (libraries calyxium_ir calyxium_parser unix))
